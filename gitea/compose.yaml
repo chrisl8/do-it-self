@@ -1,0 +1,61 @@
+services:
+  gitea:
+    container_name: gitea
+    image: gitea/gitea:latest
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    volumes:
+      - /mnt/250a/container-mounts/gitea/data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - gitea-net
+    restart: always
+    healthcheck:
+      test: 'curl --fail http://localhost:3000/api/healthz 2>/dev/null | grep "\"status\": \"pass\"," | wc -l | [ "`cat`" = "3" ] || exit 1'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Gitea
+      - homepage.weight=95
+      - homepage.icon=gitea.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+      #      - homepage.description=Git
+      - homepage.widget.type=gitea
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.key=${API_KEY}
+      - homepage.widget.fields=["notifications"]
+  ts:
+    container_name: gitea-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=gitea
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - gitea-net
+    restart: always
+    depends_on:
+      - gitea
+networks:
+  gitea-net:

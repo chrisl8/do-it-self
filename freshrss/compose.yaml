@@ -1,0 +1,56 @@
+services:
+  freshrss:
+    container_name: freshrss
+    image: freshrss/freshrss:latest
+    restart: always
+    logging:
+      options:
+        max-size: 10m
+    volumes:
+      - /mnt/250a/container-mounts/freshrss/data:/var/www/FreshRSS/data
+      - /mnt/250a/container-mounts/freshrss/extensions:/var/www/FreshRSS/extensions
+    environment:
+      TZ: America/Chicago
+      CRON_MIN: '2,32'
+    network_mode: service:ts
+    # https://github.com/FreshRSS/FreshRSS/pull/2455
+    healthcheck:
+      test: (php -r "readfile('http://localhost/i/');" | grep -q 'jsonVars') || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=FreshRSS
+      - homepage.weight=10
+      - homepage.icon=freshrss.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+      - homepage.widget.type=freshrss
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.username=${FRESHRSS_USERNAME}
+      - homepage.widget.password=${FRESHRSS_PASSWORD}
+  ts:
+    container_name: freshrss-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=freshrss
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    restart: always

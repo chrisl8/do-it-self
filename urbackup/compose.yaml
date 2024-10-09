@@ -1,0 +1,33 @@
+# https://hub.docker.com/r/uroni/urbackup-server
+services:
+  urbackup:
+    build:
+      context: ./urbackup
+      dockerfile: Dockerfile
+      args:
+        VERSION: 2.5.33
+    container_name: urbackup
+    restart: always
+    environment:
+      - TZ=America/Chicago # Enter your timezone
+    volumes:
+      - /mnt/250a/container-mounts/urbackup/db:/var/urbackup
+      - /mnt/8000/container-mounts/urbackup/backups:/backups
+      - /home/chrisl8/credentials/server_update_location.url.download:/var/urbackup/server_update_location.url.download
+      # Uncomment the next line if you want to bind-mount the www-folder
+      #- /path/to/wwwfolder:/usr/share/urbackup
+    # Unlike most of my containers, this one only runs locally,
+    # so that it can see and be seen by computers on my local network.
+    network_mode: "host"
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=UrBackup
+      - homepage.weight=100
+      - homepage.icon=urbackup.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+    healthcheck:
+      test: wget -O - http://127.0.0.1:55414 2> /dev/null | grep "UrBackup 2.5.33" || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3

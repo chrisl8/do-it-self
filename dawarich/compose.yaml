@@ -1,0 +1,189 @@
+networks:
+  dawarich-net:
+services:
+  dawarich_redis:
+    container_name: dawarich-redis
+    image: redis:7.0-alpine
+    command: redis-server
+    networks:
+      - dawarich-net
+    volumes:
+      - redis_shared_data:/var/shared/redis
+    restart: always
+    # https://stackoverflow.com/questions/67904609/how-do-you-perform-a-healthcheck-in-the-redis-docker-image
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  dawarich_db:
+    container_name: dawarich-db
+    image: postgres:14.2-alpine
+    volumes:
+      - /mnt/250a/container-mounts/dawarich/db_data:/var/lib/postgresql/data
+      - redis_shared_data:/var/shared
+    networks:
+      - dawarich-net
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    restart: always
+    healthcheck:
+      test: pg_isready
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    # If you want to expose the database for exploring it.
+  #    ports:
+  #      - 5432:5432
+  dawarich:
+    container_name: dawarich
+    build:
+      context: ./dawarich
+      dockerfile: Dockerfile
+    volumes:
+      - gem_cache:/usr/local/bundle/gems
+      - /mnt/250a/container-mounts/dawarich/public:/var/app/public
+    networks:
+      - dawarich-net
+    stdin_open: true
+    tty: true
+    entrypoint: dev-entrypoint.sh
+    command: [ 'bin/dev' ]
+    restart: always
+    environment:
+      RAILS_ENV: development
+      REDIS_URL: redis://dawarich_redis:6379/0
+      DATABASE_HOST: dawarich_db
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: dawarich_development
+      MIN_MINUTES_SPENT_IN_CITY: 60
+      TIME_ZONE: America/Chicago
+      APPLICATION_HOST: ${APPLICATION_HOST}
+      APPLICATION_HOSTS: ${APPLICATION_HOST}
+      APPLICATION_PROTOCOL: http
+      REVERSE_GEOCODING_ENABLED: true
+      DISTANCE_UNIT: "mi"
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+    healthcheck:
+      test: wget -O - http://127.0.0.1:3000/api/v1/health 2> /dev/null | grep "{\"status\":\"ok\"}" || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    depends_on:
+      - dawarich_db
+      - dawarich_redis
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Dawarich
+      - homepage.weight=40
+      - homepage.icon=/icons/dawarich.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+  dawarich_sidekiq:
+    container_name: dawarich-sidekiq
+    build:
+      context: ./dawarich
+      dockerfile: Dockerfile
+    volumes:
+      - gem_cache:/usr/local/bundle/gems
+      - /mnt/250a/container-mounts/dawarich/public:/var/app/public
+    networks:
+      - dawarich-net
+    stdin_open: true
+    tty: true
+    entrypoint: dev-entrypoint.sh
+    command: [ 'sidekiq' ]
+    restart: always
+    environment:
+      RAILS_ENV: development
+      REDIS_URL: redis://dawarich_redis:6379/0
+      DATABASE_HOST: dawarich_db
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: dawarich_development
+      APPLICATION_HOST: ${APPLICATION_HOST}
+      APPLICATION_HOSTS: ${APPLICATION_HOST}
+      BACKGROUND_PROCESSING_CONCURRENCY: 10
+      APPLICATION_PROTOCOL: http
+      REVERSE_GEOCODING_ENABLED: true
+      PHOTON_API_HOST: ${PHOTON_API_HOST}
+      TIME_ZONE: America/Chicago
+      DISTANCE_UNIT: "mi"
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+    healthcheck:
+      test: pgrep -f "sidekiq 7"
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    depends_on:
+      - dawarich_db
+      - dawarich_redis
+      - dawarich
+  #      - photon
+  ts:
+    container_name: dawarich-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=dawarich
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - dawarich-net
+    restart: always
+    depends_on:
+      - dawarich
+# IF Geocoder would allow it, I could run Photon in here.
+# As it stands, I run it in another compose setup with its own TaleScale setup so it can easily have HTTPS.
+#  photon:
+#    container_name: dawarich-photon
+#    build:
+#      context: ./photon
+#      dockerfile: Dockerfile
+#      args:
+#        PHOTON_VERSION: 0.5.0
+#    volumes:
+#      - /mnt/3000/container-mounts/photon/data:/photon/photon_data
+#    networks:
+#      - dawarich-net
+#    restart: always
+#    healthcheck:
+#      test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"," || exit 1'
+#      start_period: 30s
+#      interval: 120s
+#      timeout: 15s
+#      retries: 3
+volumes:
+  redis_shared_data:
+  gem_cache:
+

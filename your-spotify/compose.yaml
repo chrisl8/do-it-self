@@ -1,0 +1,74 @@
+services:
+  your_spotify:
+    container_name: your_spotify
+    image: lscr.io/linuxserver/your_spotify:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - MONGO_ENDPOINT=mongodb://mongo:27017/your_spotify
+      - APP_URL=${APP_URL}
+      - SPOTIFY_PUBLIC=${SPOTIFY_PUBLIC}
+      - SPOTIFY_SECRET=${SPOTIFY_SECRET}
+      - CORS=${APP_URL}
+    depends_on:
+      - mongo
+    restart: always
+    healthcheck:
+      test: curl --fail http://localhost:80/api/ | grep "Hello" || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - your_spotify-net
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Your Spotifty
+      - homepage.weight=90
+      - homepage.icon=your-spotify.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${APP_URL}
+  mongo:
+    container_name: your_spotify-mongo
+    image: mongo:6
+    volumes:
+      - /mnt/250a/container-mounts/your-spotify/db:/data/db
+    restart: always
+    healthcheck:
+      test: echo 'db.runCommand({find:"app_db_name.devUser"}).ok' | mongosh --host localhost --quiet | grep -q 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - your_spotify-net
+  ts:
+    container_name: your_spotify-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=listenedto
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - your_spotify-net
+    restart: always
+    depends_on:
+      - your_spotify
+networks:
+  your_spotify-net:

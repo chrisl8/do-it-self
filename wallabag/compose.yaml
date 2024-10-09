@@ -1,0 +1,57 @@
+services:
+  wallabag:
+    container_name: wallabag
+    image: wallabag/wallabag
+    environment:
+      - SYMFONY__ENV__SERVER_NAME="Wallabag"
+      - SYMFONY__ENV__MAILER_DSN=${SYMFONY__ENV__MAILER_DSN}
+      - SYMFONY__ENV__FROM_EMAIL=${SYMFONY__ENV__FROM_EMAIL}
+      - SYMFONY__ENV__DOMAIN_NAME=${SYMFONY__ENV__DOMAIN_NAME}
+    volumes:
+      - /mnt/250a/container-mounts/wallabag/images:/var/www/wallabag/web/assets/images
+      - /mnt/250a/container-mounts/wallabag/data:/var/www/wallabag/data
+    healthcheck:
+      test: ["CMD", "wget" ,"--no-verbose", "--tries=1", "--spider", "http://localhost"]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - wallabag-net
+    restart: always
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Wallabag
+      - homepage.weight=30
+      - homepage.icon=wallabag.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+  ts:
+    container_name: wallabag-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=wallabag
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - wallabag-net
+    restart: always
+    depends_on:
+      - wallabag
+networks:
+  wallabag-net:

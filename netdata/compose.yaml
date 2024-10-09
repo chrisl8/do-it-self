@@ -1,0 +1,64 @@
+services:
+  netdata:
+    container_name: netdata
+    image: netdata/netdata
+    pid: host
+    restart: always
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /mnt/250a/container-mounts/netdata/netdataconfig:/etc/netdata
+      - /mnt/250a/container-mounts/netdata/netdatalib:/var/lib/netdata
+      - /mnt/250a/container-mounts/netdata/netdatacache:/var/cache/netdata
+      - /:/host/root:ro,rslave
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /var/log:/host/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - netdata-net
+    # Note that netdata has a health check built into the Dockerfile, so no need to add it here.
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Netdata
+      - homepage.weight=110
+      - homepage.icon=netdata.png
+      - homepage.href=${HOME_PAGE_URL}
+      - homepage.description=System Monitoring
+  ts:
+    container_name: netdata-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=netdata
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - netdata-net
+    restart: always
+    depends_on:
+      - netdata
+networks:
+  netdata-net:

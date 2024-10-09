@@ -1,0 +1,52 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    volumes:
+      # I put the folder that contains these three into their own private git repo for tracking changes.
+      - /mnt/250a/container-mounts/homepage/config:/app/config # Make sure your local config directory exists
+      - /mnt/250a/container-mounts/homepage/images:/app/public/images
+      - /mnt/250a/container-mounts/homepage/icons:/app/public/icons
+      - /var/run/docker.sock:/var/run/docker.sock # pass local proxy
+      # To allow homepage to show disk space free on all disks I have an empty folder on each disk that I mount here.
+      - /mnt/120/for-homepage:/mnt/120
+      - /home/chrisl8/for-homepage:/mnt/root
+      - /mnt/250a/for-homepage:/mnt/250a
+      - /mnt/250b/for-homepage:/mnt/250b
+      - /mnt/500/for-homepage:/mnt/500
+      - /mnt/3000/for-homepage:/mnt/3000
+      - /mnt/8000/for-homepage:/mnt/8000
+    restart: always
+    networks:
+      - homepage-net
+  #    healthcheck: is built into this app, no need to add one.
+  ts:
+    container_name: homepage-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=console
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - homepage-net
+    restart: always
+    depends_on:
+      - homepage
+networks:
+  homepage-net:

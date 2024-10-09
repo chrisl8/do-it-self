@@ -1,0 +1,168 @@
+# Docker Compose file for running paperless from the Docker Hub.
+# This file contains everything paperless needs to run.
+# Paperless supports amd64, arm and arm64 hardware.
+#
+# All compose files of paperless configure paperless in the following way:
+#
+# - Paperless is (re)started on system boot, if it was running before shutdown.
+# - Docker volumes for storing data are managed by Docker.
+# - Folders for importing and exporting files are created in the same directory
+#   as this file and mounted to the correct folders inside the container.
+# - Paperless listens on port 8000.
+#
+# In addition to that, this Docker Compose file adds the following optional
+# configurations:
+#
+# - Instead of SQLite (default), PostgreSQL is used as the database server.
+#
+# To install and update paperless with this file, do the following:
+#
+# - Copy this file as 'docker-compose.yml' and the files 'docker-compose.env'
+#   and '.env' into a folder.
+# - Run 'docker compose pull'.
+# - Run 'docker compose run --rm webserver createsuperuser' to create a user.
+# - Run 'docker compose up -d'.
+#
+# For more extensive installation and update instructions, refer to the
+# documentation.
+
+services:
+  webserver:
+    container_name: paperless
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: always
+    depends_on:
+      - db
+      - broker
+      - gotenberg
+      - tika
+    volumes:
+      - /mnt/250a/container-mounts/paperless-ngx/data:/usr/src/paperless/data
+      - /mnt/250a/container-mounts/paperless-ngx/media:/usr/src/paperless/media # Your files are all here under documents/ originals and the generated PDFS in archive/
+      - /mnt/250a/container-mounts/paperless-ngx/export:/usr/src/paperless/export
+      - /mnt/500/samba/ScanHere:/usr/src/paperless/consume # Make sure this gets to the right directory. Test it.
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+      PAPERLESS_CONSUMER_POLLING: 120 # In Seconds. This should produce less load on the system than filesystem watchers, which are also not always reliable in some cases.
+      PAPERLESS_CONSUMER_RECURSIVE: 1
+      PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS: 1
+      PAPERLESS_NUMBER_OF_SUGGESTED_DATES: 10
+      PAPERLESS_DATE_ORDER: MDY
+      PAPERLESS_CONSUMER_DELETE_DUPLICATES: 1
+      PAPERLESS_TIME_ZONE: America/Chicago
+      PAPERLESS_URL: ${HOME_PAGE_URL}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+    networks:
+      - paperless-net
+    # Note that papaerless (webserver) has a health check built into the Dockerfile, so no need to add it here.
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=PaperlessNGX
+      - homepage.weight=70
+      - homepage.icon=paperless-ngx.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+      - homepage.widget.type=paperlessngx
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.key=${API_KEY}
+  broker:
+    container_name: paperless-broker
+    image: docker.io/library/redis:7
+    restart: always
+    volumes:
+      - redisdata:/data
+    # https://stackoverflow.com/questions/67904609/how-do-you-perform-a-healthcheck-in-the-redis-docker-image
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - paperless-net
+  db:
+    container_name: paperless-db
+    image: docker.io/library/postgres:16
+    restart: always
+    volumes:
+      - /mnt/250a/container-mounts/paperless-ngx/database:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+    healthcheck:
+      test: pg_isready
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - paperless-net
+  gotenberg:
+    container_name: paperless-gotenberg
+    image: docker.io/gotenberg/gotenberg:8.7
+    restart: always
+    networks:
+      - paperless-net
+    # The gotenberg chromium route is used to convert .eml files. We do not
+    # want to allow external content like tracking pixels or even javascript.
+    # Actually allowing this so that I can get images from emails into my PDFs, for better or worse.
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s" # Set to 120s when done processing large chunks
+      - "--chromium-disable-javascript=true"
+      #- "--chromium-allow-list=file:///tmp/.*"
+    # https://gotenberg.dev/docs/routes#health-check-route
+    healthcheck:
+      test: 'curl --fail http://localhost:3000/health 2>/dev/null | grep -o "\"status\":\"up\"," | wc -l | [ "`cat`" = "3" ] || exit 1'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  tika:
+    container_name: paperless-tika
+    image: docker.io/apache/tika:latest
+    restart: always
+    networks:
+      - paperless-net
+    healthcheck:
+      test: pgrep -f tika || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  ts:
+    container_name: paperless-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=paperless
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - paperless-net
+    restart: always
+    depends_on:
+      - webserver
+volumes:
+  redisdata:
+networks:
+  paperless-net:

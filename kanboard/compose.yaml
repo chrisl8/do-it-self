@@ -1,0 +1,52 @@
+services:
+  kanboard:
+    container_name: kanboard
+    image: kanboard/kanboard:latest
+    volumes:
+      - /mnt/250a/container-mounts/kanboard/data:/var/www/app/data
+      - /mnt/250a/container-mounts/kanboard/plugins:/var/www/app/plugins
+    healthcheck:
+      test: curl --fail http://localhost/login | grep "Username" || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - kanboard-net
+    restart: always
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=KanBoard
+      - homepage.weight=20
+      - homepage.icon=/icons/kanboard.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+  ts:
+    container_name: kanboard-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=kanboard
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - kanboard-net
+    restart: always
+    depends_on:
+      - kanboard
+networks:
+  kanboard-net:

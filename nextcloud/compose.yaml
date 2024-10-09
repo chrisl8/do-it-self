@@ -1,0 +1,86 @@
+# https://hub.docker.com/_/nextcloud/
+services:
+  nextcloud:
+    image: nextcloud
+    container_name: nextcloud
+    volumes:
+      - /mnt/3000/container-mounts/nextcloud/html:/var/www/html
+    environment:
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_HOST=db
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
+    networks:
+      - nextcloud-net
+    restart: always
+    depends_on:
+      - db
+    healthcheck:
+      test: 'runuser -s /usr/local/bin/php - www-data /var/www/html/occ status 2>/dev/null | grep -e "installed: true" -e "maintenance: false" -e "needsDbUpgrade: false" | wc -l | [ "`cat`" = "3" ]'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Nextcloud
+      - homepage.weight=65
+      - homepage.icon=nextcloud.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+      - homepage.widget.type=nextcloud
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.username=${USERNAME_FOR_HOMEPAGE}
+      - homepage.widget.password=${PASSWORD_FOR_HOMEPAGE}
+      - homepage.widget.fields=["freespace", "numfiles"]
+  db:
+    container_name: nextcloud-db
+    image: mariadb:10
+    volumes:
+      - /mnt/3000/container-mounts/nextcloud/db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    networks:
+      - nextcloud-net
+    restart: always
+    # https://mariadb.com/kb/en/using-healthcheck-sh/
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  ts-nextcloud:
+    container_name: nextcloud-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=nextcloud
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - nextcloud-net
+    restart: always
+    depends_on:
+      - nextcloud
+networks:
+  nextcloud-net:

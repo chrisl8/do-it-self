@@ -1,0 +1,59 @@
+services:
+  jellyfin:
+    container_name: jellyfin
+    image: jellyfin/jellyfin
+    # network_mode: 'host'
+    volumes:
+      - /mnt/250a/container-mounts/jellyfin/config:/config
+      - /mnt/250a/container-mounts/jellyfin/cache:/cache
+      # You can repeat the /media subfolders to have more than one media folder
+      - /mnt/250a/container-mounts/jellyfin/music:/media/music
+      - /mnt/3000/media/videos:/media/videos
+      - /mnt/3000/media/clips:/media/clips
+      - /mnt/3000/media/screenshots:/media/screenshots
+      - /mnt/3000/media/randomphotos:/media/randomphotos
+    restart: always
+    networks:
+      - jellyfin-net
+    # Note that jellyfin has a health check built into the Dockerfile, so no need to add it here.
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Jellyfin
+      - homepage.weight=60
+      - homepage.icon=jellyfin.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+      - homepage.widget.type=jellyfin
+      - homepage.widget.key=${API_KEY}
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.enableBlocks=true
+      - homepage.widget.fields=["movies", "songs"]
+  ts:
+    container_name: jellyfin-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=jellyfin
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - jellyfin-net
+    restart: always
+    depends_on:
+      - jellyfin
+networks:
+  jellyfin-net:
