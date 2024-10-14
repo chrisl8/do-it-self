@@ -56,7 +56,6 @@ fi
 cd "${SCRIPT_DIR}" || exit
 for dir in *;do
   if [[ -d "${SCRIPT_DIR}/${dir}" ]] && [[ -e "${SCRIPT_DIR}/${dir}/compose.yaml" ]];then
-    sleep ${SLEEP_TIME}
     dir=${dir%*/}
     printf "${BRIGHT_MAGENTA} - ${dir}${NC}\n"
     cd "${SCRIPT_DIR}/${dir}"
@@ -72,9 +71,10 @@ for dir in *;do
         docker exec homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico"
         docker exec homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
       fi
+      sleep ${SLEEP_TIME}
     fi
     if [[ ${ACTION} = "stop" ]];then
-      echo docker compose down
+      docker compose down
     fi
   fi
 done
