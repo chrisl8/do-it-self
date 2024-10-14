@@ -15,8 +15,9 @@ services:
       - "3306:3306"
     networks:
       - mariadb-net
+    # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized", "--mariadbupgrade"]
       start_period: 30s
       interval: 120s
       timeout: 15s
