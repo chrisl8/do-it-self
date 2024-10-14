@@ -16,7 +16,7 @@ services:
     networks:
       - mariadb-net
     healthcheck:
-      test: mariadb-admin ping -h localhost --password=$$MARIADB_ROOT_PASSWORD
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       start_period: 30s
       interval: 120s
       timeout: 15s
