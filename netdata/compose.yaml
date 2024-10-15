@@ -31,7 +31,8 @@ services:
       - homepage.weight=110
       - homepage.icon=netdata.png
       - homepage.href=${HOME_PAGE_URL}
-      - homepage.description=System Monitoring
+      - homepage.widget.type=netdata
+      - homepage.widget.url=${HOME_PAGE_URL}
   ts:
     container_name: netdata-ts
     image: tailscale/tailscale:latest
