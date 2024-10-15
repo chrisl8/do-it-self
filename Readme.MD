@@ -55,6 +55,9 @@ I have this in my crontab:
 
 Each project has a folder in the root of the repository.
 
+_Docker Compose uses the name of the folder that contains the `compose.yaml` file as the "project name", so having a unique and meaningful folder for each container is important._ There are other ways to set the project name, but this is what I use.  
+The project names aren't super important except that compose gets confused if multiple projects exist with the same name and will warn about orphans.
+
 Each of those folders should have a `compose.yaml` file.
 
 Any other files that may contain a `Dockerfile` should then be in a subfolder.
