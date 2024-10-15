@@ -25,6 +25,10 @@ services:
       - homepage.weight=100
       - homepage.icon=urbackup.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
+      - homepage.widget.type=urbackup
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.username=${URBACKUP_USERNAME}
+      - homepage.widget.password=${URBACKUP_PASSWORD}
     healthcheck:
       test: wget -O - http://127.0.0.1:55414 2> /dev/null | grep "UrBackup 2.5.33" || exit 1
       start_period: 30s
