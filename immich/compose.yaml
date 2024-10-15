@@ -27,6 +27,7 @@ services:
       - homepage.icon=immich.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=immich
+      - homepage.widget.version=2
       - homepage.widget.url=${HOME_PAGE_URL}
       - homepage.widget.key=${API_KEY}
       - homepage.widget.fields=["photos", "videos", "storage"]
