@@ -134,7 +134,7 @@ services:
       - dawarich_db
       - dawarich_redis
       - dawarich
-  #      - photon
+      - photon
   ts:
     container_name: dawarich-ts
     image: tailscale/tailscale:latest
@@ -165,24 +165,24 @@ services:
       - dawarich
 # IF Geocoder would allow it, I could run Photon in here.
 # As it stands, I run it in another compose setup with its own TaleScale setup so it can easily have HTTPS.
-#  photon:
-#    container_name: dawarich-photon
-#    build:
-#      context: ./photon
-#      dockerfile: Dockerfile
-#      args:
-#        PHOTON_VERSION: 0.5.0
-#    volumes:
-#      - /mnt/3000/container-mounts/photon/data:/photon/photon_data
-#    networks:
-#      - dawarich-net
-#    restart: always
-#    healthcheck:
-#      test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"," || exit 1'
-#      start_period: 30s
-#      interval: 120s
-#      timeout: 15s
-#      retries: 3
+  photon:
+    container_name: dawarich-photon
+    build:
+      context: ./photon
+      dockerfile: Dockerfile
+      args:
+        PHOTON_VERSION: 0.5.0
+    volumes:
+      - /mnt/3000/container-mounts/photon/data:/photon/photon_data
+    networks:
+      - dawarich-net
+    restart: always
+    healthcheck:
+      test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"," || exit 1'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
 volumes:
   redis_shared_data:
   gem_cache:
