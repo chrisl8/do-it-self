@@ -193,6 +193,13 @@ In theory, since it is all exposed via tailscale, it is only exposed to me, but 
 
 I don't know if there is any performance benefit/drawback of the two setups.
 
+# Docker hints
+
+## Docker Healthchecks
+
+If you are having trouble getting one to work you can see the output of the healthcheck by running:
+`docker inspect --format "{{json .State.Health }}" <container name> | jq`
+
 # Answers to Questions Nobody Asked
 
 1. Why do you use the latest version of so many things, isn't it dangerous not to pin versions?

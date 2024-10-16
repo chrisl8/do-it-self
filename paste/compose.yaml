@@ -1,0 +1,27 @@
+# https://github.com/tailscale-dev/tclip
+services:
+  paste:
+    container_name: paste
+    image: ghcr.io/tailscale-dev/tclip:latest
+    # NOTE that this needs its OWN "auth key" and it is NOT the same as the tailscale OAuth key other containers use.
+    # Instead you need a key from here: https://login.tailscale.com/admin/settings/keys
+    environment:
+      - DATA_DIR=/data
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - HOME_PAGE_URL=${HOME_PAGE_URL}
+    volumes:
+      - /mnt/250a/container-mounts/paste/data:/data
+      - ./healthcheck:/healthcheck
+    healthcheck:
+      test: ["CMD", "/healthcheck/get-home-page"]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    restart: always
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Paste
+      - homepage.weight=95
+      - homepage.icon=pastebin.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
