@@ -1,0 +1,30 @@
+services:
+  watch-your-lan:
+    container_name: watch-your-lan
+    image: aceberg/watchyourlan:v2
+    # Must be host as this is going to scan our network.
+    network_mode: "host"
+    restart: always
+    volumes:
+      - /mnt/250a/container-mounts/watch-your-lan/data:/data/WatchYourLAN
+    environment:
+      TZ: America/Chicago              # required: needs your TZ for correct time
+      IFACES: "enp1s0f1"  # required: 1 or more interface
+      HOST: "0.0.0.0"                   # optional, default: 0.0.0.0
+      PORT: "8840"                      # optional, default: 8840
+      TIMEOUT: "120"                    # optional, time in seconds, default: 120
+      SHOUTRRR_URL: ""                  # optional, set url to notify
+      THEME: "sand"                     # optional
+      COLOR: "dark"                     # optional
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Watch Your LAN
+      - homepage.weight=100
+      - homepage.icon=watchyourlan.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+    healthcheck:
+      test: wget -O - http://127.0.0.1:8840 2> /dev/null | grep "WatchYourLAN" || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
