@@ -82,10 +82,14 @@ done
 if [[ ${ACTION} = "start" ]];then
   printf "${YELLOW}Performing post-start chores${NC}\n"
   # Prune images now to clear any left over after upgrades.
-  docker image prune -f
+  # This ensures all images we don't use are pruned, but none that we do use
+  docker image prune -af
 
   # Remove unnamed and unused volumes that get left behind
-  docker volume prune -f
+  docker volume prune -af
+
+  # Remove unused networks that get left behind
+  docker network prune -f
 
   printf "${YELLOW}All containers started${NC}\n"
 fi
