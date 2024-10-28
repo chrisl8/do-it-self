@@ -1,0 +1,50 @@
+services:
+  uptime:
+    container_name: uptime
+    image: louislam/uptime-kuma:latest
+    volumes:
+      - /mnt/250a/container-mounts/uptime/data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - uptime-net
+    restart: always
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Uptime
+      - homepage.weight=100
+      - homepage.icon=uptime-kuma.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+      - homepage.widget.type=uptimekuma
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.slug=everything
+      # Uptime has a built-in healthcheck
+  ts:
+    container_name: uptime-ts
+    image: tailscale/tailscale:latest
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=uptime
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - uptime-net
+    restart: always
+    depends_on:
+      - uptime
+networks:
+  uptime-net:
