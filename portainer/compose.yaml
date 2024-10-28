@@ -1,31 +1,33 @@
 services:
-  nginx:
-    container_name: nginx
-    image: nginx
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:latest
     volumes:
-      - /mnt/250a/container-mounts/nginx/conf.d:/etc/nginx/conf.d
-      - /mnt/250a/container-mounts/nginx/html:/html
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mnt/250a/container-mounts/portainer/data:/data
+    networks:
+      - portainer-net
+    restart: always
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=portainer
+      - homepage.weight=0
+      - homepage.icon=portainer.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+    # This is the derpiest healtcheck I've ever set up, but it works and keeps the pattern of all of my containers having health checks
+    # https://github.com/portainer/portainer/issues/1364#issuecomment-955588034
     healthcheck:
-      test: curl --fail http://localhost/ | grep "Welcome" || exit 1
+      test: ["CMD", "/docker", "container", "top", "portainer"]
       start_period: 30s
       interval: 120s
       timeout: 15s
       retries: 3
-    networks:
-      - nginx-net
-    restart: always
-    labels: # For homepage
-      - homepage.group=MiddleServices
-      - homepage.name=nginx
-      - homepage.weight=100
-      - homepage.icon=nginx.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
-      - homepage.href=${HOME_PAGE_URL}
   ts:
-    container_name: nginx-ts
+    container_name: portainer-ts
     image: tailscale/tailscale:latest
     env_file: tailscale.env
     environment:
-      - TS_HOSTNAME=nginx
+      - TS_HOSTNAME=portainer
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
@@ -44,9 +46,9 @@ services:
       timeout: 15s
       retries: 3
     networks:
-      - nginx-net
+      - portainer-net
     restart: always
     depends_on:
-      - nginx
+      - portainer
 networks:
-  nginx-net:
+  portainer-net:

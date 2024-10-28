@@ -29,6 +29,8 @@ services:
       - homepage.widget.url=${HOME_PAGE_URL}
       - homepage.widget.username=${URBACKUP_USERNAME}
       - homepage.widget.password=${URBACKUP_PASSWORD}
+      - homepage.widget.fields=["ok", "errored", "noRecent", "totalUsed"]
+      - homepage.widget.maxDays=7
     healthcheck:
       test: wget -O - http://127.0.0.1:55414 2> /dev/null | grep "UrBackup 2.5.33" || exit 1
       start_period: 30s
