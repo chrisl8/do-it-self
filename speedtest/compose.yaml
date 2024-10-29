@@ -1,0 +1,27 @@
+services:
+  speedtest:
+    container_name: speedtest
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    ports:
+      - 8765:80
+    volumes:
+      - /mnt/250a/container-mounts/speedtest/config:/config
+    environment:
+      - DISPLAY_TIMEZONE=America/Chicago
+      - PUID=1000
+      - PGID=1000
+      - APP_KEY=base64:telXO1fQNhw+TekIMlVtP8JVhLHIFB50f+QDWL2dedc=
+      - APP_URL=${HOME_PAGE_URL}
+      - DB_CONNECTION=sqlite
+      - SPEEDTEST_SCHEDULE="35 3,15 * * *"
+      - PUBLIC_DASHBOARD=true
+    restart: always
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Speedtest
+      - homepage.weight=10
+      - homepage.icon=speedtest-tracker.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.href=${HOME_PAGE_URL}
+      - homepage.widget.type=speedtest
+      - homepage.widget.url=${HOME_PAGE_URL}
+# There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.
