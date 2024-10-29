@@ -13,7 +13,7 @@ services:
       HOST: "0.0.0.0"                   # optional, default: 0.0.0.0
       PORT: "8840"                      # optional, default: 8840
       TIMEOUT: "120"                    # optional, time in seconds, default: 120
-      SHOUTRRR_URL: ""                  # optional, set url to notify
+      SHOUTRRR_URL: ${SHOUTRRR_URL}     # optional, if you want to send notifications to Shoutrrr
       THEME: "sand"                     # optional
       COLOR: "dark"                     # optional
     labels: # For homepage
