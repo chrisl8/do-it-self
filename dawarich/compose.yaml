@@ -44,7 +44,7 @@ services:
       context: ./dawarich
       dockerfile: Dockerfile
     volumes:
-      - gem_cache:/usr/local/bundle/gems
+      - gem_cache:/usr/local/bundle/gems_app
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
     networks:
       - dawarich-net
@@ -108,7 +108,7 @@ services:
       context: ./dawarich
       dockerfile: Dockerfile
     volumes:
-      - gem_cache:/usr/local/bundle/gems
+      - gem_cache:/usr/local/bundle/gems_sidekiq
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
     networks:
       - dawarich-net
