@@ -9,12 +9,9 @@ services:
       - /mnt/250a/container-mounts/mariadb/db:/var/lib/mysql
     restart: always
     # Exposed locally so that my personal apps that use it don't have to traverse tailscale to use it.
-    # This also means remote access is via the host's tailscale connection, not the sidecar.
-    # The sidecar is only for adminer.
+    # This also means remote access is via the host's tailscale connection.
     ports:
       - "3306:3306"
-    networks:
-      - mariadb-net
     # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized", "--mariadbupgrade"]
@@ -22,56 +19,4 @@ services:
       interval: 120s
       timeout: 15s
       retries: 3
-  # There isn't anything special about this adminer instance.
-  # It can see the mariadb container because they're on the same network, but since mariadb is exposed to the local system,
-  # it could see it anyway.
-  # So this adminer could connect to any database instance that it could see, and could be put into any compose file.
-  adminer:
-    container_name: mariadb-adminerevo
-    build:
-      context: ./adminerevo
-      dockerfile: Dockerfile
-    restart: always
-    networks:
-      - mariadb-net
-    healthcheck:
-      test: (php -r "readfile('http://localhost:8080/');" | grep -q '<title>Login - AdminerEvo</title>') || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
-      retries: 3
-    labels: # For homepage
-      - homepage.group=MiddleServices
-      - homepage.name=Mariadb
-      - homepage.weight=45
-      - homepage.icon=adminer.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
-      - homepage.href=${HOME_PAGE_URL}
-  # This is only used to connect to adminer.
-  ts:
-    container_name: mariadb-ts
-    image: tailscale/tailscale:latest
-    env_file: tailscale.env
-    environment:
-      - TS_HOSTNAME=mariadb
-      - TS_EXTRA_ARGS=--advertise-tags=tag:container
-      - TS_SERVE_CONFIG=/config/tailscale-config.json
-      - TS_STATE_DIR=/var/lib/tailscale
-    volumes:
-      - ./tailscale-state:/var/lib/tailscale
-      - ./tailscale-config:/config
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - net_admin
-      - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
-    healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
-      retries: 3
-    restart: always
-    networks:
-      - mariadb-net
-networks:
-  mariadb-net:
+# There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.

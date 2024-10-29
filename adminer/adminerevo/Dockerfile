@@ -1,9 +1,9 @@
 # Copied from https://github.com/shyim/adminerevo-docker and modified.
 FROM php:latest
 
-RUN apt-get update && apt-get install --no-install-recommends -y git
+RUN apt-get update && apt-get install --no-install-recommends -y git libpq-dev
 
-RUN docker-php-ext-install mysqli pdo pdo_mysql && docker-php-ext-enable pdo_mysql
+RUN docker-php-ext-install mysqli pdo pdo_mysql pgsql pdo_pgsql && docker-php-ext-enable pdo_mysql pdo_pgsql
 
 COPY rootfs /
 
