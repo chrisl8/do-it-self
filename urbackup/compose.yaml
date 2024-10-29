@@ -17,7 +17,9 @@ services:
       # Uncomment the next line if you want to bind-mount the www-folder
       #- /path/to/wwwfolder:/usr/share/urbackup
     # Unlike most of my containers, this one only runs locally,
-    # so that it can see and be seen by computers on my local network.
+    # so that it can see and be seen by computers on my local network using any and all ports,
+    # while NOT seen remotely, because I never want backups to happen remotely at all, much less over Tailscale,
+    # although it could be away to allow remote backups, I don't want to do that at the moment.
     network_mode: "host"
     labels: # For homepage
       - homepage.group=MiddleServices

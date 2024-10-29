@@ -37,6 +37,9 @@ services:
       retries: 3
     restart: always
     ports:
+      # These ports are exposed here so that players on the LAN can connect to the server without going through Tailscale encryption, which uses valuable CPU resources and causes game latency.
+      # These ports are HERE because the minecraft container above is running ON the ts container's network,
+      # which it does so that people connecting to this game via Tailscales' magic can connect to any and all ports of the Minecraft server.
       # Minecraft Bedrock Edition uses both ports on both UDP and TCP to use IPv4 and IPv6 according to https://minecraft.wiki/w/Bedrock_Dedicated_Server#Connection
       - "19132:19132/udp"
       - "19132:19132/tcp"

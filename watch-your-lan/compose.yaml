@@ -28,3 +28,4 @@ services:
       interval: 120s
       timeout: 15s
       retries: 3
+# I do NOT have this set up with Tailscale specifically, one just has to connect to it using the host's tailscale IP and the port that watch-your-lan runs on, which is 8840 by default.
