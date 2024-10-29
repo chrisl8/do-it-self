@@ -66,7 +66,7 @@ services:
       APPLICATION_HOSTS: ${APPLICATION_HOST}
       APPLICATION_PROTOCOL: http
       REVERSE_GEOCODING_ENABLED: true
-      DISTANCE_UNIT: "mi"
+      DISTANCE_UNIT: mi
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
       driver: "json-file"
@@ -132,7 +132,7 @@ services:
       PHOTON_API_HOST: ${PHOTON_API_HOST}
       PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
       TIME_ZONE: America/Chicago
-      DISTANCE_UNIT: "mi"
+      DISTANCE_UNIT: mi
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
       driver: "json-file"
