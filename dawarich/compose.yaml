@@ -28,9 +28,10 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: dawarich_production
     restart: always
     healthcheck:
-      test: pg_isready
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
       start_period: 30s
       interval: 120s
       timeout: 15s
@@ -126,7 +127,8 @@ services:
       DATABASE_NAME: dawarich_production
       APPLICATION_HOST: ${APPLICATION_HOST}
       APPLICATION_HOSTS: ${APPLICATION_HOST}
-      BACKGROUND_PROCESSING_CONCURRENCY: 10
+#      BACKGROUND_PROCESSING_CONCURRENCY: 90
+#      RAILS_MAX_THREADS: 90
       APPLICATION_PROTOCOL: http
       REVERSE_GEOCODING_ENABLED: true
       PHOTON_API_HOST: ${PHOTON_API_HOST}
