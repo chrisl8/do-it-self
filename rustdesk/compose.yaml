@@ -1,0 +1,66 @@
+services:
+  hbbs:
+    container_name: rustdesk-rendezvous_server
+    image: rustdesk/rustdesk-server
+    command: hbbs
+    volumes:
+      - /mnt/250a/container-mounts/rustdesk/data:/root
+      - ./healthcheck:/healthcheck
+    network_mode: service:ts
+    depends_on:
+      - hbbr
+    restart: always
+    healthcheck:
+      test: ["CMD", "/healthcheck/checkForHbbsProcess"]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  hbbr:
+    container_name: rustdesk-relay_server
+    image: rustdesk/rustdesk-server
+    command: hbbr
+    volumes:
+      - /mnt/250a/container-mounts/rustdesk/data:/root
+      - ./healthcheck:/healthcheck
+    network_mode: service:ts
+    restart: always
+    depends_on:
+      - ts
+    healthcheck:
+      test: ["CMD", "/healthcheck/checkForHbbrProcess"]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  ts:
+    container_name: rustdesk-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=rustdesk
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    restart: always
+# Because using docker host mode
+# Just in case you forgot the ports:
+# 21114 TCP for web console, only available in Pro version
+# 21115 TCP for NAT type test
+# 21116 TCP TCP hole punching
+# 21116 UDP heartbeat/ID server
+# 21117 TCP relay
+# 21118/21119 TCP for web socket if you want to run web client
+
