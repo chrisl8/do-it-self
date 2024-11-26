@@ -1,0 +1,54 @@
+services:
+  collabora:
+    container_name: collabora
+    image: collabora/code
+    restart: always
+    volumes:
+      # https://github.com/CollaboraOnline/online/issues/4489#issuecomment-1486058732
+      - ./no_nag_please_kthx:/usr/share/coolwsd/browser/dist/welcome:ro
+    environment:
+      username: ${COLLABORA_ADMIN_USERNAME}
+      password: ${COLLABORA_ADMIN_PASSWORD}
+      domain: nextcloud.jamnapari-goblin.ts.net
+      DONT_GEN_SSL_CERT: "true"
+      server_name: collabora.jamnapari-goblin.ts.net
+      aliasgroup1: https://.*:443
+      # https://github.com/CollaboraOnline/online/issues/4641#issuecomment-1272447147
+      # The first "enable=false" is to tell Collabora NOT to run SSL, but then it tells everyoen who talks to it, "Hey, use http!"
+      # So the "termination=true" makes it tell everyone to use https even though it thinks it isn't.
+      extra_params: --o:ssl.enable=false --o:ssl.termination=true
+    network_mode: service:ts
+    healthcheck:
+      test: curl --fail http://127.0.0.1:9980/ | grep -q -e 'OK' || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  ts:
+    container_name: collabora-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=collabora
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    restart: always
+# This one the ts container network instead of a shared network because I originally thought
+# that something needed to connect to other non-http ports on Collabora,
+# but I'm not sure that is the case.
+# Regardless this works and I don't think there are any downsides.
