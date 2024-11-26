@@ -75,7 +75,7 @@ services:
         max-size: "20m"
         max-file: "2"
     healthcheck:
-      test: wget -O - http://127.0.0.1:3000/api/v1/health 2> /dev/null | grep "{\"status\":\"ok\"}" || exit 1
+      test: [ "CMD-SHELL", "wget -qO - http://127.0.0.1:3000/api/v1/health | grep -q '\"status\"\\s*:\\s*\"ok\"'" ]
       start_period: 30s
       interval: 120s
       timeout: 15s
@@ -142,7 +142,7 @@ services:
         max-size: "20m"
         max-file: "2"
     healthcheck:
-      test: pgrep -f "sidekiq 7"
+      test: [ "CMD-SHELL", "bundle exec sidekiqmon processes | grep $${HOSTNAME}" ]
       start_period: 30s
       interval: 120s
       timeout: 15s
@@ -154,7 +154,7 @@ services:
       - photon
   ts:
     container_name: dawarich-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=dawarich
