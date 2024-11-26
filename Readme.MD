@@ -73,6 +73,8 @@ Add a comment to the top with the source if it was originally copied from somewh
 ** Do not add a `image` tag if they have a `build` section. **
 This just confuses things, or worse pulls down an image and also builds it, causing duplication.
 
+**Note: if you don't specify the tag in the image name, latest will be used.**
+
 ### Formatting
 
 I generally remove all blank lines.
