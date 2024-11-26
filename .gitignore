@@ -6,3 +6,4 @@ tailscale.env
 /minecraft/docker-minecraft-bedrock-server/
 /diun/diun.yml
 /homepage/config/
+/nextcloud/html/
