@@ -16,7 +16,7 @@ services:
       - SYS_PTRACE
   ts:
     container_name: minecraft-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=minecraft

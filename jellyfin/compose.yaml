@@ -29,7 +29,7 @@ services:
       - homepage.widget.fields=["movies", "songs"]
   ts:
     container_name: jellyfin-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=jellyfin

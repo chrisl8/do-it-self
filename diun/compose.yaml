@@ -1,7 +1,7 @@
 services:
   diun:
     container_name: diun
-    image: crazymax/diun:latest
+    image: crazymax/diun
     command: serve
     volumes:
       - /mnt/250a/container-mounts/diun/data:/data

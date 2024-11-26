@@ -1,7 +1,7 @@
 services:
   speedtest:
     container_name: speedtest
-    image: lscr.io/linuxserver/speedtest-tracker:latest
+    image: lscr.io/linuxserver/speedtest-tracker
     ports:
       - 8765:80
     volumes:

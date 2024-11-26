@@ -22,7 +22,7 @@ services:
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: nginx-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=nginx

@@ -1,7 +1,7 @@
 services:
   kanboard:
     container_name: kanboard
-    image: kanboard/kanboard:latest
+    image: kanboard/kanboard
     volumes:
       - /mnt/250a/container-mounts/kanboard/data:/var/www/app/data
       - /mnt/250a/container-mounts/kanboard/plugins:/var/www/app/plugins
@@ -22,7 +22,7 @@ services:
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: kanboard-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=kanboard

@@ -1,6 +1,6 @@
 services:
   homepage:
-    image: ghcr.io/gethomepage/homepage:latest
+    image: ghcr.io/gethomepage/homepage
     container_name: homepage
     volumes:
       # I put the folder that contains these three into their own private git repo for tracking changes.
@@ -22,7 +22,7 @@ services:
   #    healthcheck: is built into this app, no need to add one.
   ts:
     container_name: homepage-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=console

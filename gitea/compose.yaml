@@ -1,7 +1,7 @@
 services:
   gitea:
     container_name: gitea
-    image: gitea/gitea:latest
+    image: gitea/gitea
     environment:
       - USER_UID=1000
       - USER_GID=1000
@@ -31,7 +31,7 @@ services:
       - homepage.widget.fields=["notifications"]
   ts:
     container_name: gitea-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=gitea

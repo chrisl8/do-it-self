@@ -56,7 +56,7 @@ services:
       retries: 3
   ts-nextcloud:
     container_name: nextcloud-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=nextcloud

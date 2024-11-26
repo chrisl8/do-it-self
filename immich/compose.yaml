@@ -79,7 +79,7 @@ services:
       - immich-net
   ts:
     container_name: immich-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=immich

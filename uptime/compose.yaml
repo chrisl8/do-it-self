@@ -1,7 +1,7 @@
 services:
   uptime:
     container_name: uptime
-    image: louislam/uptime-kuma:latest
+    image: louislam/uptime-kuma
     volumes:
       - /mnt/250a/container-mounts/uptime/data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -20,7 +20,7 @@ services:
       # Uptime has a built-in healthcheck
   ts:
     container_name: uptime-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=uptime

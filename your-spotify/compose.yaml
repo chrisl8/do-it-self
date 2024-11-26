@@ -1,7 +1,7 @@
 services:
   your_spotify:
     container_name: your_spotify
-    image: lscr.io/linuxserver/your_spotify:latest
+    image: lscr.io/linuxserver/your_spotify
     environment:
       - PUID=1000
       - PGID=1000
@@ -44,7 +44,7 @@ services:
       - your_spotify-net
   ts:
     container_name: your_spotify-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=listenedto

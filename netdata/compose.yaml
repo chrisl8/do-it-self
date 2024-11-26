@@ -35,7 +35,7 @@ services:
       - homepage.widget.url=${HOME_PAGE_URL}
   ts:
     container_name: netdata-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=netdata

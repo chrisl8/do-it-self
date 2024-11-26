@@ -1,7 +1,7 @@
 services:
   freshrss:
     container_name: freshrss
-    image: freshrss/freshrss:latest
+    image: freshrss/freshrss
     restart: always
     logging:
       options:
@@ -32,7 +32,7 @@ services:
       - homepage.widget.password=${FRESHRSS_PASSWORD}
   ts:
     container_name: freshrss-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=freshrss

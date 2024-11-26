@@ -1,7 +1,7 @@
 services:
   stirling-pdf:
     container_name: stirling-pdf
-    image: frooodle/s-pdf:latest-fat
+    image: frooodle/s-pdf-fat
     volumes:
       - /mnt/250a/container-mounts/stirling-pdf/tessdata:/usr/share/tessdata #Required for extra OCR languages
       - /mnt/250a/container-mounts/stirling-pdf/configs:/configs
@@ -28,7 +28,7 @@ services:
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: stirling-pdf-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=stirling-pdf

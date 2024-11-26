@@ -1,7 +1,7 @@
 services:
   portainer:
     container_name: portainer
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /mnt/250a/container-mounts/portainer/data:/data
@@ -24,7 +24,7 @@ services:
       retries: 3
   ts:
     container_name: portainer-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=portainer

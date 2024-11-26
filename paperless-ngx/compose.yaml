@@ -29,7 +29,7 @@
 services:
   webserver:
     container_name: paperless
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    image: ghcr.io/paperless-ngx/paperless-ngx
     restart: always
     depends_on:
       - db
@@ -124,7 +124,7 @@ services:
       retries: 3
   tika:
     container_name: paperless-tika
-    image: docker.io/apache/tika:latest
+    image: docker.io/apache/tika
     restart: always
     networks:
       - paperless-net
@@ -136,7 +136,7 @@ services:
       retries: 3
   ts:
     container_name: paperless-ts
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=paperless
