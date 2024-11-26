@@ -1,7 +1,7 @@
 services:
   stirling-pdf:
     container_name: stirling-pdf
-    image: frooodle/s-pdf-fat
+    image: stirlingtools/stirling-pdf
     volumes:
       - /mnt/250a/container-mounts/stirling-pdf/tessdata:/usr/share/tessdata #Required for extra OCR languages
       - /mnt/250a/container-mounts/stirling-pdf/configs:/configs
