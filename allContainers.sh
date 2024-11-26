@@ -60,18 +60,27 @@ for dir in *;do
     printf "${BRIGHT_MAGENTA} - ${dir}${NC}\n"
     cd "${SCRIPT_DIR}/${dir}"
     if [[ ${ACTION} = "start" ]];then
-      # TODO: Check if containers needing git clones exist?
-      # TODO: Check if same are out of date?
-      docker compose pull
-      docker compose build
-      docker compose up -d
-      if [[ ${dir} = "homepage" ]];then
-        # This is my personal hack to get icons the way I want them in homepage.
-        docker exec homepage sh -c "cp /app/public/images/favicons/* /app/public"
-        docker exec homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico"
-        docker exec homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
+      if [[ $(docker compose ps | wc -l) -eq 1 ]];then
+        # TODO: Check if containers needing git clones exist?
+        for dir in $(find . -name ".git" -type d 2>/dev/null); do
+          echo "Updating git repository in ${dir%/*}"
+          cd "${dir%/*}" || continue
+          git pull
+          cd - > /dev/null || exit
+        done
+        docker compose pull
+        docker compose build
+        docker compose up -d
+        if [[ ${dir} = "homepage" ]];then
+          # This is my personal hack to get icons the way I want them in homepage.
+          docker exec homepage sh -c "cp /app/public/images/favicons/* /app/public"
+          docker exec homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico"
+          docker exec homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
+        fi
+        sleep ${SLEEP_TIME}
+      else
+        printf "${YELLOW}   - Skipping ${dir} as it is already running.${NC}\n"
       fi
-      sleep ${SLEEP_TIME}
     fi
     if [[ ${ACTION} = "stop" ]];then
       docker compose down
