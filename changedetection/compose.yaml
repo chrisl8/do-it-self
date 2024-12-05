@@ -30,7 +30,7 @@ services:
       - homepage.icon=/icons/changedetection-io.png
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=changedetectionio
-      - homepage.widget.key=$API_KEY}
+      - homepage.widget.key=${API_KEY}
       - homepage.widget.url=${HOME_PAGE_URL}
     # If WEBDRIVER or PLAYWRIGHT are enabled, changedetection container depends on that
     # and must wait before starting (substitute "browser-chrome" with "playwright-chrome" if last one is used)
