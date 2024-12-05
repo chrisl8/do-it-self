@@ -1,0 +1,88 @@
+services:
+  redis:
+    container_name: searxng-redis
+    image: docker.io/valkey/valkey:8-alpine
+    command: valkey-server --save 30 1 --loglevel warning
+    restart: unless-stopped
+    volumes:
+      - valkey-data2:/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+    networks:
+      - searxng-net
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  searxng:
+    container_name: searxng
+    image: docker.io/searxng/searxng
+    restart: unless-stopped
+    networks:
+      - searxng-net
+    volumes:
+      - /mnt/250a/container-mounts/searxng/etc:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=${HOME_PAGE_URL}
+      - UWSGI_WORKERS=${SEARXNG_UWSGI_WORKERS:-4}
+      - UWSGI_THREADS=${SEARXNG_UWSGI_THREADS:-4}
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+    healthcheck:
+      test: wget --no-verbose -O - "http://127.0.0.1:8080/search?q=doctor+who&category_general=1&language=en-US&time_range=&safesearch=0&theme=simple" 2>/dev/null | grep "doctor who" || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+  ts:
+    container_name: searxng-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=searxng
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    networks:
+      - searxng-net
+    restart: always
+    depends_on:
+      - searxng
+networks:
+  searxng-net:
+volumes:
+  valkey-data2:
