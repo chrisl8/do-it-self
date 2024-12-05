@@ -8,6 +8,7 @@ NC='\033[0m' # NoColor
 
 ACTION=""
 SLEEP_TIME=10
+MOUNT=""
 
 while test $# -gt 0
 do
@@ -19,6 +20,10 @@ do
                 --sleep)
                   shift
                   SLEEP_TIME=$1
+                  ;;
+                --mount)
+                  shift
+                  MOUNT=$1
                   ;;
         esac
         shift
@@ -32,6 +37,9 @@ if [[ ${ACTION} = "" ]];then
   echo ""
   echo "You can also adjust the sleep time between starting containers. Default is 10 seconds."
   echo "allContainers.sh --start --sleep 20"
+  echo ""
+  echo "You can also specify to only STOP containers which reference a given mount text in their compose.yaml files."
+  echo "allContainers.sh --stop --mount 250a"
   exit
 fi
 
@@ -50,18 +58,28 @@ if [[ ${ACTION} = "start" ]];then
   printf "${YELLOW}Starting all containers...${NC}\n"
 fi
 if [[ ${ACTION} = "stop" ]];then
-  printf "${YELLOW}Stopping all containers...${NC}\n"
+  if [[ ${MOUNT} != "" ]];then
+    printf "${YELLOW}Stopping containers that reference /mnt/${MOUNT}...${NC}\n"
+  else
+    printf "${YELLOW}Stopping all containers...${NC}\n"
+  fi
 fi
 
 cd "${SCRIPT_DIR}" || exit
 for dir in *;do
   if [[ -d "${SCRIPT_DIR}/${dir}" ]] && [[ -e "${SCRIPT_DIR}/${dir}/compose.yaml" ]];then
     dir=${dir%*/}
-    printf "${BRIGHT_MAGENTA} - ${dir}${NC}\n"
+    if [[ ${MOUNT} != "" ]];then
+      if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${dir}/compose.yaml" | grep -v photon_data | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
+        continue
+      fi
+    fi
     cd "${SCRIPT_DIR}/${dir}"
     if [[ ${ACTION} = "start" ]];then
       if [[ $(docker compose ps | wc -l) -eq 1 ]];then
+        printf "${BRIGHT_MAGENTA} - ${dir}${NC}\n"
         # TODO: Check if containers needing git clones exist?
+        # Update any git repositories in the directory
         for dir in $(find . -name ".git" -type d 2>/dev/null); do
           echo "Updating git repository in ${dir%/*}"
           cd "${dir%/*}" || continue
@@ -78,11 +96,10 @@ for dir in *;do
           docker exec homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
         fi
         sleep ${SLEEP_TIME}
-      else
-        printf "${YELLOW}   - Skipping ${dir} as it is already running.${NC}\n"
       fi
     fi
     if [[ ${ACTION} = "stop" ]];then
+      printf "${BRIGHT_MAGENTA} - ${dir}${NC}\n"
       docker compose down
     fi
   fi
