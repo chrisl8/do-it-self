@@ -1,54 +1,55 @@
 networks:
-  dawarich-net:
+  dawarich:
 services:
   dawarich_redis:
-    container_name: dawarich-redis
     image: redis:7.0-alpine
+    container_name: dawarich_redis
     command: redis-server
     networks:
-      - dawarich-net
+      - dawarich
     volumes:
-      - redis_shared_data:/var/shared/redis
+      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/var/shared/redis
     restart: always
     # https://stackoverflow.com/questions/67904609/how-do-you-perform-a-healthcheck-in-the-redis-docker-image
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
-      start_period: 30s
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       interval: 120s
+      retries: 5
+      start_period: 30s
       timeout: 15s
-      retries: 3
   dawarich_db:
-    container_name: dawarich-db
     image: postgres:14.2-alpine
+    container_name: dawarich_db
     volumes:
       - /mnt/250a/container-mounts/dawarich/db_data:/var/lib/postgresql/data
-      - redis_shared_data:/var/shared
+      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/var/shared
     networks:
-      - dawarich-net
+      - dawarich
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: dawarich_production
     restart: always
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
-      start_period: 30s
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
       interval: 120s
+      retries: 5
+      start_period: 30s
       timeout: 15s
-      retries: 3
     # If you want to expose the database for exploring it.
     ports:
       - 5432:5432
-  dawarich:
-    container_name: dawarich
+  dawarich_app:
+    container_name: dawarich_app
     build:
       context: ./dawarich
       dockerfile: Dockerfile
     volumes:
-      - gem_cache:/usr/local/bundle/gems_app
+      - /mnt/250a/container-mounts/dawarich/gem_cache_app:/usr/local/bundle/gems
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
+      - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
     networks:
-      - dawarich-net
+      - dawarich
     stdin_open: true
     tty: true
     entrypoint: dev-entrypoint.sh
@@ -62,12 +63,14 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: dawarich_production
       MIN_MINUTES_SPENT_IN_CITY: 60
-      TIME_ZONE: America/Chicago
       APPLICATION_HOST: ${APPLICATION_HOST}
       APPLICATION_HOSTS: ${APPLICATION_HOST}
+      TIME_ZONE: America/Chicago
       APPLICATION_PROTOCOL: http
-      REVERSE_GEOCODING_ENABLED: true
       DISTANCE_UNIT: mi
+      PHOTON_API_HOST: ${PHOTON_API_HOST}
+      PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
+      REVERSE_GEOCODING_ENABLED: true
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
       driver: "json-file"
@@ -76,13 +79,17 @@ services:
         max-file: "2"
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO - http://127.0.0.1:3000/api/v1/health | grep -q '\"status\"\\s*:\\s*\"ok\"'" ]
-      start_period: 30s
       interval: 120s
+      retries: 5
+      start_period: 30s
       timeout: 15s
-      retries: 3
     depends_on:
-      - dawarich_db
-      - dawarich_redis
+      dawarich_db:
+        condition: service_healthy
+        restart: true
+      dawarich_redis:
+        condition: service_healthy
+        restart: true
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Dawarich
@@ -104,15 +111,16 @@ services:
       - homepage.widget.mappings[2].label=Total Cities
       - homepage.widget.mappings[2].type=text
   dawarich_sidekiq:
-    container_name: dawarich-sidekiq
+    container_name: dawarich_sidekiq
     build:
       context: ./dawarich
       dockerfile: Dockerfile
     volumes:
-      - gem_cache:/usr/local/bundle/gems_sidekiq
+      - /mnt/250a/container-mounts/dawarich/gem_cache_sidekiq:/usr/local/bundle/gems
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
+      - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
     networks:
-      - dawarich-net
+      - dawarich
     stdin_open: true
     tty: true
     entrypoint: dev-entrypoint.sh
@@ -127,14 +135,13 @@ services:
       DATABASE_NAME: dawarich_production
       APPLICATION_HOST: ${APPLICATION_HOST}
       APPLICATION_HOSTS: ${APPLICATION_HOST}
-#      BACKGROUND_PROCESSING_CONCURRENCY: 90
-#      RAILS_MAX_THREADS: 90
+      BACKGROUND_PROCESSING_CONCURRENCY: 10
       APPLICATION_PROTOCOL: http
+      DISTANCE_UNIT: mi
       REVERSE_GEOCODING_ENABLED: true
       PHOTON_API_HOST: ${PHOTON_API_HOST}
       PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
       TIME_ZONE: America/Chicago
-      DISTANCE_UNIT: mi
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
       driver: "json-file"
@@ -143,15 +150,28 @@ services:
         max-file: "2"
     healthcheck:
       test: [ "CMD-SHELL", "bundle exec sidekiqmon processes | grep $${HOSTNAME}" ]
-      start_period: 30s
       interval: 120s
-      timeout: 15s
-      retries: 3
+      retries: 30
+      start_period: 30s
+      timeout: 30s
     depends_on:
-      - dawarich_db
-      - dawarich_redis
-      - dawarich
-      - photon
+      dawarich_db:
+        condition: service_healthy
+        restart: true
+      dawarich_redis:
+        condition: service_healthy
+        restart: true
+      dawarich_app:
+        condition: service_healthy
+        restart: true
+      dawarich_photon:
+        condition: service_healthy
+        restart: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50' # Limit CPU usage to 50% of one core
+          memory: '4G' # Limit memory usage to 4GB
   ts:
     container_name: dawarich-ts
     image: tailscale/tailscale
@@ -176,13 +196,13 @@ services:
       timeout: 15s
       retries: 3
     networks:
-      - dawarich-net
+      - dawarich
     restart: always
     depends_on:
-      - dawarich
+      - dawarich_app
   # I run photon here for simplicity and to avoid the overhead of passing data out and back in through a tailscale tunnel.
-  photon:
-    container_name: dawarich-photon
+  dawarich_photon:
+    container_name: dawarich_photon
     build:
       context: ./photon
       dockerfile: Dockerfile
@@ -192,7 +212,7 @@ services:
     volumes:
       - /mnt/250b/container-mounts/photon/data:/photon/photon_data
     networks:
-      - dawarich-net
+      - dawarich
     restart: always
     healthcheck:
       test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"," || exit 1'
@@ -200,7 +220,3 @@ services:
       interval: 120s
       timeout: 15s
       retries: 3
-volumes:
-  redis_shared_data:
-  gem_cache:
-
