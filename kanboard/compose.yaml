@@ -47,6 +47,7 @@ services:
       - kanboard-net
     restart: always
     depends_on:
-      - kanboard
+      kanboard:
+        condition: service_healthy
 networks:
   kanboard-net:

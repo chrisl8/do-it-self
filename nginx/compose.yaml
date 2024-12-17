@@ -47,6 +47,7 @@ services:
       - nginx-net
     restart: always
     depends_on:
-      - nginx
+      nginx:
+        condition: service_healthy
 networks:
   nginx-net:

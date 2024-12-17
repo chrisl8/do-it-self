@@ -32,10 +32,14 @@ services:
     image: ghcr.io/paperless-ngx/paperless-ngx
     restart: always
     depends_on:
-      - db
-      - broker
-      - gotenberg
-      - tika
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+      gotenberg:
+        condition: service_healthy
+      tika:
+        condition: service_healthy
     volumes:
       - /mnt/250a/container-mounts/paperless-ngx/data:/usr/src/paperless/data
       - /mnt/250a/container-mounts/paperless-ngx/media:/usr/src/paperless/media # Your files are all here under documents/ originals and the generated PDFS in archive/
@@ -161,7 +165,8 @@ services:
       - paperless-net
     restart: always
     depends_on:
-      - webserver
+      webserver:
+        condition: service_healthy
 volumes:
   redisdata:
 networks:

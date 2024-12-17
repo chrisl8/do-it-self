@@ -54,6 +54,9 @@ services:
       interval: 120s
       timeout: 15s
       retries: 3
+    depends_on:
+      redis:
+        condition: service_healthy
   ts:
     container_name: searxng-ts
     image: tailscale/tailscale
@@ -81,7 +84,8 @@ services:
       - searxng-net
     restart: always
     depends_on:
-      - searxng
+      searxng:
+        condition: service_healthy
 networks:
   searxng-net:
 volumes:

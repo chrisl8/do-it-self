@@ -16,7 +16,8 @@ services:
       - nextcloud-net
     restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     healthcheck:
       test: 'runuser -s /usr/local/bin/php - www-data /var/www/html/occ status 2>/dev/null | grep -e "installed: true" -e "maintenance: false" -e "needsDbUpgrade: false" | wc -l | [ "`cat`" = "3" ]'
       start_period: 30s
@@ -81,6 +82,7 @@ services:
       - nextcloud-net
     restart: always
     depends_on:
-      - nextcloud
+      nextcloud:
+        condition: service_healthy
 networks:
   nextcloud-net:

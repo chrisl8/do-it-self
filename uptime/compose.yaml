@@ -45,6 +45,7 @@ services:
       - uptime-net
     restart: always
     depends_on:
-      - uptime
+      uptime:
+        condition: service_healthy
 networks:
   uptime-net:

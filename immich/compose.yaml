@@ -16,8 +16,10 @@ services:
     env_file:
       - .env
     depends_on:
-      - redis
-      - database
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: always
     networks:
       - immich-net
@@ -47,6 +49,9 @@ services:
     restart: always
     networks:
       - immich-net
+    depends_on:
+        immich-server:
+            condition: service_healthy
   redis:
     container_name: immich_redis
     image: docker.io/redis:6.2-alpine@sha256:2ba50e1ac3a0ea17b736ce9db2b0a9f6f8b85d4c27d5f5accc6a416d8f42c6d5
@@ -106,7 +111,8 @@ services:
       - immich-net
     restart: always
     depends_on:
-      - immich-server
+      immich-machine-learning:
+        condition: service_healthy
 volumes:
   model-cache:
 networks:

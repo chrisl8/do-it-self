@@ -58,7 +58,6 @@ services:
       interval: 120s
       timeout: 15s
       retries: 3
-
     networks:
       - changedetection-net
   ts:
@@ -88,7 +87,8 @@ services:
       - changedetection-net
     restart: always
     depends_on:
-      - changedetection
+      changedetection:
+        condition: service_healthy
 networks:
   changedetection-net:
 volumes:

@@ -54,6 +54,7 @@ services:
       - jellyfin-net
     restart: always
     depends_on:
-      - jellyfin
+      jellyfin:
+        condition: service_healthy
 networks:
   jellyfin-net:

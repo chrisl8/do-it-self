@@ -52,6 +52,7 @@ services:
       - wallabag-net
     restart: always
     depends_on:
-      - wallabag
+      wallabag:
+        condition: service_healthy
 networks:
   wallabag-net:

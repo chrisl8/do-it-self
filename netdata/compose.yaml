@@ -60,6 +60,7 @@ services:
       - netdata-net
     restart: always
     depends_on:
-      - netdata
+      netdata:
+        condition: service_healthy
 networks:
   netdata-net:

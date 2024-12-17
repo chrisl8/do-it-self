@@ -49,6 +49,7 @@ services:
       - portainer-net
     restart: always
     depends_on:
-      - portainer
+      portainer:
+        condition: service_healthy
 networks:
   portainer-net:

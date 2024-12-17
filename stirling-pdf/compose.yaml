@@ -53,6 +53,7 @@ services:
       - stirling-pdf-net
     restart: always
     depends_on:
-      - stirling-pdf
+      stirling-pdf:
+        condition: service_healthy
 networks:
   stirling-pdf-net:

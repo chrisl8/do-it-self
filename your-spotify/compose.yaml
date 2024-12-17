@@ -12,7 +12,8 @@ services:
       - SPOTIFY_SECRET=${SPOTIFY_SECRET}
       - CORS=${APP_URL}
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     restart: always
     healthcheck:
       test: curl --fail http://localhost:80/api/ | grep "Hello" || exit 1
@@ -69,6 +70,7 @@ services:
       - your_spotify-net
     restart: always
     depends_on:
-      - your_spotify
+      your_spotify:
+        condition: service_healthy
 networks:
   your_spotify-net:

@@ -47,6 +47,7 @@ services:
       - homepage-net
     restart: always
     depends_on:
-      - homepage
+      homepage:
+        condition: service_healthy
 networks:
   homepage-net:
