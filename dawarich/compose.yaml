@@ -8,9 +8,8 @@ services:
     networks:
       - dawarich
     volumes:
-      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/var/shared/redis
+      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/data
     restart: always
-    # https://stackoverflow.com/questions/67904609/how-do-you-perform-a-healthcheck-in-the-redis-docker-image
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       interval: 120s
@@ -53,7 +52,7 @@ services:
     stdin_open: true
     tty: true
     entrypoint: dev-entrypoint.sh
-    command: [ 'bin/dev' ]
+    command: ['bin/dev']
     restart: always
     environment:
       RAILS_ENV: development
@@ -70,6 +69,10 @@ services:
       DISTANCE_UNIT: mi
       PHOTON_API_HOST: ${PHOTON_API_HOST}
       PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
+      PROMETHEUS_EXPORTER_ENABLED: false
+      PROMETHEUS_EXPORTER_HOST: 0.0.0.0
+      PROMETHEUS_EXPORTER_PORT: 9394
+      ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
       REVERSE_GEOCODING_ENABLED: true
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
@@ -124,7 +127,7 @@ services:
     stdin_open: true
     tty: true
     entrypoint: dev-entrypoint.sh
-    command: [ 'sidekiq' ]
+    command: ['sidekiq']
     restart: always
     environment:
       RAILS_ENV: development
@@ -138,9 +141,13 @@ services:
       BACKGROUND_PROCESSING_CONCURRENCY: 10
       APPLICATION_PROTOCOL: http
       DISTANCE_UNIT: mi
-      REVERSE_GEOCODING_ENABLED: true
       PHOTON_API_HOST: ${PHOTON_API_HOST}
       PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
+      PROMETHEUS_EXPORTER_ENABLED: false
+      PROMETHEUS_EXPORTER_HOST: dawarich_app
+      PROMETHEUS_EXPORTER_PORT: 9394
+      ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
+      REVERSE_GEOCODING_ENABLED: true
       TIME_ZONE: America/Chicago
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
@@ -199,7 +206,8 @@ services:
       - dawarich
     restart: always
     depends_on:
-      - dawarich_app
+      dawarich_sidekiq:
+        condition: service_healthy
   # I run photon here for simplicity and to avoid the overhead of passing data out and back in through a tailscale tunnel.
   dawarich_photon:
     container_name: dawarich_photon
