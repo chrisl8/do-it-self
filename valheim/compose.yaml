@@ -1,0 +1,35 @@
+services:
+  valheim:
+    container_name: valheim
+    image: ghcr.io/lloesche/valheim-server
+    cap_add:
+      - sys_nice
+    volumes:
+      - /mnt/250a/container-mounts/valheim/config:/config
+      - /mnt/250a/container-mounts/valheim/data:/opt/valheim
+    ports:
+      - "2456-2458:2456-2458/udp"
+      - "9001:9001/tcp"
+    restart: always
+    stop_grace_period: 2m
+    environment:
+      - TZ=${TZ}
+      - SERVER_NAME=${SERVER_NAME}
+      - WORLD_NAME=${WORLD_NAME}
+      - SERVER_PASS=${SERVER_PASS}
+      - BACKUPS_MAX_AGE=30
+      - ADMINLIST_IDS=${ADMINLIST_IDS}
+      - BEPINEX=true
+      - SUPERVISOR_HTTP=true
+    healthcheck:
+      test: wget --no-verbose -O - "http://127.0.0.1:9001" 2>/dev/null | grep running | wc -l | [ "`cat`" = "5" ] || exit 1
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Valheim
+      - homepage.weight=100
+      - homepage.icon=/icons/valheim.png
+      - homepage.href=${HOME_PAGE_URL}
