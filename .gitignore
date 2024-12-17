@@ -5,6 +5,6 @@ tailscale.env
 /dawarich/dawarich/
 /minecraft/docker-minecraft-bedrock-server/
 /diun/diun.yml
-/homepage/config/
+homepage/config
 /nextcloud/html
-/searxng/etc/
+/searxng/etc
