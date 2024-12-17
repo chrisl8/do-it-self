@@ -54,8 +54,24 @@ done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 #echo "${SCRIPT_DIR}" # For debugging
 
+cd "${SCRIPT_DIR}" || exit
+
+# Create and sort list
+CONTAINER_LIST=()
+for DIR in *;do
+  if [[ -d "${SCRIPT_DIR}/${DIR}" ]] && [[ -e "${SCRIPT_DIR}/${DIR}/compose.yaml" ]];then
+    STRIPPED_DIR=${DIR%*/}
+    ORDER="a"
+    if [[ -e "${SCRIPT_DIR}/${DIR}/.start-order" ]];then
+      ORDER=$(< "${SCRIPT_DIR}/${DIR}/.start-order")
+    fi
+    CONTAINER_LIST+=("${ORDER}-${STRIPPED_DIR}")
+  fi
+done
+
 if [[ ${ACTION} = "start" ]];then
   printf "${YELLOW}Starting all containers...${NC}\n"
+  readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -z | xargs -0n1)
 fi
 if [[ ${ACTION} = "stop" ]];then
   if [[ ${MOUNT} != "" ]];then
@@ -63,43 +79,44 @@ if [[ ${ACTION} = "stop" ]];then
   else
     printf "${YELLOW}Stopping all containers...${NC}\n"
   fi
+  readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -rz | xargs -0n1)
 fi
 
-cd "${SCRIPT_DIR}" || exit
-for dir in *;do
-  if [[ -d "${SCRIPT_DIR}/${dir}" ]] && [[ -e "${SCRIPT_DIR}/${dir}/compose.yaml" ]];then
-    dir=${dir%*/}
+for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
+  CONTAINER_DIR="$(echo $ENTRY | cut -d "-" -f 2)"
+  if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
     if [[ ${MOUNT} != "" ]];then
-      if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${dir}/compose.yaml" | grep -v photon_data | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
+      if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" | grep -v photon_data | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
         continue
       fi
     fi
-    cd "${SCRIPT_DIR}/${dir}"
+    cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
     if [[ ${ACTION} = "start" ]];then
       if [[ $(docker compose ps | wc -l) -eq 1 ]];then
-        printf "${BRIGHT_MAGENTA} - ${dir}${NC}\n"
+        printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
         # TODO: Check if containers needing git clones exist?
         # Update any git repositories in the directory
-        for dir in $(find . -name ".git" -type d 2>/dev/null); do
-          echo "Updating git repository in ${dir%/*}"
-          cd "${dir%/*}" || continue
+        for GIT_DIR in $(find . -name ".git" -type d 2>/dev/null); do
+          echo "Updating git repository in ${GIT_DIR%/*}"
+          cd "${GIT_DIR%/*}" || continue
           git pull
           cd - > /dev/null || exit
         done
         docker compose pull
         docker compose build
         docker compose up -d
-        if [[ ${dir} = "homepage" ]];then
+        if [[ ${CONTAINER_DIR} = "homepage" ]];then
           # This is my personal hack to get icons the way I want them in homepage.
           docker exec homepage sh -c "cp /app/public/images/favicons/* /app/public"
           docker exec homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico"
           docker exec homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
         fi
-        sleep ${SLEEP_TIME}
+        printf "${YELLOW} ...Starting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
+        sleep "${SLEEP_TIME}"
       fi
     fi
     if [[ ${ACTION} = "stop" ]];then
-      printf "${BRIGHT_MAGENTA} - ${dir}${NC}\n"
+      printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
       docker compose down
     fi
   fi
