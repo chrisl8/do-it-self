@@ -7,3 +7,4 @@ tailscale.env
 /diun/diun.yml
 /homepage/config/
 /nextcloud/html
+/searxng/etc/
