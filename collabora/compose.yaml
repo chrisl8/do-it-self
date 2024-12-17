@@ -14,7 +14,7 @@ services:
       server_name: collabora.jamnapari-goblin.ts.net
       aliasgroup1: https://.*:443
       # https://github.com/CollaboraOnline/online/issues/4641#issuecomment-1272447147
-      # The first "enable=false" is to tell Collabora NOT to run SSL, but then it tells everyoen who talks to it, "Hey, use http!"
+      # The first "enable=false" is to tell Collabora NOT to run SSL, but then it tells everyone who talks to it, "Hey, use http!"
       # So the "termination=true" makes it tell everyone to use https even though it thinks it isn't.
       extra_params: --o:ssl.enable=false --o:ssl.termination=true
     network_mode: service:ts
