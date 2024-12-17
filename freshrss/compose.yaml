@@ -12,7 +12,8 @@ services:
     environment:
       TZ: America/Chicago
       CRON_MIN: '2,32'
-    network_mode: service:ts
+    networks:
+        - freshrss-net
     # https://github.com/FreshRSS/FreshRSS/pull/2455
     healthcheck:
       test: (php -r "readfile('http://localhost/i/');" | grep -q 'jsonVars') || exit 1
@@ -54,3 +55,10 @@ services:
       timeout: 15s
       retries: 3
     restart: always
+    networks:
+      - freshrss-net
+    depends_on:
+      freshrss:
+        condition: service_healthy
+networks:
+  freshrss-net:
