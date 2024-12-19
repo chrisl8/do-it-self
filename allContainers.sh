@@ -111,6 +111,10 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           docker exec homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico"
           docker exec homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
         fi
+        printf "${YELLOW} ...Waiting for all containers to report healthy...${NC}\n"
+        while /usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
+          sleep 0.1;
+        done;
         printf "${YELLOW} ...Starting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
         sleep "${SLEEP_TIME}"
       fi
