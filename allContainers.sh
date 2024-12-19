@@ -4,6 +4,7 @@ set -e
 
 YELLOW='\033[1;33m'
 BRIGHT_MAGENTA='\033[1;95m'
+RED='\033[0;31m'
 NC='\033[0m' # NoColor
 
 ACTION=""
@@ -65,7 +66,7 @@ for DIR in *;do
     if [[ -e "${SCRIPT_DIR}/${DIR}/.start-order" ]];then
       ORDER=$(< "${SCRIPT_DIR}/${DIR}/.start-order")
     fi
-    CONTAINER_LIST+=("${ORDER}-${STRIPPED_DIR}")
+    CONTAINER_LIST+=("${ORDER}/${STRIPPED_DIR}")
   fi
 done
 
@@ -83,7 +84,7 @@ if [[ ${ACTION} = "stop" ]];then
 fi
 
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
-  CONTAINER_DIR="$(echo $ENTRY | cut -d "-" -f 2)"
+  CONTAINER_DIR="$(echo $ENTRY | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
     if [[ ${MOUNT} != "" ]];then
       if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" | grep -v photon_data | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
@@ -123,6 +124,8 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
       docker compose down
     fi
+  else
+    printf "${RED} - ${CONTAINER_DIR} is not a valid container directory${NC}\n"
   fi
 done
 
