@@ -26,7 +26,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Change Detection
-      - homepage.weight=120
+      - homepage.weight=3
       - homepage.icon=/icons/changedetection-io.png
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=changedetectionio

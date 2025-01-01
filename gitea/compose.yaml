@@ -21,7 +21,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Gitea
-      - homepage.weight=95
+      - homepage.weight=100
       - homepage.icon=gitea.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       #      - homepage.description=Git

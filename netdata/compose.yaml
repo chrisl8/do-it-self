@@ -28,7 +28,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Netdata
-      - homepage.weight=110
+      - homepage.weight=30
       - homepage.icon=netdata.png
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=netdata

@@ -30,6 +30,6 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Valheim
-      - homepage.weight=100
+      - homepage.weight=500
       - homepage.icon=/icons/valheim.png
       - homepage.href=${HOME_PAGE_URL}

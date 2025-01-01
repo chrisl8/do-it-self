@@ -96,7 +96,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Dawarich
-      - homepage.weight=40
+      - homepage.weight=50
       - homepage.icon=/icons/dawarich.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=customapi

@@ -11,7 +11,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=portainer
-      - homepage.weight=0
+      - homepage.weight=500
       - homepage.icon=portainer.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
     # This is the derpiest healtcheck I've ever set up, but it works and keeps the pattern of all of my containers having health checks

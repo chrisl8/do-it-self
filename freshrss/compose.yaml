@@ -24,7 +24,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=FreshRSS
-      - homepage.weight=10
+      - homepage.weight=1
       - homepage.icon=freshrss.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=freshrss

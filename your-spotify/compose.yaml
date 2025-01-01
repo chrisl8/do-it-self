@@ -26,7 +26,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Your Spotifty
-      - homepage.weight=90
+      - homepage.weight=4
       - homepage.icon=your-spotify.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${APP_URL}
   mongo:

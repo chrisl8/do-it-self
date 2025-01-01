@@ -24,7 +24,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=UrBackup
-      - homepage.weight=100
+      - homepage.weight=20
       - homepage.icon=urbackup.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=urbackup

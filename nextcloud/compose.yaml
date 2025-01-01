@@ -27,7 +27,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Nextcloud
-      - homepage.weight=65
+      - homepage.weight=80
       - homepage.icon=nextcloud.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=nextcloud

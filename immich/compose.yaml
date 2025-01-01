@@ -26,7 +26,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Immich
-      - homepage.weight=50
+      - homepage.weight=60
       - homepage.icon=immich.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=immich

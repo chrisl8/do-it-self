@@ -19,7 +19,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Jellyfin
-      - homepage.weight=60
+      - homepage.weight=70
       - homepage.icon=jellyfin.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=jellyfin

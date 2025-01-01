@@ -11,7 +11,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Uptime
-      - homepage.weight=100
+      - homepage.weight=40
       - homepage.icon=uptime-kuma.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=uptimekuma

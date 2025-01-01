@@ -17,7 +17,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=nginx
-      - homepage.weight=100
+      - homepage.weight=500
       - homepage.icon=nginx.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
   ts:

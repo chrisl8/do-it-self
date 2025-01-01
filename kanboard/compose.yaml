@@ -17,7 +17,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=KanBoard
-      - homepage.weight=20
+      - homepage.weight=220
       - homepage.icon=/icons/kanboard.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
   ts:

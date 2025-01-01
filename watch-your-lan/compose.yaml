@@ -19,7 +19,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Watch Your LAN
-      - homepage.weight=100
+      - homepage.weight=500
       - homepage.icon=watchyourlan.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
     healthcheck:
