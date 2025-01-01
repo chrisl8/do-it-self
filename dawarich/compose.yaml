@@ -22,6 +22,7 @@ services:
     volumes:
       - /mnt/250a/container-mounts/dawarich/db_data:/var/lib/postgresql/data
       - /mnt/250a/container-mounts/dawarich/redis_shared_data:/var/shared
+      - ./dawarich/postgresql.conf.example:/etc/postgresql/postgresql.conf
     networks:
       - dawarich
     environment:
@@ -35,6 +36,7 @@ services:
       retries: 5
       start_period: 30s
       timeout: 15s
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf # Use custom config
     # If you want to expose the database for exploring it.
     ports:
       - 5432:5432
