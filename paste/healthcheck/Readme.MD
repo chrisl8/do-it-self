@@ -3,7 +3,7 @@
 This is a very simplistic go based health check binary.  
 Built this way and put here because it will run within the Distroless container that runs tclip.
 
-The source code file `get-home-age.go` is **not** required, I just included it for completeness.
+The source code file `get-home-page.go` is **not** required, I just included it for completeness.
 
 You must ensure it is statically linked if you rebuild it, so to build it you need to run:
 
