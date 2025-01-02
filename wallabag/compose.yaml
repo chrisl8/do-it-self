@@ -22,7 +22,7 @@ services:
     labels: # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Wallabag
-      - homepage.weight=30
+      - homepage.weight=550
       - homepage.icon=wallabag.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
       - homepage.href=${HOME_PAGE_URL}
   ts:
