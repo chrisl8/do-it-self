@@ -1,0 +1,56 @@
+services:
+  beszel:
+    image: henrygd/beszel:latest
+    container_name: beszel
+    restart: always
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - 8090:8090
+    volumes:
+      - /mnt/250b/container-mounts/beszel/data:/beszel_data
+      - ./healthcheck:/healthcheck
+    healthcheck:
+      test: ["CMD", "/healthcheck/get-home-page"]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
+    labels: # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Beszel
+      - homepage.weight=35
+      - homepage.icon=/icons/beszel.svg
+      - homepage.href=${HOME_PAGE_HREF}
+      - homepage.widget.type=beszel
+      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.systemId=${SYSTEM_ID_FOR_HOMEPAGE}
+      - homepage.widget.username=${USERNAME_FOR_HOMEPAGE}
+      - homepage.widget.password=${PASSWORD_FOR_HOMEPAGE}
+      - homepage.widget.version=2
+  beszel-agent:
+    image: henrygd/beszel-agent:latest
+    container_name: beszel-agent
+    restart: always
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # monitor other disks / partitions by mounting a folder in /extra-filesystems
+      # Using the mounts that I set up for homepage
+      - /mnt/120/for-homepage:/extra-filesystems/120:ro
+      - /mnt/250a/for-homepage:/extra-filesystems/250a:ro
+      - /mnt/250b/for-homepage:/extra-filesystems/250b:ro
+      - /mnt/500/for-homepage:/extra-filesystems/500:ro
+      - /mnt/3000/for-homepage:/extra-filesystems/3000:ro
+      - /mnt/8000/for-homepage:/extra-filesystems/8000:ro
+      - ./healthcheck:/healthcheck
+    environment:
+      PORT: 45876
+      # Do not remove quotes around the key
+      KEY: ${KEY}
+    healthcheck:
+      test: ["CMD", "/healthcheck/checkForAgentProcess"]
+      start_period: 30s
+      interval: 120s
+      timeout: 15s
+      retries: 3
