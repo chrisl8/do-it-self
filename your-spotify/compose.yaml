@@ -28,7 +28,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Your Spotifty
       - homepage.weight=4
-      - homepage.icon=your-spotify.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=your-spotify.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${APP_URL}
   mongo:
     container_name: your_spotify-mongo

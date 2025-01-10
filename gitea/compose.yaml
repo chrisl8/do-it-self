@@ -23,7 +23,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Gitea
       - homepage.weight=100
-      - homepage.icon=gitea.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=gitea.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       #      - homepage.description=Git
       - homepage.widget.type=gitea

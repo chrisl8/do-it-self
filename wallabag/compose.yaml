@@ -24,7 +24,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Wallabag
       - homepage.weight=550
-      - homepage.icon=wallabag.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=wallabag.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: wallabag-ts

@@ -12,7 +12,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Uptime
       - homepage.weight=40
-      - homepage.icon=uptime-kuma.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=uptime-kuma.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=uptimekuma
       - homepage.widget.url=${HOME_PAGE_URL}

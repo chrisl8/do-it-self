@@ -19,7 +19,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=nginx
       - homepage.weight=500
-      - homepage.icon=nginx.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=nginx.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: nginx-ts

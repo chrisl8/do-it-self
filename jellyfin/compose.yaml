@@ -20,7 +20,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Jellyfin
       - homepage.weight=70
-      - homepage.icon=jellyfin.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=jellyfin.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=jellyfin
       - homepage.widget.key=${API_KEY}

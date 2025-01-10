@@ -29,7 +29,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Nextcloud
       - homepage.weight=80
-      - homepage.icon=nextcloud.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=nextcloud.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=nextcloud
       - homepage.widget.url=${HOME_PAGE_URL}

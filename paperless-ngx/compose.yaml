@@ -67,7 +67,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=PaperlessNGX
       - homepage.weight=2
-      - homepage.icon=paperless-ngx.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=paperless-ngx.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=paperlessngx
       - homepage.widget.url=${HOME_PAGE_URL}

@@ -26,7 +26,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=FreshRSS
       - homepage.weight=1
-      - homepage.icon=freshrss.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=freshrss.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=freshrss
       - homepage.widget.url=${HOME_PAGE_URL}

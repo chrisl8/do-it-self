@@ -27,7 +27,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Immich
       - homepage.weight=60
-      - homepage.icon=immich.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=immich.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=immich
       - homepage.widget.version=2

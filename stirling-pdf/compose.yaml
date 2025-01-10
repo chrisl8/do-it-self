@@ -25,7 +25,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Stirling PDF
       - homepage.weight=80
-      - homepage.icon=stirling-pdf.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=stirling-pdf.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: stirling-pdf-ts

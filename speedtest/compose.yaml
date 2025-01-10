@@ -20,7 +20,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Speedtest
       - homepage.weight=10
-      - homepage.icon=speedtest-tracker.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=speedtest-tracker.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=speedtest
       - homepage.widget.url=${HOME_PAGE_URL}
