@@ -48,7 +48,6 @@ services:
       context: ./dawarich
       dockerfile: Dockerfile
     volumes:
-      - /mnt/250a/container-mounts/dawarich/gem_cache_app:/usr/local/bundle/gems
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
       - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
     networks:
@@ -124,7 +123,6 @@ services:
       context: ./dawarich
       dockerfile: Dockerfile
     volumes:
-      - /mnt/250a/container-mounts/dawarich/gem_cache_sidekiq:/usr/local/bundle/gems
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
       - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
     networks:
