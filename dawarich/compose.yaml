@@ -1,14 +1,15 @@
+name: dawarich
 networks:
   dawarich:
 services:
   dawarich_redis:
-    image: redis:7.0-alpine
+    image: redis:alpine
     container_name: dawarich_redis
     command: redis-server
     networks:
       - dawarich
     volumes:
-      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/data
+      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/var/shared/redis
     restart: always
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
@@ -19,10 +20,10 @@ services:
       retries: 3
   dawarich_db:
     image: postgres:14.2-alpine
+    shm_size: 1G
     container_name: dawarich_db
     volumes:
       - /mnt/250a/container-mounts/dawarich/db_data:/var/lib/postgresql/data
-      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/var/shared
       - ./dawarich/postgresql.conf.example:/etc/postgresql/postgresql.conf
     networks:
       - dawarich
@@ -46,7 +47,7 @@ services:
     container_name: dawarich_app
     build:
       context: ./dawarich
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.prod
     volumes:
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
       - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
@@ -54,13 +55,14 @@ services:
       - dawarich
     stdin_open: true
     tty: true
-    entrypoint: dev-entrypoint.sh
-    command: ['bin/dev']
+    entrypoint: web-entrypoint.sh
+    command: ['bin/rails', 'server', '-p', '3000', '-b', '::']
     restart: always
     environment:
       RAILS_ENV: development
       REDIS_URL: redis://dawarich_redis:6379/0
       DATABASE_HOST: dawarich_db
+      DATABASE_PORT: 5432
       DATABASE_USERNAME: postgres
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: dawarich_production
@@ -75,9 +77,10 @@ services:
       PROMETHEUS_EXPORTER_ENABLED: false
       PROMETHEUS_EXPORTER_HOST: 0.0.0.0
       PROMETHEUS_EXPORTER_PORT: 9394
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      RAILS_LOG_TO_STDOUT: "true"
       ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
       REVERSE_GEOCODING_ENABLED: true
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
       driver: "json-file"
       options:
@@ -101,7 +104,7 @@ services:
       - homepage.group=MiddleServices
       - homepage.name=Dawarich
       - homepage.weight=50
-      - homepage.icon=/icons/dawarich.png # https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@latest/png/
+      - homepage.icon=/icons/dawarich.png
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=customapi
       - homepage.widget.url=${HOME_PAGE_URL}/api/v1/stats?api_key=${API_KEY}
@@ -121,7 +124,7 @@ services:
     container_name: dawarich_sidekiq
     build:
       context: ./dawarich
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.prod
     volumes:
       - /mnt/250a/container-mounts/dawarich/public:/var/app/public
       - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
@@ -129,13 +132,14 @@ services:
       - dawarich
     stdin_open: true
     tty: true
-    entrypoint: dev-entrypoint.sh
-    command: ['sidekiq']
+    entrypoint: sidekiq-entrypoint.sh
+    command: ['bundle', 'exec', 'sidekiq']
     restart: always
     environment:
       RAILS_ENV: development
       REDIS_URL: redis://dawarich_redis:6379/0
       DATABASE_HOST: dawarich_db
+      DATABASE_PORT: 5432
       DATABASE_USERNAME: postgres
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: dawarich_production
@@ -149,10 +153,11 @@ services:
       PROMETHEUS_EXPORTER_ENABLED: false
       PROMETHEUS_EXPORTER_HOST: dawarich_app
       PROMETHEUS_EXPORTER_PORT: 9394
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      RAILS_LOG_TO_STDOUT: "true"
       ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
       REVERSE_GEOCODING_ENABLED: true
       TIME_ZONE: America/Chicago
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     logging:
       driver: "json-file"
       options:
