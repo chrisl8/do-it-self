@@ -20,9 +20,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: 'runuser -s /usr/local/bin/php - www-data /var/www/html/occ status 2>/dev/null | grep -e "installed: true" -e "maintenance: false" -e "needsDbUpgrade: false" | wc -l | [ "`cat`" = "3" ]'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     labels: # For homepage
       - homepage.group=MiddleServices
@@ -51,9 +52,10 @@ services:
     # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
       test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
   ts-nextcloud:
     container_name: nextcloud-ts
@@ -74,9 +76,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - nextcloud-net

@@ -23,9 +23,10 @@ services:
       - SUPERVISOR_HTTP=true
     healthcheck:
       test: wget --no-verbose -O - "http://127.0.0.1:9001" 2>/dev/null | grep running | wc -l | [ "`cat`" = "5" ] || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     labels: # For homepage
       - homepage.group=MiddleServices

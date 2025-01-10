@@ -17,9 +17,10 @@ services:
     restart: always
     healthcheck:
       test: curl --fail http://localhost:80/api/ | grep "Hello" || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - your_spotify-net
@@ -37,9 +38,10 @@ services:
     restart: always
     healthcheck:
       test: echo 'db.runCommand({find:"app_db_name.devUser"}).ok' | mongosh --host localhost --quiet | grep -q 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - your_spotify-net
@@ -62,9 +64,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - your_spotify-net

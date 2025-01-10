@@ -12,9 +12,10 @@ services:
       - ./healthcheck:/healthcheck
     healthcheck:
       test: ["CMD", "/healthcheck/get-home-page"]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     labels: # For homepage
       - homepage.group=MiddleServices
@@ -50,7 +51,8 @@ services:
       KEY: ${KEY}
     healthcheck:
       test: ["CMD", "/healthcheck/checkForAgentProcess"]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3

@@ -15,8 +15,9 @@ services:
     # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized", "--mariadbupgrade"]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
 # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.

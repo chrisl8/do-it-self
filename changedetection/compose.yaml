@@ -19,9 +19,10 @@ services:
         "CMD-SHELL",
         "python3 -c \"import sys, urllib.request; sys.exit(1) if '<title>Change Detection</title>' not in urllib.request.urlopen('http://localhost:5000').read().decode('utf-8') else sys.exit(0)\""
       ]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     labels: # For homepage
       - homepage.group=MiddleServices
@@ -54,9 +55,10 @@ services:
     # https://github.com/dgtlmoon/sockpuppetbrowser
     healthcheck:
       test: wget --no-verbose -O - http://127.0.0.1:8080/stats 2>/dev/null | grep ",\ \"special_counter_len\":\ 0}" || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - changedetection-net
@@ -79,9 +81,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - changedetection-net

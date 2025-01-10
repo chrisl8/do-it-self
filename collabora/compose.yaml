@@ -19,9 +19,10 @@ services:
       extra_params: --o:ssl.enable=false --o:ssl.termination=true
     healthcheck:
       test: curl --fail http://127.0.0.1:9980/ | grep -q -e 'OK' || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - collabora-net
@@ -44,9 +45,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     restart: always
     networks:

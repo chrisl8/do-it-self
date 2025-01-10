@@ -18,9 +18,10 @@ services:
     # https://github.com/portainer/portainer/issues/1364#issuecomment-955588034
     healthcheck:
       test: ["CMD", "/docker", "container", "top", "portainer"]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
   ts:
     container_name: portainer-ts
@@ -41,9 +42,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - portainer-net

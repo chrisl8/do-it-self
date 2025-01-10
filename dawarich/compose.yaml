@@ -12,10 +12,11 @@ services:
     restart: always
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
-      interval: 120s
-      retries: 5
-      start_period: 30s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
   dawarich_db:
     image: postgres:14.2-alpine
     container_name: dawarich_db
@@ -32,10 +33,11 @@ services:
     restart: always
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
-      interval: 120s
-      retries: 5
-      start_period: 30s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
     command: postgres -c config_file=/etc/postgresql/postgresql.conf # Use custom config
     # If you want to expose the database for exploring it.
     ports:
@@ -84,10 +86,11 @@ services:
         max-file: "2"
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO - http://127.0.0.1:3000/api/v1/health | grep -q '\"status\"\\s*:\\s*\"ok\"'" ]
-      interval: 120s
-      retries: 5
-      start_period: 30s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
     depends_on:
       dawarich_db:
         condition: service_healthy
@@ -159,10 +162,11 @@ services:
         max-file: "2"
     healthcheck:
       test: [ "CMD-SHELL", "bundle exec sidekiqmon processes | grep $${HOSTNAME}" ]
-      interval: 120s
-      retries: 30
-      start_period: 30s
-      timeout: 30s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
     depends_on:
       dawarich_db:
         condition: service_healthy
@@ -200,9 +204,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - dawarich
@@ -226,7 +231,8 @@ services:
     restart: always
     healthcheck:
       test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"," || exit 1'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3

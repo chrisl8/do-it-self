@@ -81,9 +81,10 @@ services:
     # https://stackoverflow.com/questions/67904609/how-do-you-perform-a-healthcheck-in-the-redis-docker-image
     healthcheck:
       test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - paperless-net
@@ -99,9 +100,10 @@ services:
       POSTGRES_PASSWORD: paperless
     healthcheck:
       test: pg_isready
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - paperless-net
@@ -122,9 +124,10 @@ services:
     # https://gotenberg.dev/docs/routes#health-check-route
     healthcheck:
       test: 'curl --fail http://localhost:3000/health 2>/dev/null | grep -o "\"status\":\"up\"," | wc -l | [ "`cat`" = "3" ] || exit 1'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
   tika:
     container_name: paperless-tika
@@ -134,9 +137,10 @@ services:
       - paperless-net
     healthcheck:
       test: pgrep -f tika || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
   ts:
     container_name: paperless-ts
@@ -157,9 +161,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - paperless-net

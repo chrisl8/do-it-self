@@ -13,7 +13,8 @@ services:
       - 21025:21025
     healthcheck:
       test: pgrep -f starbound_server || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3

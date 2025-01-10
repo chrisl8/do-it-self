@@ -26,8 +26,9 @@ services:
       - homepage.widget.url=${HOME_PAGE_URL}
     healthcheck:
       test: curl -fSs APP_URL/api/healthcheck | jq -r .message || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
 # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.

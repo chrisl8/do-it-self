@@ -13,9 +13,10 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "/healthcheck/checkForHbbsProcess"]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
   hbbr:
     container_name: rustdesk-relay_server
@@ -31,9 +32,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/healthcheck/checkForHbbrProcess"]
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
   ts:
     container_name: rustdesk-ts
@@ -52,9 +54,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     restart: always
 # Because using docker host mode

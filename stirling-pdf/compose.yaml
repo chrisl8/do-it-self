@@ -16,9 +16,10 @@ services:
       - stirling-pdf-net
     healthcheck:
       test: 'curl --fail -s http://localhost:8080/api/v1/info/status 2>/dev/null | grep "\"status\":\"UP\"" || exit 1'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     labels: # For homepage
       - homepage.group=MiddleServices
@@ -45,9 +46,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - stirling-pdf-net

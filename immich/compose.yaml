@@ -57,10 +57,6 @@ services:
     image: docker.io/redis:6.2-alpine@sha256:2ba50e1ac3a0ea17b736ce9db2b0a9f6f8b85d4c27d5f5accc6a416d8f42c6d5
     healthcheck:
       test: redis-cli ping || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
-      retries: 3
     restart: always
     networks:
       - immich-net
@@ -103,9 +99,10 @@ services:
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
     healthcheck:
       test: tailscale status --peers=false --json | grep -q 'Online.*true'
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
     networks:
       - immich-net

@@ -24,8 +24,9 @@ services:
       - homepage.href=${HOME_PAGE_URL}
     healthcheck:
       test: wget -O - http://127.0.0.1:8840 2> /dev/null | grep "WatchYourLAN" || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
 # I do NOT have this set up with Tailscale specifically, one just has to connect to it using the host's tailscale IP and the port that watch-your-lan runs on, which is 8840 by default.

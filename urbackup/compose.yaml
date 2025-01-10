@@ -35,7 +35,8 @@ services:
       - homepage.widget.maxDays=7
     healthcheck:
       test: wget -O - http://127.0.0.1:55414 2> /dev/null | grep "UrBackup 2.5.33" || exit 1
-      start_period: 30s
-      interval: 120s
-      timeout: 15s
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
       retries: 3
