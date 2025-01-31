@@ -1,0 +1,52 @@
+services:
+  couchdb:
+    container_name: obsidian-babel-livesync
+    image: couchdb
+    restart: no
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+    volumes:
+      - /mnt/2000/container-mounts/obsidian-babel-livesync/data:/opt/couchdb/data
+      - ./docker.ini:/opt/couchdb/etc/local.d/docker.ini
+    networks:
+      - obsidian-babel-livesync-net
+    healthcheck:
+      test: 'curl --fail -u ${COUCHDB_USER}:${COUCHDB_PASSWORD} http://127.0.0.1:5984 2>/dev/null | grep -q Welcome || exit 1'
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  ts:
+    container_name: obsidian-babel-livesync-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=obsidian-babel-livesync
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    healthcheck:
+      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: no
+    networks:
+      - obsidian-babel-livesync-net
+    depends_on:
+      couchdb:
+        condition: service_healthy
+networks:
+  obsidian-babel-livesync-net:
