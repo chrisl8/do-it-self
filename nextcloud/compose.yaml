@@ -25,7 +25,8 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Nextcloud
       - homepage.weight=80

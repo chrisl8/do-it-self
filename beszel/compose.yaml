@@ -11,13 +11,14 @@ services:
       - /mnt/2000/container-mounts/beszel/data:/beszel_data
       - ./healthcheck:/healthcheck
     healthcheck:
-      test: ["CMD", "/healthcheck/get-home-page"]
+      test: [ "CMD", "/healthcheck/get-home-page" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Beszel
       - homepage.weight=35
@@ -48,7 +49,7 @@ services:
       # Do not remove quotes around the key
       KEY: ${KEY}
     healthcheck:
-      test: ["CMD", "/healthcheck/checkForAgentProcess"]
+      test: [ "CMD", "/healthcheck/checkForAgentProcess" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

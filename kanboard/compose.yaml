@@ -14,8 +14,9 @@ services:
       retries: 3
     networks:
       - kanboard-net
-    restart: always
-    labels: # For homepage
+    restart: no
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=KanBoard
       - homepage.weight=220

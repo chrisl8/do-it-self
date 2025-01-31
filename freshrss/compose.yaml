@@ -13,7 +13,7 @@ services:
       TZ: America/Chicago
       CRON_MIN: '2,32'
     networks:
-        - freshrss-net
+      - freshrss-net
     # https://github.com/FreshRSS/FreshRSS/pull/2455
     healthcheck:
       test: (php -r "readfile('http://localhost/i/');" | grep -q 'jsonVars') || exit 1
@@ -22,7 +22,8 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=FreshRSS
       - homepage.weight=1

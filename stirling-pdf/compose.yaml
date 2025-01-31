@@ -3,8 +3,8 @@ services:
     container_name: stirling-pdf
     image: stirlingtools/stirling-pdf
     volumes:
-      - /mnt/250a/container-mounts/stirling-pdf/tessdata:/usr/share/tessdata #Required for extra OCR languages
-      - /mnt/250a/container-mounts/stirling-pdf/configs:/configs
+      - /mnt/2000/container-mounts/stirling-pdf/tessdata:/usr/share/tessdata #Required for extra OCR languages
+      - /mnt/2000/container-mounts/stirling-pdf/configs:/configs
     # - ./customFiles:/customFiles/ # Not used yet.
     # - ./logs:/logs/ # Don't care, they can be lost
     environment:
@@ -21,7 +21,8 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Stirling PDF
       - homepage.weight=80

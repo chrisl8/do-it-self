@@ -15,8 +15,9 @@ services:
       - DB_CONNECTION=sqlite
       - SPEEDTEST_SCHEDULE="35 3,15 * * *"
       - PUBLIC_DASHBOARD=true
-    restart: always
-    labels: # For homepage
+    restart: no
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Speedtest
       - homepage.weight=10
@@ -31,4 +32,5 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+
 # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.

@@ -1,7 +1,7 @@
 # The immich compose file is a bit opinionated and is designed to be used with the immich app,
 # so I've tried to not vary too far from their defaults, even if it conflicts with my ideals.
 #
-# I do this to see if there are any new changes:
+# I do this periodically to see if there are any new changes:
 # wget -O vendor-compose-file https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml
 # diff compose.yaml vendor-compose-file
 
@@ -32,7 +32,8 @@ services:
       disable: false
     networks:
       - immich-net
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Immich
       - homepage.weight=60
@@ -61,8 +62,8 @@ services:
     networks:
       - immich-net
     depends_on:
-        immich-server:
-            condition: service_healthy
+      immich-server:
+        condition: service_healthy
   redis:
     container_name: immich_redis
     image: docker.io/redis:6.2-alpine
@@ -84,25 +85,15 @@ services:
       - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
     healthcheck:
       test: >-
-        pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1;
-        Chksum="$$(psql --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" --tuples-only --no-align
-        --command='SELECT COALESCE(SUM(checksum_failures), 0) FROM pg_stat_database')";
-        echo "checksum failure count is $$Chksum";
-        [ "$$Chksum" = '0' ] || exit 1
+        pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1; Chksum="$$(psql --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" --tuples-only --no-align --command='SELECT COALESCE(SUM(checksum_failures), 0) FROM pg_stat_database')"; echo "checksum failure count is $$Chksum"; [ "$$Chksum" = '0' ] || exit 1
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     command: >-
-      postgres
-      -c shared_preload_libraries=vectors.so
-      -c 'search_path="$$user", public, vectors'
-      -c logging_collector=on
-      -c max_wal_size=2GB
-      -c shared_buffers=512MB
-      -c wal_compression=on
-    restart: always
+      postgres -c shared_preload_libraries=vectors.so -c 'search_path="$$user", public, vectors' -c logging_collector=on -c max_wal_size=2GB -c shared_buffers=512MB -c wal_compression=on
+    restart: no
     networks:
       - immich-net
   ts:

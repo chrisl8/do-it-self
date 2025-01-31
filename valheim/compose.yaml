@@ -5,8 +5,8 @@ services:
     cap_add:
       - sys_nice
     volumes:
-      - /mnt/250a/container-mounts/valheim/config:/config
-      - /mnt/250a/container-mounts/valheim/data:/opt/valheim
+      - /mnt/2000/container-mounts/valheim/config:/config
+      - /mnt/2000/container-mounts/valheim/data:/opt/valheim
     ports:
       - "2456-2458:2456-2458/udp"
       - "9001:9001/tcp"
@@ -28,7 +28,8 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Valheim
       - homepage.weight=500

@@ -3,12 +3,13 @@ services:
     container_name: uptime
     image: louislam/uptime-kuma
     volumes:
-      - /mnt/250a/container-mounts/uptime/data:/app/data
+      - /mnt/2000/container-mounts/uptime/data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - uptime-net
-    restart: always
-    labels: # For homepage
+    restart: no
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Uptime
       - homepage.weight=40

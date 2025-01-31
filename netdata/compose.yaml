@@ -25,7 +25,8 @@ services:
     networks:
       - netdata-net
     # Note that netdata has a health check built into the Dockerfile, so no need to add it here.
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Netdata
       - homepage.weight=30

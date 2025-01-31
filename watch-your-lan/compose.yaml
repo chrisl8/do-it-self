@@ -6,17 +6,18 @@ services:
     network_mode: "host"
     restart: no
     volumes:
-      - /mnt/250a/container-mounts/watch-your-lan/data:/data/WatchYourLAN
+      - /mnt/2000/container-mounts/watch-your-lan/data:/data/WatchYourLAN
     environment:
-      TZ: America/Chicago              # required: needs your TZ for correct time
-      IFACES: "enp1s0f1"  # required: 1 or more interface
-      HOST: "0.0.0.0"                   # optional, default: 0.0.0.0
-      PORT: "8840"                      # optional, default: 8840
-      TIMEOUT: "120"                    # optional, time in seconds, default: 120
-      SHOUTRRR_URL: ${SHOUTRRR_URL}     # optional, if you want to send notifications to Shoutrrr
-      THEME: "sand"                     # optional
-      COLOR: "dark"                     # optional
-    labels: # For homepage
+      TZ: America/Chicago # required: needs your TZ for correct time
+      IFACES: "enp1s0f1" # required: 1 or more interface
+      HOST: "0.0.0.0" # optional, default: 0.0.0.0
+      PORT: "8840" # optional, default: 8840
+      TIMEOUT: "120" # optional, time in seconds, default: 120
+      SHOUTRRR_URL: ${SHOUTRRR_URL} # optional, if you want to send notifications to Shoutrrr
+      THEME: "sand" # optional
+      COLOR: "dark" # optional
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Watch Your LAN
       - homepage.weight=500
@@ -29,4 +30,5 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+
 # I do NOT have this set up with Tailscale specifically, one just has to connect to it using the host's tailscale IP and the port that watch-your-lan runs on, which is 8840 by default.

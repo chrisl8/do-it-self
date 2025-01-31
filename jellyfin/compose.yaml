@@ -16,7 +16,8 @@ services:
     networks:
       - jellyfin-net
     # Note that jellyfin has a health check built into the Dockerfile, so no need to add it here.
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=Jellyfin
       - homepage.weight=70

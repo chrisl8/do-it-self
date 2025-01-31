@@ -1,0 +1,28 @@
+# https://neko.m1k1o.net/#/getting-started/
+# To use webrtc without STUN/TURN you set an empty set of ICE servers:
+#     https://stackoverflow.com/a/57698377/4982408
+services:
+  neko:
+    container_name: neko
+    image: m1k1o/neko:tor-browser
+    shm_size: "2gb"
+    ports:
+      - "8890:8080"
+      - "62000-62100:62000-62100/udp"
+    environment:
+      NEKO_PASSWORD: neko
+      NEKO_PASSWORD_ADMIN: admin
+      NEKO_SCREEN: 1920x1080@30
+      NEKO_NAT1TO1: ${HOST_IP}
+      NEKO_EPR: 62000-62100
+      NEKO_ICELITE: 1
+      NEKO_ICESERVERS: '[]'
+      NEKO_IMPLICIT_CONTROL: true
+    restart: no
+    labels:
+      # For homepage
+      - homepage.group=MiddleServices
+      - homepage.name=Neko
+      - homepage.weight=2
+      - homepage.icon=neko.svg # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.href=${HOME_PAGE_URL}

@@ -63,7 +63,8 @@ services:
     networks:
       - paperless-net
     # Note that papaerless (webserver) has a health check built into the Dockerfile, so no need to add it here.
-    labels: # For homepage
+    labels:
+      # For homepage
       - homepage.group=MiddleServices
       - homepage.name=PaperlessNGX
       - homepage.weight=2
@@ -121,7 +122,7 @@ services:
       - "--api-timeout=120s" # Set to 120s when done processing large chunks
       - "--chromium-disable-javascript=true"
       #- "--chromium-allow-list=file:///tmp/.*"
-    # https://gotenberg.dev/docs/routes#health-check-route
+      # https://gotenberg.dev/docs/routes#health-check-route
     healthcheck:
       test: 'curl --fail http://localhost:3000/health 2>/dev/null | grep -o "\"status\":\"up\"," | wc -l | [ "`cat`" = "3" ] || exit 1'
       start_period: 120s
