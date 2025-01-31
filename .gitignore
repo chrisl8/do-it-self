@@ -8,3 +8,7 @@ tailscale.env
 homepage/config
 /nextcloud/html
 /searxng/etc
+gitea/app.ini
+homepage/icons/
+homepage/images/
+obsidian-babel-livesync/docker.ini
