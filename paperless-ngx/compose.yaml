@@ -41,10 +41,10 @@ services:
       tika:
         condition: service_healthy
     volumes:
-      - /mnt/250a/container-mounts/paperless-ngx/data:/usr/src/paperless/data
-      - /mnt/250a/container-mounts/paperless-ngx/media:/usr/src/paperless/media # Your files are all here under documents/ originals and the generated PDFS in archive/
-      - /mnt/250a/container-mounts/paperless-ngx/export:/usr/src/paperless/export
-      - /mnt/500/samba/ScanHere:/usr/src/paperless/consume # Make sure this gets to the right directory. Test it.
+      - /mnt/2000/container-mounts/paperless-ngx/data:/usr/src/paperless/data
+      - /mnt/2000/container-mounts/paperless-ngx/media:/usr/src/paperless/media # Your files are all here under documents/ originals and the generated PDFS in archive/
+      - /mnt/2000/container-mounts/paperless-ngx/export:/usr/src/paperless/export
+      - /mnt/2000/samba/ScanHere:/usr/src/paperless/consume # Make sure this gets to the right directory. Test it.
     environment:
       PAPERLESS_REDIS: redis://broker:6379
       PAPERLESS_DBHOST: db
@@ -93,7 +93,7 @@ services:
     image: docker.io/library/postgres:16
     restart: no
     volumes:
-      - /mnt/250a/container-mounts/paperless-ngx/database:/var/lib/postgresql/data
+      - /mnt/2000/container-mounts/paperless-ngx/database:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: paperless
       POSTGRES_USER: paperless

@@ -16,7 +16,7 @@ services:
     #   service: cpu # set to one of [nvenc, quicksync, rkmpp, vaapi, vaapi-wsl] for accelerated transcoding
     volumes:
       # Do not edit the next line. If you want to change the media storage location on your system, edit the value of UPLOAD_LOCATION in the .env file
-      # /mnt/3000/immich/photos
+      # /mnt/2000/container-mounts/immich/photos
       - ${UPLOAD_LOCATION}:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
     # Note them doing here exactly what I say not to, but here is an example of a big project disagreeing.

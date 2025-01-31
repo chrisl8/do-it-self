@@ -7,7 +7,7 @@ services:
     environment:
       EULA: "TRUE"
     volumes:
-      - /mnt/250a/container-mounts/minecraft/data:/data
+      - /mnt/2000/container-mounts/minecraft/data:/data
     stdin_open: true
     tty: true
     restart: no

@@ -3,8 +3,8 @@ services:
     container_name: kanboard
     image: kanboard/kanboard
     volumes:
-      - /mnt/250a/container-mounts/kanboard/data:/var/www/app/data
-      - /mnt/250a/container-mounts/kanboard/plugins:/var/www/app/plugins
+      - /mnt/2000/container-mounts/kanboard/data:/var/www/app/data
+      - /mnt/2000/container-mounts/kanboard/plugins:/var/www/app/plugins
     healthcheck:
       test: curl --fail http://localhost/login | grep "Username" || exit 1
       start_period: 120s

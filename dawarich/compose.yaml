@@ -9,8 +9,8 @@ services:
     networks:
       - dawarich
     volumes:
-      - /mnt/250a/container-mounts/dawarich/redis_shared_data:/var/shared/redis
-    restart: always
+      - /mnt/2000/container-mounts/dawarich/redis_shared_data:/var/shared/redis
+    restart: no
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       start_period: 120s
@@ -23,7 +23,7 @@ services:
     shm_size: 1G
     container_name: dawarich_db
     volumes:
-      - /mnt/250a/container-mounts/dawarich/db_data:/var/lib/postgresql/data
+      - /mnt/2000/container-mounts/dawarich/db_data:/var/lib/postgresql/data
       - ./dawarich/postgresql.conf.example:/etc/postgresql/postgresql.conf
     networks:
       - dawarich
@@ -49,8 +49,8 @@ services:
       context: ./dawarich
       dockerfile: docker/Dockerfile.prod
     volumes:
-      - /mnt/250a/container-mounts/dawarich/public:/var/app/public
-      - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
+      - /mnt/2000/container-mounts/dawarich/public:/var/app/public
+      - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
     networks:
       - dawarich
     stdin_open: true
@@ -126,8 +126,8 @@ services:
       context: ./dawarich
       dockerfile: docker/Dockerfile.prod
     volumes:
-      - /mnt/250a/container-mounts/dawarich/public:/var/app/public
-      - /mnt/250a/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
+      - /mnt/2000/container-mounts/dawarich/public:/var/app/public
+      - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
     networks:
       - dawarich
     stdin_open: true
@@ -228,7 +228,7 @@ services:
         # Watch https://github.com/komoot/photon for the latest version
         PHOTON_VERSION: 0.6.0
     volumes:
-      - /mnt/250b/container-mounts/photon/data:/photon/photon_data
+      - /mnt/250/container-mounts/photon/photon_data:/photon/photon_data
     networks:
       - dawarich
     restart: no

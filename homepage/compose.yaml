@@ -4,17 +4,15 @@ services:
     container_name: homepage
     volumes:
       # I put the folder that contains these three into their own private git repo for tracking changes.
-      - /mnt/120/container-mounts/homepage/config:/app/config # Make sure your local config directory exists
-      - /mnt/120/container-mounts/homepage/images:/app/public/images
-      - /mnt/120/container-mounts/homepage/icons:/app/public/icons
+      - ./config:/app/config # Make sure your local config directory exists
+      - ./images:/app/public/images
+      - ./icons:/app/public/icons
       - /var/run/docker.sock:/var/run/docker.sock # pass local proxy
       # To allow homepage to show disk space free on all disks I have an empty folder on each disk that I mount here.
-      - /mnt/120/for-homepage:/mnt/120
       - /home/chrisl8/for-homepage:/mnt/root
-      - /mnt/250a/for-homepage:/mnt/250a
-      - /mnt/250b/for-homepage:/mnt/250b
-      - /mnt/500/for-homepage:/mnt/500
-      - /mnt/3000/for-homepage:/mnt/3000
+      - /mnt/120/for-homepage:/mnt/120
+      - /mnt/250/for-homepage:/mnt/250
+      - /mnt/2000/for-homepage:/mnt/2000
       - /mnt/8000/for-homepage:/mnt/8000
     restart: no
     networks:

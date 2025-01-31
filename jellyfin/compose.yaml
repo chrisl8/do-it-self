@@ -4,15 +4,15 @@ services:
     image: jellyfin/jellyfin
     # network_mode: 'host'
     volumes:
-      - /mnt/250a/container-mounts/jellyfin/config:/config
-      - /mnt/250a/container-mounts/jellyfin/cache:/cache
+      - /mnt/2000/container-mounts/jellyfin/config:/config
+      - /mnt/2000/container-mounts/jellyfin/cache:/cache
       # You can repeat the /media subfolders to have more than one media folder
-      - /mnt/250a/container-mounts/jellyfin/music:/media/music
-      - /mnt/3000/media/videos:/media/videos
-      - /mnt/3000/media/clips:/media/clips
-      - /mnt/3000/media/screenshots:/media/screenshots
-      - /mnt/3000/media/randomphotos:/media/randomphotos
-    restart: always
+      - /mnt/2000/container-mounts/jellyfin/music:/media/music
+      - /mnt/2000/container-mounts/jellyfin/videos:/media/videos
+      - /mnt/2000/container-mounts/jellyfin/clips:/media/clips
+      - /mnt/2000/container-mounts/jellyfin/screenshots:/media/screenshots
+      - /mnt/2000/container-mounts/jellyfin/randomphotos:/media/randomphotos
+    restart: no
     networks:
       - jellyfin-net
     # Note that jellyfin has a health check built into the Dockerfile, so no need to add it here.

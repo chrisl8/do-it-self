@@ -10,7 +10,7 @@ services:
       - TS_AUTHKEY=${TS_AUTHKEY}
       - HOME_PAGE_URL=${HOME_PAGE_URL}
     volumes:
-      - /mnt/250a/container-mounts/paste/data:/data
+      - /mnt/2000/container-mounts/paste/data:/data
       - ./healthcheck:/healthcheck
     healthcheck:
       test: ["CMD", "/healthcheck/get-home-page"]

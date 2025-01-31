@@ -4,7 +4,7 @@ services:
     image: rustdesk/rustdesk-server
     command: hbbs
     volumes:
-      - /mnt/250a/container-mounts/rustdesk/data:/root
+      - /mnt/2000/container-mounts/rustdesk/data:/root
       - ./healthcheck:/healthcheck
     network_mode: service:ts
     depends_on:
@@ -23,7 +23,7 @@ services:
     image: rustdesk/rustdesk-server
     command: hbbr
     volumes:
-      - /mnt/250a/container-mounts/rustdesk/data:/root
+      - /mnt/2000/container-mounts/rustdesk/data:/root
       - ./healthcheck:/healthcheck
     network_mode: service:ts
     restart: no

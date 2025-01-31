@@ -4,7 +4,7 @@ services:
     image: nextcloud
     container_name: nextcloud
     volumes:
-      - /mnt/3000/container-mounts/nextcloud/html:/var/www/html
+      - /mnt/2000/container-mounts/nextcloud/html:/var/www/html
     environment:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=nextcloud
@@ -40,7 +40,7 @@ services:
     container_name: nextcloud-db
     image: mariadb:10
     volumes:
-      - /mnt/3000/container-mounts/nextcloud/db:/var/lib/mysql
+      - /mnt/2000/container-mounts/nextcloud/db:/var/lib/mysql
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}

@@ -6,8 +6,8 @@ services:
       - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
       - MARIADB_AUTO_UPGRADE=1
     volumes:
-      - /mnt/250a/container-mounts/mariadb/db:/var/lib/mysql
-    restart: always
+      - /mnt/2000/container-mounts/mariadb/db:/var/lib/mysql
+    restart: no
     # Exposed locally so that my personal apps that use it don't have to traverse tailscale to use it.
     # This also means remote access is via the host's tailscale connection.
     ports:

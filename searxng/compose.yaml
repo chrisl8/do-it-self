@@ -33,7 +33,7 @@ services:
     networks:
       - searxng-net
     volumes:
-      - /mnt/250a/container-mounts/searxng/etc:/etc/searxng:rw
+      - /mnt/2000/container-mounts/searxng/etc:/etc/searxng:rw
     environment:
       - SEARXNG_BASE_URL=${HOME_PAGE_URL}
       - UWSGI_WORKERS=${SEARXNG_UWSGI_WORKERS:-4}

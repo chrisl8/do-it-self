@@ -4,7 +4,7 @@ services:
     image: crazymax/diun
     command: serve
     volumes:
-      - /mnt/250a/container-mounts/diun/data:/data
+      - /mnt/2000/container-mounts/diun/data:/data
       - ./diun.yml:/diun.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
