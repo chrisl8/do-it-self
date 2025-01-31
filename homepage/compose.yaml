@@ -16,7 +16,7 @@ services:
       - /mnt/500/for-homepage:/mnt/500
       - /mnt/3000/for-homepage:/mnt/3000
       - /mnt/8000/for-homepage:/mnt/8000
-    restart: always
+    restart: no
     networks:
       - homepage-net
   #    healthcheck: is built into this app, no need to add one.
@@ -46,7 +46,7 @@ services:
       retries: 3
     networks:
       - homepage-net
-    restart: always
+    restart: no
     depends_on:
       homepage:
         condition: service_healthy

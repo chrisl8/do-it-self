@@ -3,7 +3,7 @@ services:
     container_name: starbound
     build:
       dockerfile: Dockerfile
-    restart: always
+    restart: no
     environment:
       STEAM_USER: ${STEAM_USER}
     volumes:

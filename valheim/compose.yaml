@@ -10,7 +10,7 @@ services:
     ports:
       - "2456-2458:2456-2458/udp"
       - "9001:9001/tcp"
-    restart: always
+    restart: no
     stop_grace_period: 2m
     environment:
       - TZ=${TZ}

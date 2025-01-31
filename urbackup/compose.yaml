@@ -7,7 +7,7 @@ services:
       args:
         VERSION: 2.5.33
     container_name: urbackup
-    restart: always
+    restart: no
     environment:
       - TZ=America/Chicago # Enter your timezone
     volumes:

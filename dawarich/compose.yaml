@@ -31,7 +31,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: dawarich_production
-    restart: always
+    restart: no
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
       start_period: 120s
@@ -214,7 +214,7 @@ services:
       retries: 3
     networks:
       - dawarich
-    restart: always
+    restart: no
     depends_on:
       dawarich_sidekiq:
         condition: service_healthy
@@ -231,7 +231,7 @@ services:
       - /mnt/250b/container-mounts/photon/data:/photon/photon_data
     networks:
       - dawarich
-    restart: always
+    restart: no
     healthcheck:
       test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"," || exit 1'
       start_period: 120s

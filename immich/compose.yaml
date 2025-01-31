@@ -27,7 +27,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: always
+    restart: no
     healthcheck:
       disable: false
     networks:
@@ -55,7 +55,7 @@ services:
       - model-cache:/cache
     env_file:
       - .env
-    restart: always
+    restart: no
     healthcheck:
       disable: false
     networks:
@@ -68,7 +68,7 @@ services:
     image: docker.io/redis:6.2-alpine
     healthcheck:
       test: redis-cli ping || exit 1
-    restart: always
+    restart: no
     networks:
       - immich-net
   database:
@@ -131,7 +131,7 @@ services:
       retries: 3
     networks:
       - immich-net
-    restart: always
+    restart: no
     depends_on:
       immich-machine-learning:
         condition: service_healthy

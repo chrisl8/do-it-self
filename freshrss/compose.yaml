@@ -2,7 +2,7 @@ services:
   freshrss:
     container_name: freshrss
     image: freshrss/freshrss
-    restart: always
+    restart: no
     logging:
       options:
         max-size: 10m
@@ -56,7 +56,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
+    restart: no
     networks:
       - freshrss-net
     depends_on:

@@ -49,7 +49,7 @@ services:
       retries: 3
     networks:
       - portainer-net
-    restart: always
+    restart: no
     depends_on:
       portainer:
         condition: service_healthy

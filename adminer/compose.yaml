@@ -3,7 +3,7 @@ services:
     container_name: adminer
     build:
       dockerfile: Dockerfile
-    restart: always
+    restart: no
     # Must be host as this is going to connect to a variety of locally exposed databases.
     # There are other ways to do this, but this is what I'm going with for now.
     network_mode: "host"
@@ -14,5 +14,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+
 # There is no homepage config for this internally, instead I have bookmarks set up in homepage config that go directly to the various databases that I connect to with Adminer.
 # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.

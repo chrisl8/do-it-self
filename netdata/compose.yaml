@@ -3,7 +3,7 @@ services:
     container_name: netdata
     image: netdata/netdata
     pid: host
-    restart: always
+    restart: no
     cap_add:
       - SYS_PTRACE
       - SYS_ADMIN
@@ -59,7 +59,7 @@ services:
       retries: 3
     networks:
       - netdata-net
-    restart: always
+    restart: no
     depends_on:
       netdata:
         condition: service_healthy

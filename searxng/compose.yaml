@@ -3,7 +3,7 @@ services:
     container_name: searxng-redis
     image: docker.io/valkey/valkey:8-alpine
     command: valkey-server --save 30 1 --loglevel warning
-    restart: unless-stopped
+    restart: no
     volumes:
       - valkey-data2:/data
     cap_drop:
@@ -29,7 +29,7 @@ services:
   searxng:
     container_name: searxng
     image: docker.io/searxng/searxng
-    restart: unless-stopped
+    restart: no
     networks:
       - searxng-net
     volumes:
@@ -85,7 +85,7 @@ services:
       retries: 3
     networks:
       - searxng-net
-    restart: always
+    restart: no
     depends_on:
       searxng:
         condition: service_healthy

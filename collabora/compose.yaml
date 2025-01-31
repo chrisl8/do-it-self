@@ -2,7 +2,7 @@ services:
   collabora:
     container_name: collabora
     image: collabora/code
-    restart: always
+    restart: no
     volumes:
       # https://github.com/CollaboraOnline/online/issues/4489#issuecomment-1486058732
       - ./no_nag_please_kthx:/usr/share/coolwsd/browser/dist/welcome:ro
@@ -50,7 +50,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
+    restart: no
     networks:
       - collabora-net
     depends_on:

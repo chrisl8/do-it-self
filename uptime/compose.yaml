@@ -44,7 +44,7 @@ services:
       retries: 3
     networks:
       - uptime-net
-    restart: always
+    restart: no
     depends_on:
       uptime:
         condition: service_healthy

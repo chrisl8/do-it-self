@@ -11,7 +11,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
     networks:
       - gitea-net
-    restart: always
+    restart: no
     healthcheck:
       test: 'curl --fail http://localhost:3000/api/healthz 2>/dev/null | grep "\"status\": \"pass\"," | wc -l | [ "`cat`" = "3" ] || exit 1'
       start_period: 120s
@@ -56,7 +56,7 @@ services:
       retries: 3
     networks:
       - gitea-net
-    restart: always
+    restart: no
     depends_on:
       gitea:
         condition: service_healthy

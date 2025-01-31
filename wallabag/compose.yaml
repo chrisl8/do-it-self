@@ -52,7 +52,7 @@ services:
       retries: 3
     networks:
       - wallabag-net
-    restart: always
+    restart: no
     depends_on:
       wallabag:
         condition: service_healthy

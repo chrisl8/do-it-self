@@ -14,7 +14,7 @@ services:
       - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
     networks:
       - nextcloud-net
-    restart: always
+    restart: no
     depends_on:
       db:
         condition: service_healthy
@@ -48,7 +48,7 @@ services:
       - MYSQL_USER=nextcloud
     networks:
       - nextcloud-net
-    restart: always
+    restart: no
     # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
       test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
@@ -83,7 +83,7 @@ services:
       retries: 3
     networks:
       - nextcloud-net
-    restart: always
+    restart: no
     depends_on:
       nextcloud:
         condition: service_healthy

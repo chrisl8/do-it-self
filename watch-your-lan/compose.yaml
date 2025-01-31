@@ -4,7 +4,7 @@ services:
     image: aceberg/watchyourlan:v2
     # Must be host as this is going to scan our network.
     network_mode: "host"
-    restart: always
+    restart: no
     volumes:
       - /mnt/250a/container-mounts/watch-your-lan/data:/data/WatchYourLAN
     environment:

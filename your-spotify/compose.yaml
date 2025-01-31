@@ -14,7 +14,7 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
-    restart: always
+    restart: no
     healthcheck:
       test: curl --fail http://localhost:80/api/ | grep "Hello" || exit 1
       start_period: 120s
@@ -71,7 +71,7 @@ services:
       retries: 3
     networks:
       - your_spotify-net
-    restart: always
+    restart: no
     depends_on:
       your_spotify:
         condition: service_healthy

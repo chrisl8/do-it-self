@@ -47,7 +47,7 @@ services:
       retries: 3
     networks:
       - kanboard-net
-    restart: always
+    restart: no
     depends_on:
       kanboard:
         condition: service_healthy
