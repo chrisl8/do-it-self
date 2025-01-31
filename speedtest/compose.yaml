@@ -5,7 +5,7 @@ services:
     ports:
       - 8765:80
     volumes:
-      - /mnt/250a/container-mounts/speedtest/config:/config
+      - /mnt/2000/container-mounts/speedtest/config:/config
     environment:
       - DISPLAY_TIMEZONE=America/Chicago
       - PUID=1000
