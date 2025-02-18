@@ -1,17 +1,16 @@
 services:
-  gitea:
-    container_name: gitea
-    image: gitea/gitea
+  forgejo:
+    container_name: forgejo
+    image: codeberg.org/forgejo/forgejo:10
     environment:
-      - USER_UID=1000
-      - USER_GID=1000
-
+      - USER_UID=1010
+      - USER_GID=1010
     volumes:
-      - /mnt/2000/container-mounts/gitea/data:/data
+      - /mnt/2000/container-mounts/forgejo/data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     networks:
-      - gitea-net
+      - forgejo-net
     restart: no
     healthcheck:
       test: 'curl --fail http://localhost:3000/api/healthz 2>/dev/null | grep "\"status\": \"pass\"," | wc -l | [ "`cat`" = "3" ] || exit 1'
@@ -22,10 +21,10 @@ services:
       retries: 3
     labels:
       # For homepage
-      - homepage.group=MiddleServices
-      - homepage.name=Gitea
-      - homepage.weight=100
-      - homepage.icon=gitea.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.group=My Stuff
+      - homepage.name=forgejo
+      - homepage.weight=50
+      - homepage.icon=/dashboard-icons/svg/forgejo.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       #      - homepage.description=Git
       - homepage.widget.type=gitea
@@ -33,14 +32,17 @@ services:
       - homepage.widget.key=${API_KEY}
       - homepage.widget.fields=["notifications"]
   ts:
-    container_name: gitea-ts
+    container_name: forgejo-ts
+    user: 1010:1010
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
-      - TS_HOSTNAME=gitea
+      - TS_HOSTNAME=forgejo
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -48,19 +50,19 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     networks:
-      - gitea-net
+      - forgejo-net
     restart: no
     depends_on:
-      gitea:
+      forgejo:
         condition: service_healthy
 networks:
-  gitea-net:
+  forgejo-net:
