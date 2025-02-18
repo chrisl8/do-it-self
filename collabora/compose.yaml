@@ -1,6 +1,8 @@
+# https://sdk.collaboraonline.com/docs/installation/CODE_Docker_image.html?highlight=dont_gen_ssl_cert
 services:
   collabora:
     container_name: collabora
+    # Collabora seems to switch itself to user ID 100 with a name of 'cool' internally, and fails if we try to run as 1006:1006
     image: collabora/code
     restart: no
     volumes:
@@ -28,6 +30,7 @@ services:
       - collabora-net
   ts:
     container_name: collabora-ts
+    user: 1006:1006
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -35,6 +38,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -42,9 +47,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

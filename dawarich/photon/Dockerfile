@@ -6,8 +6,8 @@ FROM eclipse-temurin:21-jre
 # Install pbzip2 for parallel extraction
 RUN apt-get update \
     && apt-get -y install \
-        pbzip2 \
-        wget \
+    pbzip2 \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 ARG PHOTON_VERSION

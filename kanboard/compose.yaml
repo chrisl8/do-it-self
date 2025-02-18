@@ -1,10 +1,13 @@
 services:
   kanboard:
     container_name: kanboard
+    # I haven't figured out how to run this as a non-root user.
+    # user: 1013:1013
     image: kanboard/kanboard
     volumes:
       - /mnt/2000/container-mounts/kanboard/data:/var/www/app/data
       - /mnt/2000/container-mounts/kanboard/plugins:/var/www/app/plugins
+      - /mnt/2000/container-mounts/kanboard/nginx_ssl:/etc/nginx/ssl
     healthcheck:
       test: curl --fail http://localhost/login | grep "Username" || exit 1
       start_period: 120s
@@ -17,13 +20,14 @@ services:
     restart: no
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=KanBoard
       - homepage.name=KanBoard
-      - homepage.weight=220
+      - homepage.weight=10
       - homepage.icon=/icons/kanboard.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: kanboard-ts
+    user: 1013:1013
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -31,6 +35,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -38,9 +44,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

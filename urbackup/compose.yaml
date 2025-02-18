@@ -23,10 +23,10 @@ services:
     network_mode: "host"
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=System Monitoring
       - homepage.name=UrBackup
-      - homepage.weight=20
-      - homepage.icon=urbackup.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=50
+      - homepage.icon=/dashboard-icons/png/urbackup.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=urbackup
       - homepage.widget.url=${HOME_PAGE_URL}

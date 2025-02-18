@@ -23,15 +23,18 @@ ENV LC_ALL en_US.UTF-8
 RUN mkdir -p /steamcmd
 
 RUN cd /steamcmd \
-        && wget -o /tmp/steamcmd.tar.gz http://media.steampowered.com/installer/steamcmd_linux.tar.gz \
-        && tar zxvf steamcmd_linux.tar.gz \
-        && rm steamcmd_linux.tar.gz \
-        && chmod +x ./steamcmd.sh
+    && wget -o /tmp/steamcmd.tar.gz http://media.steampowered.com/installer/steamcmd_linux.tar.gz \
+    && tar zxvf steamcmd_linux.tar.gz \
+    && rm steamcmd_linux.tar.gz \
+    && chmod +x ./steamcmd.sh
 
 ADD start.sh /start.sh
 ADD update.sh /update.sh
 # Add initial require update flag
 ADD .update /.update
+
+RUN chmod ugo+rwx /start.sh \
+    && chmod ugo+rwx /update.sh
 
 WORKDIR /
 

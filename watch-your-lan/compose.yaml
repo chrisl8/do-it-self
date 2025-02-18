@@ -18,10 +18,10 @@ services:
       COLOR: "dark" # optional
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=System Monitoring
       - homepage.name=Watch Your LAN
       - homepage.weight=500
-      - homepage.icon=watchyourlan.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.icon=/dashboard-icons/png/watchyourlan.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
     healthcheck:
       test: wget -O - http://127.0.0.1:8840 2> /dev/null | grep "WatchYourLAN" || exit 1

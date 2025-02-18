@@ -4,6 +4,7 @@ services:
     build:
       dockerfile: Dockerfile
     restart: no
+    user: 1002:1002
     # Must be host as this is going to connect to a variety of locally exposed databases.
     # There are other ways to do this, but this is what I'm going with for now.
     network_mode: "host"

@@ -1,7 +1,8 @@
 services:
   beszel:
-    image: henrygd/beszel:latest
+    image: henrygd/beszel
     container_name: beszel
+    user: 1004:1004
     restart: no
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -19,9 +20,9 @@ services:
       retries: 3
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=System Monitoring
       - homepage.name=Beszel
-      - homepage.weight=35
+      - homepage.weight=10
       - homepage.icon=/icons/beszel.svg
       - homepage.href=${HOME_PAGE_HREF}
       - homepage.widget.type=beszel
@@ -30,10 +31,18 @@ services:
       - homepage.widget.username=${USERNAME_FOR_HOMEPAGE}
       - homepage.widget.password=${PASSWORD_FOR_HOMEPAGE}
       - homepage.widget.version=2
+  # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.
+  # That could be changed, but I didn't see the point.
   beszel-agent:
-    image: henrygd/beszel-agent:latest
+    image: henrygd/beszel-agent
     container_name: beszel-agent
+    user: 1004:1004
+    # This must be the ID of the Docker group.
+    group_add:
+      - 985
     restart: no
+    # The agent must run as root to get metrics from all docker containers, so do not add the user: directive.
+    # The agent must use host network mode to access network interface metrics
     network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

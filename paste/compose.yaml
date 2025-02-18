@@ -2,6 +2,7 @@
 services:
   paste:
     container_name: paste
+    user: 1020:1020
     image: ghcr.io/tailscale-dev/tclip
     # NOTE that this needs its OWN "auth key" and it is NOT the same as the tailscale OAuth key other containers use.
     # Instead you need a key from here: https://login.tailscale.com/admin/settings/keys
@@ -22,8 +23,8 @@ services:
     restart: no
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=Tools
       - homepage.name=Paste
-      - homepage.weight=95
-      - homepage.icon=pastebin.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=20
+      - homepage.icon=/dashboard-icons/svg/pastebin.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}

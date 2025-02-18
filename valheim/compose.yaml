@@ -21,6 +21,8 @@ services:
       - ADMINLIST_IDS=${ADMINLIST_IDS}
       - BEPINEX=true
       - SUPERVISOR_HTTP=true
+      - PUID=1029
+      - PGID=1029
     healthcheck:
       test: wget --no-verbose -O - "http://127.0.0.1:9001" 2>/dev/null | grep running | wc -l | [ "`cat`" = "5" ] || exit 1
       start_period: 120s
@@ -30,7 +32,7 @@ services:
       retries: 3
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=Home
       - homepage.name=Valheim
       - homepage.weight=500
       - homepage.icon=/icons/valheim.png

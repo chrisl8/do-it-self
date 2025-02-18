@@ -42,6 +42,33 @@ I typically subscribe to their releases in github so that I know when to do so.
 
 The compose files all have my specific mount points in them. You will need to update those to point to your own system paths.
 
+### User
+
+I attempt to run each "stack" of services as a user, using the format `stackname-docker`.
+
+For each stack you must make a user, get the UUID, and then use that in the compose file.
+
+Then you also must create the data volume mounts and make the container user the owner of them.
+
+Adding yourself to the container's run-as group is also a good idea so that you can easily edit the files from the host. *Remember that you must log out and back in to apply your new group membership.*
+
+I am also making the Tailscale sidecar container run as the same user, meaning that you must also ensure that the container user owns their config files.
+
+Here is a bit of a walkthrough with some helpful one-liners.
+```bash
+cd ~/continers/stackname
+sudo mkdir -p /mnt/2000/container-mounts/$(basename "$PWD")/data
+sudo useradd --no-create-home $(basename "$PWD")-docker
+id $(basename "$PWD")-docker
+sudo usermod -a -G $(basename "$PWD")-docker $USER
+sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker /mnt/2000/container-mounts/$(basename "$PWD")/*
+sudo chmod o-rwx -R /mnt/2000/container-mounts/$(basename "$PWD")/*
+sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker tailscale-config tailscale-state
+```
+*Note that many containers will only start or even run as root. I made some attempt to not do this, but I was only willing to put in so much effort.*
+
+My experience is that many many users on Reddit think running anything in a contaienr as root is the end of the world, while most developers who provide containers don't think this matters at all. The disconnect means that unless I am willing to rebuild the containers myself, I will need to run them as the author intended.
+
 ## Start/Stop Script
 
 You can run the script `allContainers.sh` to start and stop all of the containers.
@@ -80,6 +107,10 @@ This just confuses things, or worse pulls down an image and also builds it, caus
 I generally remove all blank lines.
 Copious comments.
 Then whatever auto-formatting the IDE I'm using at the moment applies.
+
+### Tags
+
+Typically I use the `:latest` if that works, and don't actually specify it in the compose file as `:latest` is the default.
 
 ### Environment Variables ond Files
 
@@ -229,5 +260,5 @@ I could see myself using them more in the future, especially if I could get invo
 
 4. You run a lot of our containers as root, isn't that dangerous?
 
-This is a personal setup, and I'm not worried about it.
-You can form your own opinion on this. The Internet has plenty of opinions on this topic.
+This is a personal setup, and I'm not worried about it, but see the seciont above on "user" for more information.
+Basically running as non-root is non-trivial when the container author didn't make it easy.

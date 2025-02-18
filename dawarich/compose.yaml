@@ -5,11 +5,16 @@ services:
   dawarich_redis:
     image: redis:alpine
     container_name: dawarich_redis
+    user: 1007:1007
     command: redis-server
     networks:
       - dawarich
     volumes:
+      # I'm not convinced that this is used anymore, instead I think it saves to /data instaed of this.
       - /mnt/2000/container-mounts/dawarich/redis_shared_data:/var/shared/redis
+      # Redis wants to write to its root data folder, but it cannot do this if it doesnt' have permission to the folder, which inside of the container it does not,
+      # so I mount a volume and give it permission to write to it.
+      - /mnt/2000/container-mounts/dawarich/redis_data:/data
     restart: no
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
@@ -19,9 +24,10 @@ services:
       timeout: 5s
       retries: 3
   dawarich_db:
-    image: postgres:17-alpine
+    image: postgis/postgis:17-3.5-alpine
     shm_size: 1G
     container_name: dawarich_db
+    user: 1007:1007
     volumes:
       - /mnt/2000/container-mounts/dawarich/db_data:/var/lib/postgresql/data
       - ./dawarich/postgresql.conf.example:/etc/postgresql/postgresql.conf
@@ -102,9 +108,9 @@ services:
         restart: true
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=Favorites
       - homepage.name=Dawarich
-      - homepage.weight=50
+      - homepage.weight=10
       - homepage.icon=/icons/dawarich.png
       - homepage.href=${HOME_PAGE_URL}
   dawarich_sidekiq:
@@ -177,6 +183,7 @@ services:
           memory: '4G' # Limit memory usage to 4GB
   ts:
     container_name: dawarich-ts
+    user: 1007:1007
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -184,6 +191,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -191,9 +200,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

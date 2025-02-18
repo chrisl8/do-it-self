@@ -1,6 +1,7 @@
 services:
   jellyfin:
     container_name: jellyfin
+    user: 1014:1014
     image: jellyfin/jellyfin
     # network_mode: 'host'
     volumes:
@@ -18,10 +19,10 @@ services:
     # Note that jellyfin has a health check built into the Dockerfile, so no need to add it here.
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=My Stuff
       - homepage.name=Jellyfin
-      - homepage.weight=70
-      - homepage.icon=jellyfin.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=30
+      - homepage.icon=/dashboard-icons/svg/jellyfin.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=jellyfin
       - homepage.widget.key=${API_KEY}
@@ -30,6 +31,7 @@ services:
       - homepage.widget.fields=["movies", "songs"]
   ts:
     container_name: jellyfin-ts
+    user: 1014:1014
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -37,6 +39,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -44,9 +48,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

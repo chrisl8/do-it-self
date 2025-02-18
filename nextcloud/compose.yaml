@@ -3,6 +3,7 @@ services:
   nextcloud:
     image: nextcloud
     container_name: nextcloud
+    #user: 1017:1017
     volumes:
       - /mnt/2000/container-mounts/nextcloud/html:/var/www/html
     environment:
@@ -27,10 +28,10 @@ services:
       retries: 3
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=My Stuff
       - homepage.name=Nextcloud
-      - homepage.weight=80
-      - homepage.icon=nextcloud.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=40
+      - homepage.icon=/dashboard-icons/svg/nextcloud.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=nextcloud
       - homepage.widget.url=${HOME_PAGE_URL}
@@ -39,6 +40,7 @@ services:
       - homepage.widget.fields=["freespace", "numfiles"]
   db:
     container_name: nextcloud-db
+    user: 1017:1017
     image: mariadb:10
     volumes:
       - /mnt/2000/container-mounts/nextcloud/db:/var/lib/mysql
@@ -60,6 +62,7 @@ services:
       retries: 3
   ts-nextcloud:
     container_name: nextcloud-ts
+    user: 1017:1017
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -67,6 +70,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -74,9 +79,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

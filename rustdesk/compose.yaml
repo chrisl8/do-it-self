@@ -1,6 +1,7 @@
 services:
   hbbs:
     container_name: rustdesk-rendezvous_server
+    user: 1023:1023
     image: rustdesk/rustdesk-server
     command: hbbs
     volumes:
@@ -20,6 +21,7 @@ services:
       retries: 3
   hbbr:
     container_name: rustdesk-relay_server
+    user: 1023:1023
     image: rustdesk/rustdesk-server
     command: hbbr
     volumes:
@@ -39,21 +41,24 @@ services:
       retries: 3
   ts:
     container_name: rustdesk-ts
+    user: 1023:1023
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
       - TS_HOSTNAME=rustdesk
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

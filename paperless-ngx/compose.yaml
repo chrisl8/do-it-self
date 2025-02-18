@@ -54,21 +54,25 @@ services:
       PAPERLESS_CONSUMER_POLLING: 120 # In Seconds. This should produce less load on the system than filesystem watchers, which are also not always reliable in some cases.
       PAPERLESS_CONSUMER_RECURSIVE: 1
       PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS: 1
+      PAPERLESS_CONSUMER_POLLING_RETRY_COUNT: 100
+      PAPERLESS_CONSUMER_POLLING_DELAY: 30
       PAPERLESS_NUMBER_OF_SUGGESTED_DATES: 10
       PAPERLESS_DATE_ORDER: MDY
       PAPERLESS_CONSUMER_DELETE_DUPLICATES: 1
       PAPERLESS_TIME_ZONE: America/Chicago
       PAPERLESS_URL: ${HOME_PAGE_URL}
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      USERMAP_UID: 1019
+      USERMAP_GID: 1019
     networks:
       - paperless-net
     # Note that papaerless (webserver) has a health check built into the Dockerfile, so no need to add it here.
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=My Stuff
       - homepage.name=PaperlessNGX
-      - homepage.weight=2
-      - homepage.icon=paperless-ngx.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=10
+      - homepage.icon=/dashboard-icons/svg/paperless-ngx.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=paperlessngx
       - homepage.widget.url=${HOME_PAGE_URL}
@@ -145,6 +149,7 @@ services:
       retries: 3
   ts:
     container_name: paperless-ts
+    user: 1019:1019
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -152,6 +157,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -159,9 +166,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

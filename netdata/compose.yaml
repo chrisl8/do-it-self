@@ -1,6 +1,13 @@
 services:
   netdata:
     container_name: netdata
+    # Netdata will work but only partially as a non-root user?
+    # It isn't clear what will or wont' work without root.
+    # https://learn.netdata.cloud/docs/netdata-agent/installation/docker
+    user: 1016:1016
+    # This must be the ID of the Docker group.
+    group_add:
+      - 985
     image: netdata/netdata
     pid: host
     restart: no
@@ -27,15 +34,16 @@ services:
     # Note that netdata has a health check built into the Dockerfile, so no need to add it here.
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=System Monitoring
       - homepage.name=Netdata
       - homepage.weight=30
-      - homepage.icon=netdata.png
+      - homepage.icon=/dashboard-icons/svg/netdata.svg
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=netdata
       - homepage.widget.url=${HOME_PAGE_URL}
   ts:
     container_name: netdata-ts
+    user: 1016:1016
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -43,6 +51,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -50,9 +60,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

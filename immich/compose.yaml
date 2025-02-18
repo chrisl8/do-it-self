@@ -10,6 +10,7 @@ name: immich
 services:
   immich-server:
     container_name: immich_server
+    user: 1012:1012
     image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
     # extends:
     #   file: hwaccel.transcoding.yml
@@ -34,10 +35,10 @@ services:
       - immich-net
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=My Stuff
       - homepage.name=Immich
-      - homepage.weight=60
-      - homepage.icon=immich.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=20
+      - homepage.icon=/dashboard-icons/svg/immich.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=immich
       - homepage.widget.version=2
@@ -46,6 +47,7 @@ services:
       - homepage.widget.fields=["photos", "videos", "storage"]
   immich-machine-learning:
     container_name: immich_machine_learning
+    user: 1012:1012
     # For hardware acceleration, add one of -[armnn, cuda, openvino] to the image tag.
     # Example tag: ${IMMICH_VERSION:-release}-cuda
     image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
@@ -54,8 +56,11 @@ services:
     #   service: cpu # set to one of [armnn, cuda, openvino, openvino-wsl] for accelerated inference - use the `-wsl` version for WSL2 where applicable
     volumes:
       - model-cache:/cache
+      - /mnt/2000/container-mounts/immich/matplotlib:/usr/src/app/matplotlib
     env_file:
       - .env
+    environment:
+      - MPLCONFIGDIR=/usr/src/app/matplotlib
     restart: no
     healthcheck:
       disable: false
@@ -66,14 +71,20 @@ services:
         condition: service_healthy
   redis:
     container_name: immich_redis
+    user: 1012:1012
     image: docker.io/redis:6.2-alpine
     healthcheck:
       test: redis-cli ping || exit 1
     restart: no
     networks:
       - immich-net
+    volumes:
+      # Redis wants to write to its root data folder, but it cannot do this if it doesnt' have permission to the folder, which inside of the container it does not,
+      # so I mount a volume and give it permission to write to it.
+      - /mnt/2000/container-mounts/immich/redis_data:/data
   database:
     container_name: immich_postgres
+    user: 1012:1012
     image: docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0@sha256:90724186f0a3517cf6914295b5ab410db9ce23190a2d9d0b9dd6463e3fa298f0
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -98,6 +109,7 @@ services:
       - immich-net
   ts:
     container_name: immich-ts
+    user: 1012:1012
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -105,6 +117,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -112,9 +126,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

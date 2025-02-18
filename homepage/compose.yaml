@@ -2,11 +2,16 @@ services:
   homepage:
     image: ghcr.io/gethomepage/homepage
     container_name: homepage
+    user: 1011:1011
+    # This must be the ID of the Docker group.
+    group_add:
+      - 985
+      - 1000
     volumes:
-      # I put the folder that contains these three into their own private git repo for tracking changes.
       - ./config:/app/config # Make sure your local config directory exists
       - ./images:/app/public/images
       - ./icons:/app/public/icons
+      - ./dashboard-icons:/app/public/dashboard-icons
       - /var/run/docker.sock:/var/run/docker.sock # pass local proxy
       # To allow homepage to show disk space free on all disks I have an empty folder on each disk that I mount here.
       - /home/chrisl8/for-homepage:/mnt/root
@@ -20,6 +25,7 @@ services:
   #    healthcheck: is built into this app, no need to add one.
   ts:
     container_name: homepage-ts
+    user: 1011:1011
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -27,6 +33,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -34,9 +42,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

@@ -1,5 +1,5 @@
 # https://hub.docker.com/r/uroni/urbackup-server
-FROM debian:latest
+FROM debian
 
 ARG VERSION
 

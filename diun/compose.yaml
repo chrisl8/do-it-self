@@ -1,6 +1,10 @@
 services:
   diun:
     container_name: diun
+    user: 1008:1008
+    # This must be the ID of the Docker group.
+    group_add:
+      - 985
     image: crazymax/diun
     command: serve
     volumes:
@@ -26,3 +30,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+
+# This doesn't even have a "front end", it just runs in the background and emails you when there are new images.
+# I think it has to be run as root in order to do this though.

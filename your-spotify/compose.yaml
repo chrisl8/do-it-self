@@ -3,8 +3,8 @@ services:
     container_name: your_spotify
     image: lscr.io/linuxserver/your_spotify
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=1031
+      - PGID=1031
       - TZ=Etc/UTC
       - MONGO_ENDPOINT=mongodb://mongo:27017/your_spotify
       - APP_URL=${APP_URL}
@@ -26,13 +26,14 @@ services:
       - your_spotify-net
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=Favorites
       - homepage.name=Your Spotifty
-      - homepage.weight=4
-      - homepage.icon=your-spotify.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=20
+      - homepage.icon=/dashboard-icons/svg/your-spotify.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${APP_URL}
   mongo:
     container_name: your_spotify-mongo
+    user: 1031:1031
     image: mongo:6
     volumes:
       - /mnt/2000/container-mounts/your-spotify/db:/data/db
@@ -48,6 +49,7 @@ services:
       - your_spotify-net
   ts:
     container_name: your_spotify-ts
+    user: 1031:1031
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
@@ -55,6 +57,8 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
@@ -62,9 +66,9 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2265152534
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: tailscale status --peers=false --json | grep -q 'Online.*true'
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
       start_period: 120s
       start_interval: 5s
       interval: 5m

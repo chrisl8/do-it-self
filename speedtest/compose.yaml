@@ -1,6 +1,7 @@
 services:
   speedtest:
     container_name: speedtest
+    # user: 1025:1025
     image: lscr.io/linuxserver/speedtest-tracker
     ports:
       - 8765:80
@@ -8,8 +9,8 @@ services:
       - /mnt/2000/container-mounts/speedtest/config:/config
     environment:
       - DISPLAY_TIMEZONE=America/Chicago
-      - PUID=1000
-      - PGID=1000
+      - PUID=1025
+      - PGID=1025
       - APP_KEY=base64:telXO1fQNhw+TekIMlVtP8JVhLHIFB50f+QDWL2dedc=
       - APP_URL=${HOME_PAGE_URL}
       - DB_CONNECTION=sqlite
@@ -18,10 +19,10 @@ services:
     restart: no
     labels:
       # For homepage
-      - homepage.group=MiddleServices
+      - homepage.group=System Monitoring
       - homepage.name=Speedtest
-      - homepage.weight=10
-      - homepage.icon=speedtest-tracker.png # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.weight=40
+      - homepage.icon=/dashboard-icons/png/speedtest-tracker.png # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=speedtest
       - homepage.widget.url=${HOME_PAGE_URL}
