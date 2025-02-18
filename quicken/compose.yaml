@@ -1,0 +1,73 @@
+# https://raw.githubusercontent.com/actualbudget/actual-server/refs/heads/master/docker-compose.yml
+services:
+  quicken_server:
+    container_name: quicken-server
+    user: 1022:1022
+    image: docker.io/actualbudget/actual-server
+    # environment:
+    # Uncomment any of the lines below to set configuration options.
+    # - ACTUAL_HTTPS_KEY=/data/selfhost.key
+    # - ACTUAL_HTTPS_CERT=/data/selfhost.crt
+    # - ACTUAL_PORT=5006
+    # - ACTUAL_UPLOAD_FILE_SYNC_SIZE_LIMIT_MB=20
+    # - ACTUAL_UPLOAD_SYNC_ENCRYPTED_FILE_SYNC_SIZE_LIMIT_MB=50
+    # - ACTUAL_UPLOAD_FILE_SIZE_LIMIT_MB=20
+    # See all options and more details at https://actualbudget.github.io/docs/Installing/Configuration
+    # !! If you are not using any of these options, remove the 'environment:' tag entirely.
+    volumes:
+      # Change './actual-data' below to the path to the folder you want Actual to store its data in on your server.
+      # '/data' is the path Actual will look for its files in by default, so leave that as-is.
+      - /mnt/2000/container-mounts/quicken/data:/data
+    healthcheck:
+      # Enable health check for the instance
+      test: [ "CMD-SHELL", "node src/scripts/health-check.js" ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: no
+    networks:
+      - quicken-net
+    labels:
+      # For homepage
+      - homepage.group=My Stuff
+      - homepage.name=Quicken
+      - homepage.weight=60
+      - homepage.icon=/dashboard-icons/svg/actual-budget.svg # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.href=${HOME_PAGE_URL}
+  ts:
+    container_name: quicken-ts
+    user: 1022:1022
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=quicken
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: no
+    networks:
+      - quicken-net
+    depends_on:
+      quicken_server:
+        condition: service_healthy
+networks:
+  quicken-net:
