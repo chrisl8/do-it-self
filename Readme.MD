@@ -62,7 +62,7 @@ sudo useradd --no-create-home $(basename "$PWD")-docker
 id $(basename "$PWD")-docker
 sudo usermod -a -G $(basename "$PWD")-docker $USER
 sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker /mnt/2000/container-mounts/$(basename "$PWD")/*
-sudo chmod o-rwx -R /mnt/2000/container-mounts/$(basename "$PWD")/*
+sudo chmod ug+rX,o-rwx -R /mnt/2000/container-mounts/$(basename "$PWD")/*
 sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker tailscale-config tailscale-state
 ```
 *Note that many containers will only start or even run as root. I made some attempt to not do this, but I was only willing to put in so much effort.*
