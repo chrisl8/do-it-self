@@ -13,3 +13,5 @@ homepage/icons/
 homepage/images/
 obsidian-babel-livesync/docker.ini
 homepage/dashboard-icons/
+caddy/conf
+caddy/site

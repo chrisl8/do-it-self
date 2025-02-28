@@ -1,0 +1,70 @@
+services:
+  caddy:
+    container_name: caddy
+    user: 1032:1032
+    image: caddy
+    restart: no
+    ports:
+      - "443:443"
+    volumes:
+      - /mnt/2000/container-mounts/caddy/conf:/etc/caddy
+      - /mnt/2000/container-mounts/caddy/site:/srv
+      - /mnt/2000/container-mounts/caddy/data:/data
+      - /mnt/2000/container-mounts/caddy/config:/config
+      - /mnt/2000/container-mounts/caddy/logs:/var/log/caddy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO - https://www.lofland.com/ | grep -q 'Ekpyrotic Frood Landing Page'" ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  spacymote:
+    container_name: caddy-spacymote
+    user: 1032:1032
+    build:
+      context: ./spacymote
+      dockerfile: Dockerfile
+    restart: no
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO - http://127.0.0.1:3000/ | grep -q '<title>SpacyMote</title>'" ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  witchazzan:
+    container_name: caddy-witchazzan
+    user: 1032:1032
+    build:
+      context: ./Witchazzan
+      dockerfile: Dockerfile
+    restart: no
+    volumes:
+      - /mnt/2000/container-mounts/caddy/witchazzan/persistentData:/app/persistentData
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO - http://127.0.0.1:8080/ | grep -q '<title>Witchazzan</title>'" ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  space-game:
+    container_name: caddy-space-game
+    user: 1032:1032
+    build:
+      context: ./space-game
+      dockerfile: Dockerfile
+    restart: no
+    volumes:
+      - /mnt/2000/container-mounts/caddy/space-game:/space-game
+      - ./healthcheck:/healthcheck
+    environment:
+      - HOME=/space-game
+    healthcheck:
+      test: [ "CMD", "/healthcheck/checkForSpaceGameProcess" ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
