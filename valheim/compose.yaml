@@ -2,6 +2,7 @@ services:
   valheim:
     container_name: valheim
     image: ghcr.io/lloesche/valheim-server
+    init: true
     cap_add:
       - sys_nice
     volumes:
