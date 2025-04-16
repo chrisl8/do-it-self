@@ -73,17 +73,6 @@ witchazzan.ekpyroticfrood.net {
 	}
 	log
 }
-*.witchazzan.space, witchazzan.space {
-	tls /etc/caddy/witchazzan-space.pem /etc/caddy/witchazzan-space-key.pem {
-		client_auth {
-			mode require_and_verify
-			trust_pool file /etc/caddy/cloudflair-origin-pull-ca.pem
-		}
-	}
-	root * /srv/EkpyroticFroodLandingPage/witchazzan-redirect
-	file_server
-	log
-}
 *.voidshipephemeral.space, voidshipephemeral.space {
 	tls /etc/caddy/voidshipephemeral-space.pem /etc/caddy/voidshipephemeral-space-key.pem {
 		client_auth {
