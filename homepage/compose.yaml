@@ -22,7 +22,9 @@ services:
     restart: no
     networks:
       - homepage-net
-  #    healthcheck: is built into this app, no need to add one.
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: ${HOMEPAGE_HOST}
+    # healthcheck: is built into this app, no need to add one.
   ts:
     container_name: homepage-ts
     user: 1011:1011
