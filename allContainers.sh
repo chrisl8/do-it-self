@@ -13,7 +13,8 @@ MOUNT=""
 CATEGORY=""
 
 FAST_START=false
-NO_GIT_PULLS=false
+UPDATE_GIT_REPOS=false
+GET_UPDATES=false
 
 while test $# -gt 0
 do
@@ -37,8 +38,11 @@ do
                 --fast)
                   FAST_START=true
                   ;;
-                --no-git-pulls)
-                  NO_GIT_PULLS=true
+                --update-git-repos)
+                  UPDATE_GIT_REPOS=true
+                  ;;
+                --get-updates)
+                  GET_UPDATES=true
                   ;;
         esac
         shift
@@ -58,6 +62,12 @@ if [[ ${ACTION} = "" ]];then
   echo ""
   echo "You can also specify to only STOP containers which reference a given category in their compose.yaml files based on the homepage.group tag."
   echo "allContainers.sh --stop --category \"System Monitoring\""
+  echo ""
+  echo "You can also update all git repositories in all containers by running:"
+  echo "allContainers.sh --update-git-repos"
+  echo ""
+  echo "You can also get updates for all containers by running:"
+  echo "allContainers.sh --get-updates"
   exit
 fi
 
@@ -199,7 +209,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           fi
         fi
 
-        if [[ ${NO_GIT_PULLS} = false ]];then
+        if [[ ${UPDATE_GIT_REPOS} = true ]];then
         # Update any git repositories in the directory
           for GIT_DIR in $(find . -name ".git" -type d 2>/dev/null); do
             echo "Updating git repository in ${GIT_DIR%/*}"
@@ -208,8 +218,10 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             cd - > /dev/null || exit
           done
         fi
-        docker compose pull
-        docker compose build
+        if [[ ${GET_UPDATES} = true ]];then
+          docker compose pull
+          docker compose build
+        fi
         docker compose up -d
         if [[ ${CONTAINER_DIR} = "homepage" ]];then
           # This is my personal hack to get icons the way I want them in homepage.
