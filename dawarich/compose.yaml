@@ -57,6 +57,7 @@ services:
     volumes:
       - /mnt/2000/container-mounts/dawarich/public:/var/app/public
       - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
+      - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
     networks:
       - dawarich
     stdin_open: true
@@ -87,6 +88,7 @@ services:
       PHOTON_API_HOST: ${PHOTON_API_HOST}
       PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
       REVERSE_GEOCODING_ENABLED: true
+      SELF_HOSTED: true
     logging:
       driver: "json-file"
       options:
@@ -121,6 +123,7 @@ services:
     volumes:
       - /mnt/2000/container-mounts/dawarich/public:/var/app/public
       - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
+      - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
     networks:
       - dawarich
     stdin_open: true
@@ -151,6 +154,7 @@ services:
       PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
       REVERSE_GEOCODING_ENABLED: true
       TIME_ZONE: America/Chicago
+      SELF_HOSTED: true
     logging:
       driver: "json-file"
       options:
