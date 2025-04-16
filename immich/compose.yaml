@@ -10,7 +10,6 @@ name: immich
 services:
   immich-server:
     container_name: immich_server
-    user: 1012:1012
     image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
     # extends:
     #   file: hwaccel.transcoding.yml
@@ -47,7 +46,6 @@ services:
       - homepage.widget.fields=["photos", "videos", "storage"]
   immich-machine-learning:
     container_name: immich_machine_learning
-    user: 1012:1012
     # For hardware acceleration, add one of -[armnn, cuda, openvino] to the image tag.
     # Example tag: ${IMMICH_VERSION:-release}-cuda
     image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
@@ -71,7 +69,6 @@ services:
         condition: service_healthy
   redis:
     container_name: immich_redis
-    user: 1012:1012
     image: docker.io/redis:6.2-alpine
     healthcheck:
       test: redis-cli ping || exit 1
@@ -84,7 +81,6 @@ services:
       - /mnt/2000/container-mounts/immich/redis_data:/data
   database:
     container_name: immich_postgres
-    user: 1012:1012
     image: docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0@sha256:90724186f0a3517cf6914295b5ab410db9ce23190a2d9d0b9dd6463e3fa298f0
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -109,7 +105,6 @@ services:
       - immich-net
   ts:
     container_name: immich-ts
-    user: 1012:1012
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
