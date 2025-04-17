@@ -1,7 +1,7 @@
 services:
   forgejo:
     container_name: forgejo
-    image: codeberg.org/forgejo/forgejo:10
+    image: codeberg.org/forgejo/forgejo:11
     environment:
       - USER_UID=1010
       - USER_GID=1010
