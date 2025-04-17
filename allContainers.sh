@@ -7,7 +7,8 @@ BRIGHT_MAGENTA='\033[1;95m'
 RED='\033[0;31m'
 NC='\033[0m' # NoColor
 
-ACTION=""
+START_ACTION=false
+STOP_ACTION=false
 SLEEP_TIME=10
 MOUNT=""
 CATEGORY=""
@@ -19,9 +20,9 @@ GET_UPDATES=false
 while test $# -gt 0
 do
         case "$1" in
-                --start) ACTION=start
+                --start) START_ACTION=true
                 ;;
-                --stop) ACTION=stop
+                --stop) STOP_ACTION=true
                 ;;
                 --sleep)
                   shift
@@ -48,11 +49,14 @@ do
         shift
 done
 
-if [[ ${ACTION} = "" ]];then
+if [[ ${START_ACTION} = false && ${STOP_ACTION} = false ]];then
   echo "You must an action of either start or stop like this:"
   echo "allContainers.sh --start"
   echo "or"
   echo "allContainers.sh --stop"
+  echo ""
+  echo "You can also specify BOTH stop and start to stop and start each container one at a time."
+  echo "Then if you include the --update-git-repos and --get-updates flags, it will update the git repos and get updates for each container one at a time."
   echo ""
   echo "You can also adjust the sleep time between starting containers. Default is 10 seconds."
   echo "allContainers.sh --start --sleep 20"
@@ -68,6 +72,9 @@ if [[ ${ACTION} = "" ]];then
   echo ""
   echo "You can also get updates for all containers by running:"
   echo "allContainers.sh --get-updates"
+  echo ""
+  echo "Finaly, there is a --fast flag that will skip waiting for all containers to report healthy."
+  echo "allContainers.sh --fast"
   exit
 fi
 
@@ -97,11 +104,13 @@ for DIR in *;do
   fi
 done
 
-if [[ ${ACTION} = "start" ]];then
+if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
+  echo "Restarting all containers..."
+  readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -z | xargs -0n1)
+elif [[ ${START_ACTION} = true ]];then
   printf "${YELLOW}Starting all containers...${NC}\n"
   readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -z | xargs -0n1)
-fi
-if [[ ${ACTION} = "stop" ]];then
+elif [[ ${STOP_ACTION} = true ]];then
   if [[ ${MOUNT} != "" ]];then
     printf "${YELLOW}Stopping containers that reference /mnt/${MOUNT}...${NC}\n"
   elif [[ ${CATEGORY} != "" ]];then
@@ -125,7 +134,11 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
       fi
     fi
     cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
-    if [[ ${ACTION} = "start" ]];then
+    if [[ ${STOP_ACTION} = true ]];then
+      printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
+      docker compose down
+    fi
+    if [[ ${START_ACTION} = true ]];then
       if [[ $(docker compose ps | wc -l) -eq 1 ]];then
         printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
 
@@ -212,13 +225,14 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         if [[ ${UPDATE_GIT_REPOS} = true ]];then
         # Update any git repositories in the directory
           for GIT_DIR in $(find . -name ".git" -type d 2>/dev/null); do
-            echo "Updating git repository in ${GIT_DIR%/*}"
+            printf "${YELLOW}  Updating git repository in ${GIT_DIR%/*}${NC}\n"
             cd "${GIT_DIR%/*}" || continue
             git pull
             cd - > /dev/null || exit
           done
         fi
         if [[ ${GET_UPDATES} = true ]];then
+          printf "${YELLOW}  Pulling updates and rebuilding all containers...${NC}\n"
           docker compose pull
           docker compose build
         fi
@@ -235,21 +249,21 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           while /usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
             sleep 0.1;
           done;
-        printf "${YELLOW} ...Starting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
-        sleep "${SLEEP_TIME}"
+          if [[ ${STOP_ACTION} = true ]];then
+            printf "${YELLOW} ...Restarting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
+          else
+            printf "${YELLOW} ...Starting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
+          fi
+          sleep "${SLEEP_TIME}"
         fi
       fi
-    fi
-    if [[ ${ACTION} = "stop" ]];then
-      printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
-      docker compose down
     fi
   else
     printf "${RED} - ${CONTAINER_DIR} is not a valid container directory${NC}\n"
   fi
 done
 
-if [[ ${ACTION} = "start" ]];then
+if [[ ${START_ACTION} = true ]];then
   printf "${YELLOW}Performing post-start chores${NC}\n"
   # Prune images now to clear any left over after upgrades.
   # This ensures all images we don't use are pruned, but none that we do use
@@ -264,6 +278,8 @@ if [[ ${ACTION} = "start" ]];then
   printf "${YELLOW}All containers started${NC}\n"
 fi
 
-if [[ ${ACTION} = "stop" ]];then
+if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
+  printf "${YELLOW}All containers restarted.${NC}\n"
+elif [[ ${STOP_ACTION} = true ]];then
   printf "${YELLOW}All containers stopped.${NC}\n"
 fi
