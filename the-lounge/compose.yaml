@@ -1,0 +1,61 @@
+services:
+  the_lounge:
+    image: lscr.io/linuxserver/thelounge:latest
+    container_name: the_lounge
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - /mnt/2000/container-mounts/the_lounge/config:/config
+    restart: no
+    labels:
+      # For homepage
+      - homepage.group=Home
+      - homepage.name=The Lounge
+      - homepage.weight=500
+      - homepage.icon=/dashboard-icons/svg/thelounge.svg # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.href=${HOME_PAGE_URL}
+    networks:
+      - the_lounge-net
+    healthcheck:
+      test: 'curl --fail http://localhost:9000/ 2>/dev/null | grep -o "<title>The Lounge</title>" || exit 1'
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  ts:
+    container_name: the_lounge-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=thelounge
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - the_lounge-net
+    restart: no
+    depends_on:
+      the_lounge:
+        condition: service_healthy
+networks:
+  the_lounge-net:
