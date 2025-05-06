@@ -13,7 +13,7 @@ SLEEP_TIME=10
 MOUNT=""
 CATEGORY=""
 
-FAST_START=false
+NO_WAIT=false
 UPDATE_GIT_REPOS=false
 GET_UPDATES=false
 
@@ -36,8 +36,8 @@ do
                   shift
                   CATEGORY="$1"
                   ;;
-                --fast)
-                  FAST_START=true
+                --no-wait)
+                  NO_WAIT=true
                   ;;
                 --update-git-repos)
                   UPDATE_GIT_REPOS=true
@@ -244,7 +244,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
         fi
 
-        if [[ ${FAST_START} = false ]];then
+        if [[ ${NO_WAIT} = false ]];then
           printf "${YELLOW} ...Waiting for all containers to report healthy...${NC}\n"
           while /usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
             sleep 0.1;
