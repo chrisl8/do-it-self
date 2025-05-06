@@ -8,6 +8,7 @@ services:
     volumes:
       # https://github.com/CollaboraOnline/online/issues/4489#issuecomment-1486058732
       - ./no_nag_please_kthx:/usr/share/coolwsd/browser/dist/welcome:ro
+      - ./healthcheck:/healthcheck
     environment:
       username: ${COLLABORA_ADMIN_USERNAME}
       password: ${COLLABORA_ADMIN_PASSWORD}
@@ -20,7 +21,7 @@ services:
       # So the "termination=true" makes it tell everyone to use https even though it thinks it isn't.
       extra_params: --o:ssl.enable=false --o:ssl.termination=true
     healthcheck:
-      test: curl --fail http://127.0.0.1:9980/ | grep -q -e 'OK' || exit 1
+      test: ["CMD", "/healthcheck/get-collabora-page"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -49,7 +50,7 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
