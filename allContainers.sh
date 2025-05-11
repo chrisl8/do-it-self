@@ -228,8 +228,18 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             printf "${YELLOW}  Updating git repository in ${GIT_DIR%/*}${NC}\n"
             cd "${GIT_DIR%/*}" || continue
             git pull
-            cd - > /dev/null || exit
+            cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
           done
+          if [[ -e site/my-digital-garden/.git ]];then
+            printf "${YELLOW}  Updating git repository in site/my-digital-garden${NC}\n"
+            cd site/my-digital-garden || continue
+            git pull
+            rm -rf node_modules
+            rm package-lock.json
+            npm i
+            npm run build
+            cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
+          fi
         fi
         if [[ ${GET_UPDATES} = true ]];then
           printf "${YELLOW}  Pulling updates and rebuilding all containers...${NC}\n"
