@@ -21,7 +21,7 @@ services:
     networks:
       - searxng-net
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -30,7 +30,7 @@ services:
   searxng:
     container_name: searxng
     user: 1024:1024
-    image: docker.io/searxng/searxng
+    image: searxng/searxng
     restart: no
     networks:
       - searxng-net
@@ -82,7 +82,7 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
