@@ -69,37 +69,23 @@ services:
         condition: service_healthy
   redis:
     container_name: immich_redis
-    image: docker.io/redis:6.2-alpine
+    image: docker.io/valkey/valkey:8-bookworm@sha256:ff21bc0f8194dc9c105b769aeabf9585fea6a8ed649c0781caeac5cb3c247884
     healthcheck:
       test: redis-cli ping || exit 1
     restart: no
     networks:
       - immich-net
-    volumes:
-      # Redis wants to write to its root data folder, but it cannot do this if it doesnt' have permission to the folder, which inside of the container it does not,
-      # so I mount a volume and give it permission to write to it.
-      - /mnt/2000/container-mounts/immich/redis_data:/data
   database:
     container_name: immich_postgres
-    image: docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0@sha256:90724186f0a3517cf6914295b5ab410db9ce23190a2d9d0b9dd6463e3fa298f0
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_DB: ${DB_DATABASE_NAME}
-      POSTGRES_INITDB_ARGS: '--data-checksums'
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       # Do not edit the next line. If you want to change the database storage location on your system, edit the value of DB_DATA_LOCATION in the .env file
       - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
-    healthcheck:
-      test: >-
-        pg_isready --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" || exit 1; Chksum="$$(psql --dbname="$${POSTGRES_DB}" --username="$${POSTGRES_USER}" --tuples-only --no-align --command='SELECT COALESCE(SUM(checksum_failures), 0) FROM pg_stat_database')"; echo "checksum failure count is $$Chksum"; [ "$$Chksum" = '0' ] || exit 1
-      start_period: 120s
-      start_interval: 5s
-      interval: 5m
-      timeout: 5s
-      retries: 3
-    command: >-
-      postgres -c shared_preload_libraries=vectors.so -c 'search_path="$$user", public, vectors' -c logging_collector=on -c max_wal_size=2GB -c shared_buffers=512MB -c wal_compression=on
     restart: no
     networks:
       - immich-net
@@ -123,7 +109,7 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
