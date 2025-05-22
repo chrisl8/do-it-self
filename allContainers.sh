@@ -234,9 +234,11 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             printf "${YELLOW}  Updating git repository in site/my-digital-garden${NC}\n"
             cd site/my-digital-garden || continue
             git pull
+            printf "${YELLOW}    Updating dependencies in site/my-digital-garden${NC}\n"
             rm -rf node_modules
             rm package-lock.json
             npm i
+            printf "${YELLOW}    Rebuilding site/my-digital-garden${NC}\n"
             npm run build
             cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
           fi
