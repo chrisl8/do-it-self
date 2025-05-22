@@ -1,0 +1,51 @@
+# https://sdk.collaboraonline.com/docs/installation/CODE_Docker_image.html?highlight=dont_gen_ssl_cert
+services:
+  nextcloud-whiteboard:
+    container_name: nextcloud-whiteboard
+    image: ghcr.io/nextcloud-releases/whiteboard:release
+    environment:
+      - NEXTCLOUD_URL=https://nextcloud.jamnapari-goblin.ts.net
+      - JWT_SECRET_KEY=${WHITEBOARD_JWT_SECRET_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3002"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - nextcloud-whiteboard-net
+  ts:
+    container_name: nextcloud-whiteboard-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=nextcloud-whiteboard
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: no
+    networks:
+      - nextcloud-whiteboard-net
+    depends_on:
+      nextcloud-whiteboard:
+        condition: service_healthy
+networks:
+  nextcloud-whiteboard-net:
