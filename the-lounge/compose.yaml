@@ -53,7 +53,7 @@ services:
       retries: 3
     networks:
       - the_lounge-net
-    restart: no
+    restart: always
     depends_on:
       the_lounge:
         condition: service_healthy

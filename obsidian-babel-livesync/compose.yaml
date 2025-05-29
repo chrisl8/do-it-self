@@ -12,7 +12,7 @@ services:
     networks:
       - obsidian-babel-livesync-net
     healthcheck:
-      test: 'curl --fail -u ${COUCHDB_USER}:${COUCHDB_PASSWORD} http://127.0.0.1:5984 2>/dev/null | grep -q Welcome || exit 1'
+      test: "curl --fail -u ${COUCHDB_USER}:${COUCHDB_PASSWORD} http://127.0.0.1:5984 2>/dev/null | grep -q Welcome || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -39,13 +39,13 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
+    restart: always
     networks:
       - obsidian-babel-livesync-net
     depends_on:

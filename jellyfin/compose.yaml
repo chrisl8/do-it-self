@@ -47,7 +47,7 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -55,7 +55,7 @@ services:
       retries: 3
     networks:
       - jellyfin-net
-    restart: no
+    restart: always
     depends_on:
       jellyfin:
         condition: service_healthy
