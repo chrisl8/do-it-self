@@ -12,6 +12,7 @@ STOP_ACTION=false
 SLEEP_TIME=10
 MOUNT=""
 CATEGORY=""
+CONTAINER_LIST_FILE=""
 
 NO_WAIT=false
 UPDATE_GIT_REPOS=false
@@ -35,6 +36,10 @@ do
                 --category)
                   shift
                   CATEGORY="$1"
+                  ;;
+                --container-list)
+                  shift
+                  CONTAINER_LIST_FILE="$1"
                   ;;
                 --no-wait)
                   NO_WAIT=true
@@ -66,6 +71,9 @@ if [[ ${START_ACTION} = false && ${STOP_ACTION} = false ]];then
   echo ""
   echo "You can also specify to only STOP containers which reference a given category in their compose.yaml files based on the homepage.group tag."
   echo "allContainers.sh --stop --category \"System Monitoring\""
+  echo ""
+  echo "You can also specify a file containing a list of container directories to process."
+  echo "allContainers.sh --start --container-list my-containers.txt"
   echo ""
   echo "You can also update all git repositories in all containers by running:"
   echo "allContainers.sh --update-git-repos"
@@ -104,11 +112,41 @@ for DIR in *;do
   fi
 done
 
+RESTART_LIST_TEXT="all containers"
+RESTART_LIST_TEXT_UPPER="All containers"
+
+# If a container list file is provided, read it and filter the container list
+if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
+  if [[ ! -f "${CONTAINER_LIST_FILE}" ]]; then
+    printf "${RED}Error: Container list file ${CONTAINER_LIST_FILE} does not exist${NC}\n"
+    exit 1
+  fi
+  
+  # Read the container list file into an array
+  mapfile -t ALLOWED_DIRS < "${CONTAINER_LIST_FILE}"
+  
+  # Filter CONTAINER_LIST to only include directories in the file list
+  FILTERED_LIST=()
+  for ENTRY in "${CONTAINER_LIST[@]}"; do
+    CONTAINER_DIR="$(echo $ENTRY | cut -d "/" -f 2)"
+    if [[ " ${ALLOWED_DIRS[*]} " =~ " ${CONTAINER_DIR} " ]]; then
+      FILTERED_LIST+=("${ENTRY}")
+    fi
+  done
+  CONTAINER_LIST=("${FILTERED_LIST[@]}")
+  RESTART_LIST_TEXT="the containers in ${CONTAINER_LIST_FILE}"
+  RESTART_LIST_TEXT_UPPER="The containers in ${CONTAINER_LIST_FILE}"
+fi
+
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
-  echo "Restarting all containers..."
+  if [[ ${GET_UPDATES} = true ]];then
+    printf "${YELLOW}Pulling updates and rebuilding ${RESTART_LIST_TEXT}${NC}\n\n"
+  else
+    printf "${YELLOW}Restarting ${RESTART_LIST_TEXT}${NC}\n\n"
+  fi
   readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -z | xargs -0n1)
 elif [[ ${START_ACTION} = true ]];then
-  printf "${YELLOW}Starting all containers...${NC}\n"
+  printf "${YELLOW}Starting ${RESTART_LIST_TEXT}...${NC}\n"
   readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -z | xargs -0n1)
 elif [[ ${STOP_ACTION} = true ]];then
   if [[ ${MOUNT} != "" ]];then
@@ -116,7 +154,7 @@ elif [[ ${STOP_ACTION} = true ]];then
   elif [[ ${CATEGORY} != "" ]];then
     printf "${YELLOW}Stopping containers that reference the category ${CATEGORY}...${NC}\n"
   else
-    printf "${YELLOW}Stopping all containers...${NC}\n"
+    printf "${YELLOW}Stopping ${RESTART_LIST_TEXT}...${NC}\n"
   fi
   readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -rz | xargs -0n1)
 fi
@@ -244,7 +282,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           fi
         fi
         if [[ ${GET_UPDATES} = true ]];then
-          printf "${YELLOW}  Pulling updates and rebuilding all containers...${NC}\n"
+          printf "${YELLOW}  Pulling updates and rebuilding...${NC}\n"
           docker compose pull
           docker compose build
         fi
@@ -286,12 +324,17 @@ if [[ ${START_ACTION} = true ]];then
 
   # Remove unused networks that get left behind
   docker network prune -f
-
-  printf "${YELLOW}All containers started${NC}\n"
 fi
 
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
-  printf "${YELLOW}All containers restarted.${NC}\n"
+  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} restarted.${NC}\n"
 elif [[ ${STOP_ACTION} = true ]];then
-  printf "${YELLOW}All containers stopped.${NC}\n"
+  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} stopped.${NC}\n"
+elif [[ ${START_ACTION} = true ]];then
+  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} started.${NC}\n"
+fi
+
+# Run my check script to go ahead and let everyone know we are back up.
+if [[ -e "${HOME}/Scripts/containerCheckups.sh" ]];then
+  "${HOME}/Scripts/containerCheckups.sh"
 fi
