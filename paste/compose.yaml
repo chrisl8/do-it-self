@@ -14,13 +14,13 @@ services:
       - /mnt/2000/container-mounts/paste/data:/data
       - ./healthcheck:/healthcheck
     healthcheck:
-      test: [ "CMD", "/healthcheck/get-home-page" ]
+      test: ["CMD", "/healthcheck/get-home-page"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
+    restart: always
     labels:
       # For homepage
       - homepage.group=Tools

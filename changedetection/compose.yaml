@@ -31,7 +31,7 @@ services:
       - homepage.group=Reading
       - homepage.name=Change Detection
       - homepage.weight=30
-      - homepage.icon=/icons/changedetection-io.png
+      - homepage.icon=/dashboard-icons/svg/changedetection.svg
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=changedetectionio
       - homepage.widget.key=${API_KEY}
@@ -92,7 +92,7 @@ services:
       retries: 3
     networks:
       - changedetection-net
-    restart: no
+    restart: always
     depends_on:
       changedetection:
         condition: service_healthy

@@ -56,7 +56,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
+    restart: always
     networks:
       - collabora-net
     depends_on:

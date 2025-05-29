@@ -12,7 +12,7 @@ services:
       - /mnt/2000/container-mounts/beszel/data:/beszel_data
       - ./healthcheck:/healthcheck
     healthcheck:
-      test: [ "CMD", "/healthcheck/get-home-page" ]
+      test: ["CMD", "/healthcheck/get-home-page"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -51,14 +51,14 @@ services:
       - /mnt/120/for-homepage:/extra-filesystems/120:ro
       - /mnt/250/for-homepage:/extra-filesystems/250:ro
       - /mnt/2000/for-homepage:/extra-filesystems/2000:ro
-      - /mnt/8000/for-homepage:/extra-filesystems/8000:ro
+      - /mnt/22TB/for-homepage:/extra-filesystems/22TB:ro
       - ./healthcheck:/healthcheck
     environment:
       PORT: 45876
       # Do not remove quotes around the key
       KEY: ${KEY}
     healthcheck:
-      test: [ "CMD", "/healthcheck/checkForAgentProcess" ]
+      test: ["CMD", "/healthcheck/checkForAgentProcess"]
       start_period: 120s
       start_interval: 5s
       interval: 5m

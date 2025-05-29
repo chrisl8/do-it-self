@@ -117,7 +117,7 @@ services:
       - homepage.group=Favorites
       - homepage.name=Dawarich
       - homepage.weight=10
-      - homepage.icon=/icons/dawarich.png
+      - homepage.icon=/dashboard-icons/svg/dawarich.svg
       - homepage.href=${HOME_PAGE_URL}
   dawarich_sidekiq:
     container_name: dawarich_sidekiq
@@ -218,7 +218,7 @@ services:
       retries: 3
     networks:
       - dawarich
-    restart: no
+    restart: always
     depends_on:
       dawarich_sidekiq:
         condition: service_healthy

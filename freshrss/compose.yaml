@@ -14,7 +14,7 @@ services:
       - /mnt/2000/container-mounts/freshrss/extensions:/var/www/FreshRSS/extensions
     environment:
       TZ: America/Chicago
-      CRON_MIN: '2,32'
+      CRON_MIN: "2,32"
     networks:
       - freshrss-net
     # https://github.com/FreshRSS/FreshRSS/pull/2455
@@ -57,13 +57,13 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
+    restart: always
     networks:
       - freshrss-net
     depends_on:

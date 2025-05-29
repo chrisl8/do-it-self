@@ -18,7 +18,7 @@ services:
       - /mnt/120/for-homepage:/mnt/120
       - /mnt/250/for-homepage:/mnt/250
       - /mnt/2000/for-homepage:/mnt/2000
-      - /mnt/8000/for-homepage:/mnt/8000
+      - /mnt/22TB/for-homepage:/mnt/22TB
     restart: no
     networks:
       - homepage-net
@@ -46,7 +46,7 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m

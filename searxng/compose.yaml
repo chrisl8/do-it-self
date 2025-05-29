@@ -90,7 +90,7 @@ services:
       retries: 3
     networks:
       - searxng-net
-    restart: no
+    restart: always
     depends_on:
       searxng:
         condition: service_healthy

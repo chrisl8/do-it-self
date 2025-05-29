@@ -20,7 +20,7 @@ services:
       - /mnt/2000/container-mounts/actual-budget/data:/data
     healthcheck:
       # Enable health check for the instance
-      test: [ "CMD-SHELL", "node src/scripts/health-check.js" ]
+      test: ["CMD-SHELL", "node src/scripts/health-check.js"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -57,13 +57,13 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
+    restart: always
     networks:
       - actual-net
     depends_on:

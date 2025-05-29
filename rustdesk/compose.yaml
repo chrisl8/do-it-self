@@ -13,7 +13,7 @@ services:
         condition: service_healthy
     restart: no
     healthcheck:
-      test: [ "CMD", "/healthcheck/checkForHbbsProcess" ]
+      test: ["CMD", "/healthcheck/checkForHbbsProcess"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -33,7 +33,7 @@ services:
       ts:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "/healthcheck/checkForHbbrProcess" ]
+      test: ["CMD", "/healthcheck/checkForHbbrProcess"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -58,14 +58,13 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
-
+    restart: always
 # Because using docker host mode
 # Just in case you forgot the ports:
 # 21114 TCP for web console, only available in Pro version

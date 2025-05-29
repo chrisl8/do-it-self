@@ -12,7 +12,7 @@ services:
       - DLC_SPACE_AGE=true
     healthcheck:
       # Enable health check for the instance
-      test: [ "CMD-SHELL", "pgrep -f /opt/factorio/bin/x64/factorio" ]
+      test: ["CMD-SHELL", "pgrep -f /opt/factorio/bin/x64/factorio"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -37,13 +37,13 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
+    restart: always
     ports:
       # These ports are exposed here so that players on the LAN can connect to the server without going through Tailscale encryption, which uses valuable CPU resources and causes game latency.
       # These ports are HERE because the server container above is running ON the ts container's network,
