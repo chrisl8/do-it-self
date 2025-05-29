@@ -13,6 +13,7 @@ services:
       - MYSQL_HOST=db
       - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}
       - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
+      - PHP_MEMORY_LIMIT=1024M
     networks:
       - nextcloud-net
     restart: no
@@ -54,7 +55,7 @@ services:
     restart: no
     # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
-      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
