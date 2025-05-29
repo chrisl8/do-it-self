@@ -305,6 +305,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             printf "${YELLOW} ...Starting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
           fi
           sleep "${SLEEP_TIME}"
+          printf "\n"
         fi
       fi
     fi
@@ -327,11 +328,11 @@ if [[ ${START_ACTION} = true ]];then
 fi
 
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
-  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} restarted.${NC}\n"
+  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} have been restarted.${NC}\n"
 elif [[ ${STOP_ACTION} = true ]];then
-  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} stopped.${NC}\n"
+  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} have been stopped.${NC}\n"
 elif [[ ${START_ACTION} = true ]];then
-  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} started.${NC}\n"
+  printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} have been started.${NC}\n"
 fi
 
 # Run my check script to go ahead and let everyone know we are back up.
