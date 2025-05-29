@@ -44,19 +44,22 @@ The compose files all have my specific mount points in them. You will need to up
 
 ### User
 
-*NOTE: This doesn't work for every container. I have had to "undo" this in some cases to restore reliable operation.*
+_NOTE: This doesn't work for every container. I have had to "undo" this in some cases to restore reliable operation._
 
-I attempt to run each "stack" of services as a user, using the format `stackname-docker`.
+One time I had a dumb idea, fueled by the Internet's "don't run as root!" craze. I regret this now.
 
-For each stack you must make a user, get the UUID, and then use that in the compose file.
+I attempted once to run each "stack" of services as a user, using the format `stackname-docker`.
+
+For each stack that is still this way you must make a user, get the UUID, and then use that in the compose file.
 
 Then you also must create the data volume mounts and make the container user the owner of them.
 
-Adding yourself to the container's run-as group is also a good idea so that you can easily edit the files from the host. *Remember that you must log out and back in to apply your new group membership.*
+Adding yourself to the container's run-as group is also a good idea so that you can easily edit the files from the host. _Remember that you must log out and back in to apply your new group membership._
 
-I am also making the Tailscale sidecar container run as the same user, meaning that you must also ensure that the container user owns their config files.
+I am also made the Tailscale sidecar container run as the same user, meaning that you must also ensure that the container user owns their config files.
 
 Here is a bit of a walkthrough with some helpful one-liners.
+
 ```bash
 cd ~/continers/stackname
 sudo mkdir -p /mnt/2000/container-mounts/$(basename "$PWD")/data
@@ -67,7 +70,8 @@ sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker /mnt/2000/cont
 sudo chmod ug+rX,o-rwx -R /mnt/2000/container-mounts/$(basename "$PWD")/*
 sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker tailscale-config tailscale-state
 ```
-*Note that many containers will only start or even run as root. I made some attempt to not do this, but I was only willing to put in so much effort.*
+
+_Note that many containers will only start or even run as root. I made some attempt to not do this, but I was only willing to put in so much effort._
 
 My experience is that many many users on Reddit think running anything in a contaienr as root is the end of the world, while most developers who provide containers don't think this matters at all. The disconnect means that unless I am willing to rebuild the containers myself, I will need to run them as the author intended.
 
@@ -96,6 +100,7 @@ This way the root is kept clean and also if the project is a git repository it c
 be left clean and updated as needed.
 
 ## Compose files
+
 Always named `compose.yaml`
 Add a comment to the top with the source if it was originally copied from somewhere else.
 
@@ -125,10 +130,12 @@ or you can create a `env_file` section to pull in a file.
 In theory you **can** set `env_file: .env` but this is basically saying, "put the same variables in two places" and many people dislike this.
 
 Hence the use of the odd looking, but actually quite correct:
+
 ```yaml
 environment:
   - VAR1=${VAR1}
 ```
+
 The benefit being that you do only put each variable in exactly the container it should be in and no more places.  
 The down-side is that it is wordy. I won't hate you if you use `env_file: .env` but I will try not to do it myself.
 
@@ -136,6 +143,7 @@ My pattern is to use only the `.env` file for all private credentials, and then 
 Hence you will not seen any `env_file` sections in my compose files.
 
 ### Credentials
+
 Do not place them in compose files.
 Instead, place them in files in my `~/credentials` folder.  
 Name them `container-name.env`
@@ -150,25 +158,30 @@ Put anything else sensitive such as personal URLs in the same file linked to by 
 Put anything generic, even if it is personal preference, in the `compose.yaml` file.
 
 ## Tailscale
+
 ### Credentials
+
 Use the same credentials for every container. Make a `tailscale.env` link back to the same file in my `~/credentials` folder.
 
 ## Mounted Volumes
- - **Only** use a folder within the project if the content is stricly configuration data, and hence should be edited with an IDE.
 
- - Otherwise, for data mounts, use a folder ona disk `/mnt/...` in a folder called `container-mounts`
- - Inside `container-mounts`, create a folder for each container that needs a data mount.
-   - Inside there make a folder with the project name just the same as the one in `containers`
-     - Inside there make a folder for the data mount.
-       - This keeps the data well separated, but makes it clear what drive they are on and what they do.
-       - Mounts are placed on drives based on their speed and available space, so they can be all over the place.
+- **Only** use a folder within the project if the content is stricly configuration data, and hence should be edited with an IDE.
+
+- Otherwise, for data mounts, use a folder ona disk `/mnt/...` in a folder called `container-mounts`
+- Inside `container-mounts`, create a folder for each container that needs a data mount.
+  - Inside there make a folder with the project name just the same as the one in `containers`
+    - Inside there make a folder for the data mount.
+      - This keeps the data well separated, but makes it clear what drive they are on and what they do.
+      - Mounts are placed on drives based on their speed and available space, so they can be all over the place.
 
 If possible, always separate config and data mounted volumes.
 
 # Networking Options
+
 I've set up networking in a few ways here and I'll explain why I use each and the benefits and drawbacks.
 
 ## Host
+
 The easiest and most simple setup is to add this to the compose file:
 `network_mode: "host"`
 In this case, the container literally sits in the same location as the host as far as networking is concerned.
@@ -176,8 +189,9 @@ In this case, the container literally sits in the same location as the host as f
 The main reason **not** to do this is port conflicts. You cannot run ten copies of NGINX or MariaDB on the same host this way unless you are OK with typing port numbers a lot.
 
 The main reasons **to** do this are:
- - Local network access. If you have something that needs a lot of rapid data access this bypasses any tailscale stuff.
- - Full access to all ports that the application may want open.
+
+- Local network access. If you have something that needs a lot of rapid data access this bypasses any tailscale stuff.
+- Full access to all ports that the application may want open.
 
 This is the case with urbackup, where it has a series of UDP ports it talks on and listens to in order to discover clients.
 Getting these all into the ports list is notoriously difficult, so this is a good way to do it.
@@ -186,12 +200,15 @@ We also don't want to pass gigabytes of backup traffic through tailscale.
 The same goes for Minecraft.
 
 ## Tailscale Sidecar with a Network
+
 This is the most common setup I use.
 In this setup the compose file has a network line in it:
+
 ```yaml
 networks:
   whatever-net:
 ```
+
 and then a Tailscale "sidecar" container is added to the compose file
 This means that each container is its own "host" but they can talk to each other.
 
@@ -206,10 +223,12 @@ This is best for things that are a web server. You run it on whatever port you w
 This also allows you to run an unlimited number fo such services, since every one has it is own tailscale DNS entry and IP address, there are no port conflicts and no need to type ports.
 
 You **can** if you want to, still expose a container's ports to the host. This is useful both:
+
 1. If you want to access a port other than the one you have exposed to tailscale.
 2. You want direct access to it, asside from tailscale, for faster zero-cpu usage operations.
 
 ## Tailscale Network Only
+
 Another option is instead of the network that all hosts are on, you use `network_mode: service:ts`, where "ts" is the name of the tailscale container, in the container running the application.
 
 You still also have a tailscale "sidecar" container, but now instead of a docker network that both are on, the application container is seen to be on the SAME network as the talescale container.
@@ -238,6 +257,7 @@ If you are having trouble getting one to work you can see the output of the heal
 # Notes on specific containers
 
 ## Your Spotify
+
 I'm using the lscr.io version of this instead of directly calling the author's repo because the lscr.io version combines the "client" (web site) and "server" (back end service) into one container, which I wanted and which I wasn't sure how to do myself at the time.  
 I'm pretty sure that I could convert, and I may because I tend to be dumb that way, but for now the lscr.io one works well.
 
@@ -251,14 +271,14 @@ Besides, I am happy to report bugs as an early adopter with this personal setup.
 
 2. Why do you use so many git clones instead of just pulling their published images?
 
-While I'm trusting enough to use latest images, I don't trust random repositories to keep their images up to date. 
+While I'm trusting enough to use latest images, I don't trust random repositories to keep their images up to date.
 Basically, this is how I feel and my life experience has taught me to trust this path for this use case.
 It is definitely a per-image decision though.
 I'm happy to use the official images for things like MariaDB and NGINX for instance.
 
 3. Why don't you use https://www.linuxserver.io/ images?
 
-Frist, I have been in the situation multiple times now where something didn't work and the application author said, "That isn't our image, it works here, contact the container builder." and Linuxserver.io said, "We don't support that image, contact the application author." I don't need that kind of run-around. I'd rather just use the official images and get support from the people who wrote the application.
+First, I have been in the situation multiple times now where something didn't work and the application author said, "That isn't our image, it works here, contact the container builder." and Linuxserver.io said, "We don't support that image, contact the application author." I don't need that kind of run-around. I'd rather just use the official images and get support from the people who wrote the application.
 Second, I've been stuck more than once wanting a recent fix to an issue that cropped up in a release, but Linuxserver.io was taking days to update their image.
 
 So I just use the official images and/or build my own compose files.
@@ -268,5 +288,6 @@ I could see myself using them more in the future, especially if I could get invo
 
 4. You run a lot of our containers as root, isn't that dangerous?
 
-This is a personal setup, and I'm not worried about it, but see the seciont above on "user" for more information.
-Basically running as non-root is non-trivial when the container author didn't make it easy.
+One day I thought, "Let's make everything run 'not as root'!". Then I spent a lot of time digging through documentation on every stack I use, trying things, running into a lot of walls and bug and issues. Eventually I got **most** of them to run as non-root. Then they started to fail randomly and I found odd side-effects to this change. Basically running as non-root is non-trivial and brittle when the container author didn't make it easy.
+
+TL;DR: This is a personal setup, I don't have time or patience for this, and I'm not worried about it, but see the section above on "user" for more information about my one time attempt and the fallout that remains.
