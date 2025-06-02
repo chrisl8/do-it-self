@@ -2,7 +2,7 @@
 services:
   nextcloud-whiteboard:
     container_name: nextcloud-whiteboard
-    image: ghcr.io/nextcloud-releases/whiteboard:release
+    image: ghcr.io/nextcloud-releases/whiteboard:v1.0.5
     environment:
       - NEXTCLOUD_URL=https://nextcloud.jamnapari-goblin.ts.net
       - JWT_SECRET_KEY=${WHITEBOARD_JWT_SECRET_KEY}
