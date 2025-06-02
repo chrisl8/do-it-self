@@ -2,27 +2,6 @@ name: dawarich
 networks:
   dawarich:
 services:
-  dawarich_redis:
-    image: redis:alpine
-    container_name: dawarich_redis
-    user: 1007:1007
-    command: redis-server
-    networks:
-      - dawarich
-    volumes:
-      # I'm not convinced that this is used anymore, instead I think it saves to /data instaed of this.
-      - /mnt/2000/container-mounts/dawarich/redis_shared_data:/var/shared/redis
-      # Redis wants to write to its root data folder, but it cannot do this if it doesnt' have permission to the folder, which inside of the container it does not,
-      # so I mount a volume and give it permission to write to it.
-      - /mnt/2000/container-mounts/dawarich/redis_data:/data
-    restart: no
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      start_period: 120s
-      start_interval: 5s
-      interval: 5m
-      timeout: 5s
-      retries: 3
   dawarich_db:
     image: postgis/postgis:17-3.5-alpine
     shm_size: 1G
@@ -58,6 +37,7 @@ services:
       - /mnt/2000/container-mounts/dawarich/public:/var/app/public
       - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
       - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
+      - /mnt/2000/container-mounts/dawarich/db_data:/dawarich_db_data
     networks:
       - dawarich
     stdin_open: true
@@ -67,7 +47,6 @@ services:
     restart: no
     environment:
       RAILS_ENV: production
-      REDIS_URL: redis://dawarich_redis:6379/0
       DATABASE_HOST: dawarich_db
       DATABASE_PORT: 5432
       DATABASE_USERNAME: postgres
@@ -89,6 +68,10 @@ services:
       REVERSE_GEOCODING_ENABLED: true
       SELF_HOSTED: true
       STORE_GEODATA: false
+      # SQLite database paths for secondary databases
+      QUEUE_DATABASE_PATH: /dawarich_db_data/dawarich_development_queue.sqlite3
+      CACHE_DATABASE_PATH: /dawarich_db_data/dawarich_development_cache.sqlite3
+      CABLE_DATABASE_PATH: /dawarich_db_data/dawarich_development_cable.sqlite3
     logging:
       driver: "json-file"
       options:
@@ -109,9 +92,6 @@ services:
       dawarich_db:
         condition: service_healthy
         restart: true
-      dawarich_redis:
-        condition: service_healthy
-        restart: true
     labels:
       # For homepage
       - homepage.group=Favorites
@@ -119,76 +99,6 @@ services:
       - homepage.weight=10
       - homepage.icon=/dashboard-icons/svg/dawarich.svg
       - homepage.href=${HOME_PAGE_URL}
-  dawarich_sidekiq:
-    container_name: dawarich_sidekiq
-    build:
-      context: ./dawarich
-      dockerfile: docker/Dockerfile.prod
-    volumes:
-      - /mnt/2000/container-mounts/dawarich/public:/var/app/public
-      - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
-      - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
-    networks:
-      - dawarich
-    stdin_open: true
-    tty: true
-    entrypoint: sidekiq-entrypoint.sh
-    command: ["bundle", "exec", "sidekiq"]
-    restart: no
-    environment:
-      RAILS_ENV: production
-      REDIS_URL: redis://dawarich_redis:6379/0
-      DATABASE_HOST: dawarich_db
-      DATABASE_PORT: 5432
-      DATABASE_USERNAME: postgres
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: dawarich_production
-      APPLICATION_HOST: ${APPLICATION_HOST}
-      APPLICATION_HOSTS: ${APPLICATION_HOST},localhost,::1,127.0.0.1
-      BACKGROUND_PROCESSING_CONCURRENCY: 10
-      APPLICATION_PROTOCOL: http
-      PROMETHEUS_EXPORTER_ENABLED: false
-      PROMETHEUS_EXPORTER_HOST: dawarich_app
-      PROMETHEUS_EXPORTER_PORT: 9394
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      RAILS_LOG_TO_STDOUT: "true"
-      ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
-      PHOTON_API_HOST: ${PHOTON_API_HOST}
-      PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
-      REVERSE_GEOCODING_ENABLED: true
-      TIME_ZONE: America/Chicago
-      SELF_HOSTED: true
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "2"
-    healthcheck:
-      test:
-        ["CMD-SHELL", "bundle exec sidekiqmon processes | grep $${HOSTNAME}"]
-      start_period: 120s
-      start_interval: 5s
-      interval: 5m
-      timeout: 5s
-      retries: 3
-    depends_on:
-      dawarich_db:
-        condition: service_healthy
-        restart: true
-      dawarich_redis:
-        condition: service_healthy
-        restart: true
-      dawarich_app:
-        condition: service_healthy
-        restart: true
-      dawarich_photon:
-        condition: service_healthy
-        restart: true
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50" # Limit CPU usage to 50% of one core
-          memory: "4G" # Limit memory usage to 4GB
   ts:
     container_name: dawarich-ts
     user: 1007:1007
@@ -220,7 +130,7 @@ services:
       - dawarich
     restart: always
     depends_on:
-      dawarich_sidekiq:
+      dawarich_app:
         condition: service_healthy
   # I run photon here for simplicity and to avoid the overhead of passing data out and back in through a tailscale tunnel.
   dawarich_photon:
