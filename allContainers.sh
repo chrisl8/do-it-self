@@ -278,6 +278,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             npm i
             printf "${YELLOW}    Rebuilding site/my-digital-garden${NC}\n"
             npm run build
+            /usr/bin/chmod -R o+rX dist
             cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
           fi
         fi
