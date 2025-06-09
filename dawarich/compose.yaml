@@ -2,6 +2,23 @@ name: dawarich
 networks:
   dawarich:
 services:
+  dawarich_redis:
+    image: redis:7.4-alpine
+    container_name: dawarich_redis
+    user: 1007:1007
+    command: redis-server
+    networks:
+      - dawarich
+    volumes:
+      - /mnt/2000/container-mounts/dawarich/redis_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
   dawarich_db:
     image: postgis/postgis:17-3.5-alpine
     shm_size: 1G
@@ -16,7 +33,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: dawarich_production
-    restart: no
+    restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       start_period: 120s
@@ -24,20 +41,16 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf # Use custom config
     # If you want to expose the database for exploring it.
     ports:
       - 5432:5432
   dawarich_app:
+    image: freikin/dawarich:latest
     container_name: dawarich_app
-    build:
-      context: ./dawarich
-      dockerfile: docker/Dockerfile.prod
     volumes:
       - /mnt/2000/container-mounts/dawarich/public:/var/app/public
       - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
       - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
-      - /mnt/2000/container-mounts/dawarich/db_data:/dawarich_db_data
     networks:
       - dawarich
     stdin_open: true
@@ -47,6 +60,7 @@ services:
     restart: no
     environment:
       RAILS_ENV: production
+      REDIS_URL: redis://dawarich_redis:6379
       DATABASE_HOST: dawarich_db
       DATABASE_PORT: 5432
       DATABASE_USERNAME: postgres
@@ -68,15 +82,11 @@ services:
       REVERSE_GEOCODING_ENABLED: true
       SELF_HOSTED: true
       STORE_GEODATA: false
-      # SQLite database paths for secondary databases
-      QUEUE_DATABASE_PATH: /dawarich_db_data/dawarich_development_queue.sqlite3
-      CACHE_DATABASE_PATH: /dawarich_db_data/dawarich_development_cache.sqlite3
-      CABLE_DATABASE_PATH: /dawarich_db_data/dawarich_development_cable.sqlite3
     logging:
       driver: "json-file"
       options:
-        max-size: "20m"
-        max-file: "2"
+        max-size: "100m"
+        max-file: "5"
     healthcheck:
       test:
         [
@@ -92,6 +102,9 @@ services:
       dawarich_db:
         condition: service_healthy
         restart: true
+      dawarich_redis:
+        condition: service_healthy
+        restart: true
     labels:
       # For homepage
       - homepage.group=Favorites
@@ -99,6 +112,75 @@ services:
       - homepage.weight=10
       - homepage.icon=/dashboard-icons/svg/dawarich.svg
       - homepage.href=${HOME_PAGE_URL}
+  dawarich_sidekiq:
+    image: freikin/dawarich:latest
+    container_name: dawarich_sidekiq
+    volumes:
+      - /mnt/2000/container-mounts/dawarich/public:/var/app/public
+      - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
+      - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
+    networks:
+      - dawarich
+    stdin_open: true
+    tty: true
+    entrypoint: sidekiq-entrypoint.sh
+    command: ["bundle", "exec", "sidekiq"]
+    restart: on-failure
+    environment:
+      RAILS_ENV: production
+      REDIS_URL: redis://dawarich_redis:6379
+      DATABASE_HOST: dawarich_db
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: dawarich_production
+      APPLICATION_HOST: ${APPLICATION_HOST}
+      APPLICATION_HOSTS: ${APPLICATION_HOST},localhost,::1,127.0.0.1
+      BACKGROUND_PROCESSING_CONCURRENCY: 10
+      APPLICATION_PROTOCOL: http
+      PROMETHEUS_EXPORTER_ENABLED: false
+      PROMETHEUS_EXPORTER_HOST: dawarich_app
+      PROMETHEUS_EXPORTER_PORT: 9394
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      RAILS_LOG_TO_STDOUT: "true"
+      ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
+      PHOTON_API_HOST: ${PHOTON_API_HOST}
+      PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
+      REVERSE_GEOCODING_ENABLED: true
+      TIME_ZONE: America/Chicago
+      SELF_HOSTED: true
+      STORE_GEODATA: false
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "bundle exec sidekiqmon processes | grep Processes"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      dawarich_db:
+        condition: service_healthy
+        restart: true
+      dawarich_redis:
+        condition: service_healthy
+        restart: true
+      dawarich_app:
+        condition: service_healthy
+        restart: true
+      dawarich_photon:
+        condition: service_healthy
+        restart: true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50" # Limit CPU usage to 50% of one core
+          memory: "4G" # Limit memory usage to 4GB
+
   ts:
     container_name: dawarich-ts
     user: 1007:1007
