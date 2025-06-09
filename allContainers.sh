@@ -300,11 +300,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           while /usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
             sleep 0.1;
           done;
-          if [[ ${STOP_ACTION} = true ]];then
-            printf "${YELLOW} ...Restarting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
-          else
-            printf "${YELLOW} ...Starting next container stack in ${SLEEP_TIME} seconds...${NC}\n"
-          fi
+          printf "${YELLOW} ...Continuing to next task in ${SLEEP_TIME} seconds...${NC}\n"
           sleep "${SLEEP_TIME}"
           printf "\n"
         fi
@@ -314,6 +310,11 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     printf "${RED} - ${CONTAINER_DIR} is not a valid container directory${NC}\n"
   fi
 done
+
+printf "${YELLOW}Waiting for all containers to report healthy on final pass...${NC}\n\n"
+while /usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
+  sleep 0.1;
+done;
 
 if [[ ${START_ACTION} = true ]];then
   printf "${YELLOW}Performing post-start chores${NC}\n"
