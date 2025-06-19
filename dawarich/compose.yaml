@@ -26,7 +26,6 @@ services:
     user: 1007:1007
     volumes:
       - /mnt/2000/container-mounts/dawarich/db_data:/var/lib/postgresql/data
-      - ./dawarich/postgresql.conf.example:/etc/postgresql/postgresql.conf
     networks:
       - dawarich
     environment:
