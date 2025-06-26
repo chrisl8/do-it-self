@@ -1,7 +1,6 @@
 services:
   diun:
     container_name: diun
-    user: 1008:1008
     # This must be the ID of the Docker group.
     group_add:
       - 985
@@ -9,6 +8,7 @@ services:
     command: serve
     volumes:
       - /mnt/2000/container-mounts/diun/data:/data
+      - /mnt/2000/container-mounts/diun/script:/script
       - ./diun.yml:/diun.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -30,6 +30,5 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-
 # This doesn't even have a "front end", it just runs in the background and emails you when there are new images.
 # I think it has to be run as root in order to do this though.
