@@ -134,8 +134,8 @@ if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
     fi
   done
   CONTAINER_LIST=("${FILTERED_LIST[@]}")
-  RESTART_LIST_TEXT="the containers in ${CONTAINER_LIST_FILE}"
-  RESTART_LIST_TEXT_UPPER="The containers in ${CONTAINER_LIST_FILE}"
+  RESTART_LIST_TEXT="the containers listed in ${CONTAINER_LIST_FILE}"
+  RESTART_LIST_TEXT_UPPER="The containers listed in ${CONTAINER_LIST_FILE}"
 fi
 
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
