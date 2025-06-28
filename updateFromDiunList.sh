@@ -1,6 +1,6 @@
 #!/bin/bash
 
-FILE_PATH="/mnt/2000/container-mounts/diun/script/pendingContainerUpdates.txt"
+FILE_PATH="/mnt/250/container-mounts/diun/script/pendingContainerUpdates.txt"
 
 # Check if the pendingContainerUpdates.txt file exists
 if [ ! -f "$FILE_PATH" ]; then

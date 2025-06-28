@@ -4,7 +4,6 @@ services:
     # Netdata will work but only partially as a non-root user?
     # It isn't clear what will or wont' work without root.
     # https://learn.netdata.cloud/docs/netdata-agent/installation/docker
-    user: 1016:1016
     # This must be the ID of the Docker group.
     group_add:
       - 985
@@ -17,9 +16,9 @@ services:
     security_opt:
       - apparmor:unconfined
     volumes:
-      - /mnt/2000/container-mounts/netdata/netdataconfig:/etc/netdata
-      - /mnt/2000/container-mounts/netdata/netdatalib:/var/lib/netdata
-      - /mnt/2000/container-mounts/netdata/netdatacache:/var/cache/netdata
+      - /mnt/250/container-mounts/netdata/netdataconfig:/etc/netdata
+      - /mnt/250/container-mounts/netdata/netdatalib:/var/lib/netdata
+      - /mnt/250/container-mounts/netdata/netdatacache:/var/cache/netdata
       - /:/host/root:ro,rslave
       - /etc/passwd:/host/etc/passwd:ro
       - /etc/group:/host/etc/group:ro
@@ -43,7 +42,6 @@ services:
       - homepage.widget.url=${HOME_PAGE_URL}
   ts:
     container_name: netdata-ts
-    user: 1016:1016
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

@@ -9,7 +9,7 @@ services:
     ports:
       - 8090:8090
     volumes:
-      - /mnt/2000/container-mounts/beszel/data:/beszel_data
+      - /mnt/250/container-mounts/beszel/data:/beszel_data
       - ./healthcheck:/healthcheck
     healthcheck:
       test: ["CMD", "/healthcheck/get-home-page"]
