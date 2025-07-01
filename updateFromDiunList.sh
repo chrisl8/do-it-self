@@ -8,6 +8,6 @@ if [ ! -f "$FILE_PATH" ]; then
     exit 1
 fi
 
-./allContainers.sh --update-git-repos --get-updates --sleep 1 --stop --start --container-list $FILE_PATH
+~/containers/allContainers.sh --update-git-repos --get-updates --sleep 1 --stop --start --container-list $FILE_PATH
 
 rm -rf $FILE_PATH
