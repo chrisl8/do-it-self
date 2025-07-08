@@ -338,6 +338,6 @@ elif [[ ${START_ACTION} = true ]];then
 fi
 
 # Run my check script to go ahead and let everyone know we are back up.
-if [[ -e "${HOME}/Scripts/containerCheckups.sh" ]];then
+if [[ ${START_ACTION} = true && -e "${HOME}/Scripts/containerCheckups.sh" ]];then
   "${HOME}/Scripts/containerCheckups.sh"
 fi
