@@ -7,7 +7,7 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
     volumes:
-      - /mnt/2000/container-mounts/the_lounge/config:/config
+      - ./config:/config
     restart: no
     labels:
       # For homepage
