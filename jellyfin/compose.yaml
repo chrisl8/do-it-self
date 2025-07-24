@@ -19,7 +19,7 @@ services:
       # For homepage
       - homepage.group=My Stuff
       - homepage.name=Jellyfin
-      - homepage.weight=30
+      - homepage.weight=45
       - homepage.icon=/dashboard-icons/svg/jellyfin.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=jellyfin
