@@ -31,7 +31,7 @@ services:
       # For homepage
       - homepage.group=My Stuff
       - homepage.name=Nextcloud
-      - homepage.weight=40
+      - homepage.weight=30
       - homepage.icon=/dashboard-icons/svg/nextcloud.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
       - homepage.widget.type=nextcloud
