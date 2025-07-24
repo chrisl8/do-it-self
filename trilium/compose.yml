@@ -1,0 +1,62 @@
+# Running `docker-compose up` will create/use the "trilium-data" directory in the user home
+# Run `TRILIUM_DATA_DIR=/path/of/your/choice docker-compose up` to set a different directory
+# To run in the background, use `docker-compose up -d`
+services:
+  trilium:
+    container_name: trilium
+    # Optionally, replace `latest` with a version tag like `v0.90.3`
+    # Using `latest` may cause unintended updates to the container
+    image: triliumnext/notes:latest
+    # Restart the container unless it was stopped by the user
+    restart: unless-stopped
+    environment:
+      - TRILIUM_DATA_DIR=/home/node/trilium-data
+    volumes:
+      # Unless TRILIUM_DATA_DIR is set, the data will be stored in the "trilium-data" directory in the home directory.
+      # This can also be changed with by replacing the line below with `- /path/of/your/choice:/home/node/trilium-data
+      - /mnt/2000/container-mounts/trilium/data:/home/node/trilium-data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - trilium-net
+    labels:
+      # For homepage
+      - homepage.group=My Stuff
+      - homepage.name=Trilium
+      - homepage.weight=40
+      - homepage.icon=/dashboard-icons/svg/trilium.svg # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.href=${HOME_PAGE_URL}
+  ts:
+    container_name: trilium-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=trilium
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: always
+    networks:
+      - trilium-net
+    depends_on:
+      trilium:
+        condition: service_healthy
+networks:
+  trilium-net:
