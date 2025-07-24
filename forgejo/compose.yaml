@@ -1,7 +1,7 @@
 services:
   forgejo:
     container_name: forgejo
-    image: codeberg.org/forgejo/forgejo:11
+    image: codeberg.org/forgejo/forgejo:12
     environment:
       - USER_UID=1010
       - USER_GID=1010
@@ -52,7 +52,7 @@ services:
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
