@@ -16,7 +16,7 @@ services:
         condition: service_healthy
     restart: no
     healthcheck:
-      test: curl --fail http://localhost:80/api/ | grep "Hello" || exit 1
+      test: curl --fail http://localhost/api/ | grep "Hello" || exit 1
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -49,7 +49,6 @@ services:
       - your_spotify-net
   ts:
     container_name: your_spotify-ts
-    user: 1031:1031
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
