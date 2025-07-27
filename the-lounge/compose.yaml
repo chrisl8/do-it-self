@@ -14,7 +14,7 @@ services:
       - homepage.group=Home
       - homepage.name=The Lounge
       - homepage.weight=500
-      - homepage.icon=/dashboard-icons/svg/thelounge.svg # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.icon=/dashboard-icons/svg/thelounge.svg
       - homepage.href=${HOME_PAGE_URL}
     networks:
       - the_lounge-net
