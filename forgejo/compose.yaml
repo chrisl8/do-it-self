@@ -24,13 +24,8 @@ services:
       - homepage.group=My Stuff
       - homepage.name=forgejo
       - homepage.weight=50
-      - homepage.icon=/dashboard-icons/svg/forgejo.svg # https://github.com/homarr-labs/dashboard-icons/
+      - homepage.icon=/dashboard-icons/svg/forgejo.svg
       - homepage.href=${HOME_PAGE_URL}
-      #      - homepage.description=Git
-      - homepage.widget.type=gitea
-      - homepage.widget.url=${HOME_PAGE_URL}
-      - homepage.widget.key=${API_KEY}
-      - homepage.widget.fields=["notifications"]
   ts:
     container_name: forgejo-ts
     user: 1010:1010
