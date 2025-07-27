@@ -18,6 +18,8 @@ This is meant to run on an x86_64 Linux server with Docker and Docker Compose in
 
 It isn't meant to run on a Pi, so you may need to adjust some things if you are using one.
 
+There is a section under OS below now that walks through some details of setting up an Ubuntu system that will run these containers.
+
 ## Setup
 
 ### Git Repos
