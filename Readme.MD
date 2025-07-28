@@ -329,7 +329,7 @@ I've tried to place everything I know we will need here to make it quick to star
 sudo apt update
 sudo apt upgrade
 sudo apt autoremove
-sudo apt install ubuntu-desktop-minimal ubuntu-advantage-tools vim ca-certificates curl mailutils apcupsd samba wsdd-server
+sudo apt install ubuntu-desktop-minimal ubuntu-advantage-tools vim ca-certificates curl samba wsdd-server
 ```
 
 Reboot now to get everything to "come up" and ensure the Desktop works.
@@ -380,7 +380,12 @@ BEFORE logging out as root:
 
 ## Swap Space Setup
 
-The system has 32 **gigabytes** of memory, but it still likes to eat all of its swap space sometimes. To basically placate it, I've made an enormous swap file on a spare SSD for it to play with.
+**Optional**  
+Start by running:
+`swapon --show`  
+If your system has ANY swap space, then you might want to just skip this anyway.
+
+My system has 32 **gigabytes** of memory, but it still likes to eat all of its swap space sometimes. To basically placate it, I've made an enormous swap file on a spare SSD for it to play with.
 
 ```bash
 sudo su -
@@ -408,17 +413,17 @@ sudo su -
 cat /proc/sys/vm/swappiness
 ```
 
-General recommendation of Internet is 10,
-but it keeps filling up for no reason without using all of the memory,
-so setting it to 1.
+General recommendation of Internet is 10,  
+but it keeps filling up for no reason without using all of the memory,  
+so setting it to 1.  
 Note that setting it to 0 can cause the entire system to lock up for hours due to . . . well I'm not sure what, but it was bad, so stick with 1.
 
-`vi /etc/sysctl.conf`
-Add:
-`vm.swappiness=1`
-Apply it:
-`sysctl -p`
-Check:
+`vi /etc/sysctl.conf`  
+Add:  
+`vm.swappiness=1`  
+Apply it:  
+`sysctl -p`  
+Check:  
 `cat /proc/sys/vm/swappiness`
 
 Between the bigger swap file and low swappiness and the memory in the system, this should not be an issue now.
@@ -451,11 +456,11 @@ sudo apt-get update
 sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-Allow yourself to run docker without sudo:
-`sudo usermod -aG docker $USER`
+Allow yourself to run docker without sudo:  
+`sudo usermod -aG docker $USER`  
 Log out and back in.
 
-- Test just to prove that it worked:
+- Test just to prove that it worked:  
   `docker run hello-world`
 
 ### Fix Address Pool Size for Docker
@@ -483,14 +488,12 @@ Run:
 Restart Docker:  
 `sudo systemctl restart docker`  
 or reboot the system.  
-Check if it worked:  
+Check if it worked (only works if you have containers set up and running already):  
+`docker network inspect homepage_homepage-net | grep Subnet`  
 _Bad_  
-`docker network inspect homepage_homepage-net | grep Subnet`  
-`                    "Subnet": "172.18.0.0/16",`
-
+ "Subnet": "172.18.0.0/16",  
 **Good**  
-`docker network inspect homepage_homepage-net | grep Subnet`  
-`                    "Subnet": "172.16.1.0/24",`
+ "Subnet": "172.16.1.0/24",
 
 ## Tailscale
 
@@ -524,7 +527,7 @@ The "scanner" user is my user for SAMBA access. It is a dumb name, but it is bec
 
 ```bash
 mkdir -p /mnt/2000/samba/scanner
-sudo adduser scanner --home /mnt/2000/samba/scanner --no-create- home --shell /usr/sbin/nologin --ingroup sambashare
+sudo adduser scanner --home /mnt/2000/samba/scanner --no-create-home --shell /usr/sbin/nologin --ingroup sambashare
 ```
 
 - Set a password for the user. It doesn't ever get used, so just make it hard and save it in 1Password
@@ -614,28 +617,43 @@ Add yourself to the _sambashare_ group so you can interact with files there:
 sudo usermod -aG sambashare $USER
 ```
 
-Run:
+### Folder Permissions
+
+```
+chmod go+rx /mnt
+chmod go+rx /mnt/2000
+chmod go+rx /mnt/2000/samba
+chmod go+rx /mnt/2000/samba/MyFancyShare
+```
+
+You get the idea.
+
+### Starting Samba
+
+Now run:
 
 ```
 testparm
+```
+
+Look at the output to see if it is showing any errors in your config.
+
+Then run:
+
+```
 sudo systemctl restart smbd.service
 ```
 
-If things aren't working:
+to actually start things.
+
+Then try connecting to the share from Windows.
+
+If things aren't working run:  
 `tail -f /var/log/samba/*`
 
-This probably means your permissions are wrong:
-
-```
-chdir_current_service: vfs_ChDir(/mnt/250b/ScanHere) failed: Permission denied.
-```
-
-You may likely need to do this to let the samba user traverse into the folder:
-
-```
-cd /mnt
-chmod go+rx 500
-```
+If you see this error:  
+**chdir_current_service: vfs_ChDir(/mnt/250b/ScanHere) failed: Permission denied.**  
+This probably means your permissions are wrong, so look at your shared folder **and parent folders** to make sure the Samba user that you created has permission to traverse the parent folders and read/write the folder itself.
 
 ## DuckDNS
 
