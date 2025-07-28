@@ -332,7 +332,7 @@ sudo apt autoremove
 sudo apt install ubuntu-desktop-minimal ubuntu-advantage-tools vim ca-certificates curl samba wsdd-server
 ```
 
-Reboot now to get everything to "come up" and ensure the Desktop works.
+Reboot now to get everything to "come up" and ensure the Desktop works.  
 `sudo shutdown -r now`
 
 We will install some other software that requires more setup later, but this will get is going.
@@ -381,7 +381,7 @@ BEFORE logging out as root:
 ## Swap Space Setup
 
 **Optional**  
-Start by running:
+Start by running:  
 `swapon --show`  
 If your system has ANY swap space, then you might want to just skip this anyway.
 
@@ -401,7 +401,7 @@ swapon /mnt/120/swap.img
 swapon --show
 ```
 
-Be sure to add it to the end of `/etc/fstab` and remove any existing entries:
+Be sure to add it to the end of `/etc/fstab` and remove any existing entries:  
 `/mnt/120/swap.img       none    swap    sw      0       0`
 
 ### Swappiness
@@ -430,9 +430,9 @@ Between the bigger swap file and low swappiness and the memory in the system, th
 
 ### Clear Swap
 
-**Optional: This is just for future reference really:**
-After that if you want to shove the swap out into RAM run:
-`sudo swapoff -a; sudo swapon -a`
+**Optional: This is just for future reference really:**  
+After that if you want to shove the swap out into RAM run:  
+`sudo swapoff -a; sudo swapon -a`  
 Watch `htop` while it runs to see it happen.
 
 ## Docker
@@ -466,13 +466,15 @@ Log out and back in.
 ### Fix Address Pool Size for Docker
 
 - Without this, you will get the error  
-  `all predefined address pools have been fully subnetted`  
+  **all predefined address pools have been fully subnetted**  
   after starting up too many containers
 
 Source Reference: https://www.reddit.com/r/selfhosted/comments/1az6mqa/psa_adjust_your_docker_defaultaddresspool_size/
 
-Run:
+Run:  
 `sudo vim /etc/docker/daemon.json`
+
+Add this to the file and save it:
 
 ```
 {
@@ -487,7 +489,8 @@ Run:
 
 Restart Docker:  
 `sudo systemctl restart docker`  
-or reboot the system.  
+or reboot the system.
+
 Check if it worked (only works if you have containers set up and running already):  
 `docker network inspect homepage_homepage-net | grep Subnet`  
 _Bad_  
@@ -502,7 +505,10 @@ Source Reference: https://tailscale.com/kb/1031/install-linux
 **NOTE: If this is a re-install, DELETE the old instance first so we don't get a "-" name!**
 
 `curl -fsSL https://tailscale.com/install.sh | sh`
-`sudo tailscale up`
+
+Then after the install is done run:  
+`sudo tailscale up`  
+This will start it, have you authenticate, and it should work!
 
 ## Samba
 
@@ -742,7 +748,7 @@ This should work now:
 echo "Test to root." | mail -s "Test message to root" root
 ```
 
-Postfix logs are in journal. Run:  
+Postfix logs are in journal, so to see them run:  
 `journalctl -t postfix/smtpd -t postfix/smtp`  
 if you need to debug.
 
@@ -756,13 +762,15 @@ sudo apt install smartmontools
 
 I get emails now about SMART events.
 
+You can run this to see what the SMART stats and events are:
+
 ```bash
 sudo smartctl -a /dev/sda
 ```
 
 ## APC UPS
 
-If you have a UPS
+**If you have a UPS**
 
 `sudo apt install apcupsd`
 
@@ -778,10 +786,10 @@ DEVICE
 
 For whatever reason the default is to have `/dev/ttyS0` on the end which breaks USB UPSs working.
 
-To enable and start the service:
+To enable and start the service:  
 `systemctl start apcupsd ; systemctl enable apcupsd`
 
-To restart if you changed settings:
+To restart if you changed settings:  
 `sudo systemctl restart apcupsd`
 
 `apcaccess` should dump stats about the UPS.
@@ -815,14 +823,14 @@ Download latest `.deb`, but not nightly, from https://github.com/rustdesk/rustde
 sudo apt install -f /mnt/500/samba/Multivac/rustdesk-1.3.2-x86_64.deb
 ```
 
-`sudo vim /etc/gdm3/custom.conf`
+`sudo vim /etc/gdm3/custom.conf`  
 Set `WaylandEnable=false` by uncommenting the line and then reboot.
 
-Make sure it starts on boot?
+Make sure it starts on boot?  
 `sudo systemctl enable rustdesk`
 
-In the client point it at my local instance of the server
-rustdesk: `rustdesk.jamnapari-goblin.ts.net` and add the key from the container's data mount.
+In the client you will need to allow "Direct IP" connection.  
+Then you can connect to it via the local or TailScale IP.
 
 ## Git Credential Manager
 
@@ -848,7 +856,7 @@ Username for 'https://gitea.jamnapari-goblin.ts.net': chrisl8
 Password for 'https://chrisl8@gitea.jamnapari-goblin.ts.net':
 ```
 
-The credentials for this example will be here:
+The credentials for this example will be here:  
 `~/.gcm/store/git/https/gitea.jamnapari-goblin.ts.net/chrisl8.credential`
 
 Note that this means the password is in plain text and accessible by root and in backups.
@@ -858,15 +866,17 @@ I'm not worried about it as this git instance is locked in my VPN, but be aware.
 
 ### Slow boot due to timeout
 
-`job systemd-network-wait-online.service/start running`
-https://askubuntu.com/questions/1217252/boot-process-hangs-at-systemd-networkd-wait-online/1501504#1501504
+Reference Site: [Ask Ubuntu](https://askubuntu.com/questions/1217252/boot-process-hangs-at-systemd-networkd-wait-online/1501504#1501504)
+
+If your system hangs during bootup and you see this when it does hang:  
+**job systemd-network-wait-online.service/start running**
 
 This appears to be due to adding Desktop to a Server install and now we have two network services active.
 
-Fix:
+To fix run:
 
 ```bash
-systemctl disable systemd-networkd.service
+sudo systemctl disable systemd-networkd.service
 ```
 
 That disables the "server" one in favor of the "desktop" one, which is hopefully OK.
