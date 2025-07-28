@@ -39,13 +39,10 @@ services:
       - /mnt/2000/container-mounts/onlyoffice/fonts:/usr/share/fonts
     networks:
       - onlyoffice-net
-
   onlyoffice-rabbitmq:
     container_name: onlyoffice-rabbitmq
     image: rabbitmq:3
     restart: always
-    expose:
-      - "5672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "status"]
       interval: 10s
@@ -54,7 +51,6 @@ services:
       timeout: 10s
     networks:
       - onlyoffice-net
-
   onlyoffice-postgresql:
     container_name: onlyoffice-postgresql
     image: postgres:15
@@ -63,8 +59,6 @@ services:
       - POSTGRES_USER=onlyoffice
       - POSTGRES_HOST_AUTH_METHOD=trust
     restart: always
-    expose:
-      - "5432"
     volumes:
       - /mnt/2000/container-mounts/onlyoffice/db:/var/lib/postgresql
     healthcheck:
