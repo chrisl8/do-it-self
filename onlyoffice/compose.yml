@@ -60,7 +60,7 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust
     restart: always
     volumes:
-      - /mnt/2000/container-mounts/onlyoffice/db:/var/lib/postgresql
+      - /mnt/2000/container-mounts/onlyoffice/db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U onlyoffice"]
       interval: 10s
