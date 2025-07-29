@@ -1,4 +1,3 @@
-# https://sdk.collaboraonline.com/docs/installation/CODE_Docker_image.html?highlight=dont_gen_ssl_cert
 services:
   nextcloud-whiteboard:
     container_name: nextcloud-whiteboard
