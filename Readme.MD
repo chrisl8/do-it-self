@@ -952,3 +952,62 @@ The `all-contaienrs.sh` script should work and if you reboot you'll see the cron
 
 I highly suggest using [Healtchecks.io](https://healthchecks.io/) and setting it up to monitor so you know if your entire domain went down.  
 You can add a config file in the scripts folder, as documented in the Readme.MD there, with your healthchecks ping key and then the system-health-check.sh script (that is in crontab above) will make calls to Healthchecks.io to let it know that your system is up or down.
+
+# System Operation
+
+## Starting, stopping, updating Containers
+
+You need to update the containers from time to time.
+
+Run the script `~/containers/scripts/all-containers.sh` to get usage information for it.  
+It will tell you how to use it to stop and start and update things.
+
+The quick way to update every container, which will stop and start them is to run:  
+`~/containers/scripts/all-containers.sh --stop --start --sleep 1 --update-git-repos --get-updates`
+
+Note how it stops, starts, waits only 1 second between each, and both updates and updates git repos if you have any.
+
+### DIUN
+
+If you added the diun container, it will update a list of contianers with pending update and email that to you weekly if you set that up in your crontab.  
+The email will inclulde the name of the script to run, which is `~/containers/scripts/update-from-diun-list.sh`
+
+## System Updates
+
+This in Ubuntu Linux box, so from time to time you should run this to update:
+
+## System Shutdown
+
+```
+sudo apt update
+sudo apt -y upgrade
+sudo apt -y autoremove
+```
+
+This will:
+
+- Pull an updated list of packages.
+- Install the updated packages without asking first (`-y`)
+- Remove any old dependencies that are no longer needed
+
+After it finishes the system may need rebooted if the kernel was updated. The output will tell you so.
+
+There is a crontab entry I recommend above that will run `apt list --upgradable` once a month and email it to you.  
+You can use this email as your reminder to run the above.
+
+## System Rebooting and/or Shutdown
+
+Before rebooting, I suggest you stop all containers by running:  
+`~/containers/scripts/all-containers.sh --stop`
+
+Then to reboot you can run:  
+`sudo shutdown -r now`
+
+If you want to shut the system down instead of rebooting, leave out the `-r`:  
+`sudo shutdown now`
+
+## System Boot
+
+When the system starts up, if you added the `@reboot` line with the `system-cron-startup.sh` scripts to your crontab, then everything should come up by itself.  
+There will be a log file created called `~/logs/system-cron-startup.log` which will be emailed to you _when it is done_, but if you want to see how things are going after a reboot, log in and run:  
+`tail -f ~/logs/system-cron-startup.log`
