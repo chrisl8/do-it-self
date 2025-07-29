@@ -1,19 +1,35 @@
-/.idea/
-tailscale-state/
+# IDE and Editor Files
+.idea/
+
+# Environment and Configuration Files
 .env
 tailscale.env
-/dawarich/dawarich/
-/minecraft/docker-minecraft-bedrock-server/
-/diun/diun.yml
-homepage/config
-/nextcloud/html
-/searxng/etc
+tailscale-state/
+
+# Application Configuration Files
 forgejo/app.ini
-homepage/icons/
-homepage/images/
 obsidian-babel-livesync/docker.ini
-homepage/dashboard-icons/
+scripts/healthcheck.conf
+scripts/excluded_devices.conf
+
+# Web Server and Proxy Configuration
 caddy/conf
 caddy/site
+
+# Application Data and Content Directories
+dawarich/dawarich/
+minecraft/docker-minecraft-bedrock-server/
+nextcloud/html
+searxng/etc
+
+# Homepage Application
+homepage/config
+homepage/icons/
+homepage/images/
+homepage/dashboard-icons/
+
+# Chat and Communication
 the-lounge/config
+
+# Documentation and Notes
 upgrade_these_containers.txt
