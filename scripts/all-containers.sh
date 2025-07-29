@@ -56,33 +56,33 @@ done
 
 if [[ ${START_ACTION} = false && ${STOP_ACTION} = false ]];then
   echo "You must an action of either start or stop like this:"
-  echo "allContainers.sh --start"
+  echo "all-containers.sh --start"
   echo "or"
-  echo "allContainers.sh --stop"
+  echo "all-containers.sh --stop"
   echo ""
   echo "You can also specify BOTH stop and start to stop and start each container one at a time."
   echo "Then if you include the --update-git-repos and --get-updates flags, it will update the git repos and get updates for each container one at a time."
   echo ""
   echo "You can also adjust the sleep time between starting containers. Default is 10 seconds."
-  echo "allContainers.sh --start --sleep 20"
+  echo "all-containers.sh --start --sleep 20"
   echo ""
   echo "You can also specify to only STOP containers which reference a given mount text in their compose.yaml files."
-  echo "allContainers.sh --stop --mount 250a"
+  echo "all-containers.sh --stop --mount 250a"
   echo ""
   echo "You can also specify to only STOP containers which reference a given category in their compose.yaml files based on the homepage.group tag."
-  echo "allContainers.sh --stop --category \"System Monitoring\""
+  echo "all-containers.sh --stop --category \"System Monitoring\""
   echo ""
   echo "You can also specify a file containing a list of container directories to process."
-  echo "allContainers.sh --start --container-list my-containers.txt"
+  echo "all-containers.sh --start --container-list my-containers.txt"
   echo ""
   echo "You can also update all git repositories in all containers by running:"
-  echo "allContainers.sh --update-git-repos"
+  echo "all-containers.sh --update-git-repos"
   echo ""
   echo "You can also get updates for all containers by running:"
-  echo "allContainers.sh --get-updates"
+  echo "all-containers.sh --get-updates"
   echo ""
   echo "Finaly, there is a --fast flag that will skip waiting for all containers to report healthy."
-  echo "allContainers.sh --fast"
+  echo "all-containers.sh --fast"
   exit
 fi
 
@@ -96,6 +96,9 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 #echo "${SCRIPT_DIR}" # For debugging
+
+# We moved the script down one level to the scripts directory, so we need to go up one level to get to the containers directory
+SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "${SCRIPT_DIR}" || exit
 
@@ -338,6 +341,6 @@ elif [[ ${START_ACTION} = true ]];then
 fi
 
 # Run my check script to go ahead and let everyone know we are back up.
-if [[ ${START_ACTION} = true && -e "${HOME}/Scripts/containerCheckups.sh" ]];then
-  "${HOME}/Scripts/containerCheckups.sh"
+if [[ ${START_ACTION} = true && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
+  "${HOME}/containers/scripts/system-health-check.sh"
 fi

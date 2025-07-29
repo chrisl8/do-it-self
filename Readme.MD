@@ -18,7 +18,7 @@ This is meant to run on an x86_64 Linux server with Docker and Docker Compose in
 
 It isn't meant to run on a Pi, so you may need to adjust some things if you are using one.
 
-There is a section under OS below now that walks through some details of setting up an Ubuntu system that will run these containers.
+**There is a section under OS below now that walks through some details of setting up an Ubuntu system that will run these containers.**
 
 ## Setup
 
@@ -79,10 +79,10 @@ My experience is that many many users on Reddit think running anything in a cont
 
 ## Start/Stop Script
 
-You can run the script `allContainers.sh` to start and stop all of the containers.
+You can run the script `all-containers.sh` to start and stop all of the containers.
 
 I have this in my crontab:
-`@reboot /mnt/250b/containers/allContainers.sh --start`
+`@reboot /mnt/chrisl8/containers/scripts/all-containers.sh --start`
 
 # My Layout Explanation
 
@@ -915,132 +915,40 @@ sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.ta
 Now suspend won't even show up on the Desktop menu!
 And under Settings-> Power you won't even see sleep/suspend options!
 
+## Scripts
+
+There are a number of helper scripts in the `scripts` folder that you can run by hand and/or put in crontab.  
+Please see the `Readme.MD` file _in the scripts directory_ for more details on each script.  
+Most of them will either need to be edited to fit your use case and/or have configuration files added to the folder for them.
+
 ## Crontab
 
-My personal crontab at the moment as an example.  
-You will notice reference to a lot of scripts. Make an Issue in Github if you want me to share those.
+My personal crontab at the moment as an example.
 
-````
+```
 # Start Stuff
-@reboot /home/chrisl8/Scripts/neuromancer-cron-startup.sh
+@reboot /home/chrisl8/containers/scripts/system-cron-startup.sh
+
+# Check System app health
+*/15 * * * * /home/chrisl8/containers/scripts/system-health-check.sh
 
 # Help Nextcloud perform its duties
-*/5 * * * * /home/chrisl8/Scripts/nextCloudCronJob.sh
+*/5 * * * * /home/chrisl8/containers/scripts/nextcloud-cron-job.sh
 
-# Duck DNS
-*/47 */1 * * * curl "https://www.duckdns.org/update?domains=ekpyroticfrood&token=143a6bd4-868a-45c6-99c5-2e61c908b6e1&ip=" >/dev/null 2>&1
+# Check for and notify about container updates available (provided by diun)
+0 8 * * 1 /home/chrisl8/containers/scripts/container-update-reminder.sh
 
-# Check Neuromancer app health
-*/15 * * * * /home/chrisl8/Scripts/containerCheckups.sh
-
-# Check for and notify about container updates available
-0 8 * * 1 /home/chrisl8/Scripts/containerUpdateReminder.sh
-
-# Notify about need to run updates
-0 8 1 * * apt list --upgradable```
-````
-
-## Start Everything Script
-
-You saw the reference to the script named `/home/chrisl8/Scripts/neuromancer-cron-startup.sh` script in Crontab above. Here is the script contents:
-
-```
-#!/usr/bin/env bash
-
-echo "Neuromancer booting up now..." | mail -s "Neuromancer just booted" chrisl8
-
-if ! [ -d /home/chrisl8/logs ]; then
-    mkdir -p /home/chrisl8/logs
-fi
-
-# Give the system a little time to finish booting
-echo "Waiting for 30 seconds before starting up..." > /home/chrisl8/logs/neuromancer-cron-startup.log
-sleep 30
-
-# Clean up docker containers if the system went down hard
-/home/chrisl8/containers/allContainers.sh --stop >> /home/chrisl8/logs/neuromancer-cron-startup.log
-
-# Now start everything
-/home/chrisl8/containers/allContainers.sh --start --no-wait >> /home/chrisl8/logs/neuromancer-cron-startup.log
-
-cat /home/chrisl8/logs/neuromancer-cron-startup.log | mail -s "Neuromancer - All services started" chrisl8
-```
-
-## Container Health Check Script
-
-cat /home/chrisl8/Scripts/containerCheckups.sh
-
-```
-#!/bin/bash
-
-# List of devices to exclude from Tailscale status checks
-EXCLUDED_DEVICES_FOR_EMAIL="mydesktop|myphone"
-EXCLUDED_DEVICES_FOR_ERROR_COUNT="mydesktop|myphone|3dprinter"
-
-ERROR_COUNT=0
-
-# Check for unhealthy containers
-DOCKER_ISSUES=$(/usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)")
-
-if [ -n "$DOCKER_ISSUES" ]; then
-  echo ""
-  echo "Unhealthy containers detected:"
-  echo "$DOCKER_ISSUES"
-  echo ""
-  ERROR_COUNT=$((ERROR_COUNT + 1))
-fi
-
-# Check for changes in container count
-if ! [[ -e /tmp/docker-ps-wc-previous.txt ]]; then
-  docker ps -a | wc -l > /tmp/docker-ps-wc-previous.txt
-fi
-docker ps -a | wc -l > /tmp/docker-ps-wc-now.txt
-if ! diff /tmp/docker-ps-wc-previous.txt /tmp/docker-ps-wc-now.txt > /dev/null; then
-  PREVIOUS_COUNT=$(</tmp/docker-ps-wc-previous.txt)
-  NOW_COUNT=$(</tmp/docker-ps-wc-now.txt)
-  echo "Docker Container count has changed from $PREVIOUS_COUNT to $NOW_COUNT"
-  echo ""
-  mv /tmp/docker-ps-wc-now.txt /tmp/docker-ps-wc-previous.txt
-  if [ $NOW_COUNT -lt $PREVIOUS_COUNT ]; then
-    echo "Docker Container count has decreased from $PREVIOUS_COUNT to $NOW_COUNT"
-    echo ""
-    ERROR_COUNT=$((ERROR_COUNT + 1))
-  fi
-fi
-
-# Check Tailscale health
-TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_EMAIL")
-
-if [ -n "$TAILSCALE_ISSUES" ]; then
-  # Wait 15 seconds and check again as often there are transient issues with tailscale
-  sleep 15
-  TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_EMAIL")
-  if [ -n "$TAILSCALE_ISSUES" ]; then
-    echo ""
-    echo "Tailscale issues detected:"
-    echo "$TAILSCALE_ISSUES"
-    echo ""
-    TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_ERROR_COUNT")
-    if [ -n "$TAILSCALE_ISSUES" ]; then
-      # Don't record error if it is just the ipad or sonicscrewdriver or other local devices that don't bring down the server.
-      # I'm not sure why neuromancer itself sometimes shows offline, but if it really was, there would be bigger issues and they would be reported elsewhere
-      ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
-  fi
-fi
-
-if [ $ERROR_COUNT -gt 0 ]; then
-  exit 1
-fi
+# Check for and notify about OS updates available
+0 8 1 * * apt list --upgradable
 ```
 
 Remember to replace my user ID with your own!
 
 ## That's it!
 
-The `allContaienrs.sh` script should work and if you reboot you'll see the crontab calls that script.
+The `all-contaienrs.sh` script should work and if you reboot you'll see the crontab calls that script to start everything for you!
 
 ## Healthchecks
 
 I highly suggest using [Healtchecks.io](https://healthchecks.io/) and setting it up to monitor so you know if your entire domain went down.  
-You can add it to crontab and you can integrate it into your health checks script as well if you like.
+You can add a config file in the scripts folder, as documented in the Readme.MD there, with your healthchecks ping key and then the system-health-check.sh script (that is in crontab above) will make calls to Healthchecks.io to let it know that your system is up or down.
