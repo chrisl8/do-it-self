@@ -93,7 +93,8 @@ Each project has a folder in the root of the repository.
 _Docker Compose uses the name of the folder that contains the `compose.yaml` file as the "project name", so having a unique and meaningful folder for each container is important._ There are other ways to set the project name, but this is what I use.  
 The project names aren't super important except that compose gets confused if multiple projects exist with the same name and will warn about orphans.
 
-Each of those folders should have a `compose.yaml` file.
+Each of those folders should have a `compose.yaml` file.  
+**NOTE: Do NOT name them `compose.yml` or the scripts will miss them!**
 
 Any other files that may contain a `Dockerfile` should then be in a subfolder.
 The compose file can use the context tag to reference it for building.
@@ -668,6 +669,23 @@ You don't need DuckDNS if you are using TailScale, but if you want it, follow th
 I am just going to run this on the host, as it is literally a cron job.
 https://www.duckdns.org/install.jsp
 
+## Time Zone
+
+_Optional_
+
+Source Reference: [Stack Overflow](<[https://stackoverflow.com/questions/40462189/docker-compose-set-user-and-group-on-mounted-volume](https://askubuntu.com/questions/3375/how-to-change-time-zone-settings-from-the-command-line)>)
+
+It is "traditional" to run Linux boxes in "UTC", but that is also a real PITA when looking at logs and files and such.  
+Since this is a personal server, it should be comfortable and "personal", so if you want to change the timezone, do this:
+
+Become root:  
+`sudo su -`
+
+Run the timezone reconfigure script:  
+`dpkg-reconfigure tzdata`
+
+Follow the prompts and then reboot.
+
 ## Email with Fastmail
 
 It is really useful to be able to send email from your server, but it is also difficult.  
@@ -838,7 +856,7 @@ So that I can push/pull to/from Gitea without pasting my password every time
 
 ### Install
 
-https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md
+Source Reference: https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md
 
 ```
 wget https://github.com/git-ecosystem/git-credential-manager/releases/download/v2.6.1/gcm-linux_amd64.2.6.1.deb
@@ -866,7 +884,7 @@ I'm not worried about it as this git instance is locked in my VPN, but be aware.
 
 ### Slow boot due to timeout
 
-Reference Site: [Ask Ubuntu](https://askubuntu.com/questions/1217252/boot-process-hangs-at-systemd-networkd-wait-online/1501504#1501504)
+Source Reference: [Ask Ubuntu](https://askubuntu.com/questions/1217252/boot-process-hangs-at-systemd-networkd-wait-online/1501504#1501504)
 
 If your system hangs during bootup and you see this when it does hang:  
 **job systemd-network-wait-online.service/start running**
