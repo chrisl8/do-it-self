@@ -50,7 +50,7 @@ _NOTE: This doesn't work for every container. I have had to "undo" this in some 
 
 One time I had a dumb idea, fueled by the Internet's "don't run as root!" craze. I regret this now.
 
-I attempted once to run each "stack" of services as a user, using the format `stackname-docker`.
+I attempted once to run each "stack" of services as a user, using the format `stack-name-docker`.
 
 For each stack that is still this way you must make a user, get the UUID, and then use that in the compose file.
 
@@ -63,7 +63,7 @@ I am also made the Tailscale sidecar container run as the same user, meaning tha
 Here is a bit of a walkthrough with some helpful one-liners.
 
 ```bash
-cd ~/continers/stackname
+cd ~/containers/stack-name
 sudo mkdir -p /mnt/2000/container-mounts/$(basename "$PWD")/data
 sudo useradd --no-create-home $(basename "$PWD")-docker
 id $(basename "$PWD")-docker
@@ -75,7 +75,7 @@ sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker tailscale-conf
 
 _Note that many containers will only start or even run as root. I made some attempt to not do this, but I was only willing to put in so much effort._
 
-My experience is that many many users on Reddit think running anything in a contaienr as root is the end of the world, while most developers who provide containers don't think this matters at all. The disconnect means that unless I am willing to rebuild the containers myself, I will need to run them as the author intended.
+My experience is that many many users on Reddit think running anything in a container as root is the end of the world, while most developers who provide containers don't think this matters at all. The disconnect means that unless I am willing to rebuild the containers myself, I will need to run them as the author intended.
 
 ## Start/Stop Script
 
@@ -168,7 +168,7 @@ Use the same credentials for every container. Make a `tailscale.env` link back t
 
 ## Mounted Volumes
 
-- **Only** use a folder within the project if the content is stricly configuration data, and hence should be edited with an IDE.
+- **Only** use a folder within the project if the content is strictly configuration data, and hence should be edited with an IDE.
 
 - Otherwise, for data mounts, use a folder ona disk `/mnt/...` in a folder called `container-mounts`
 - Inside `container-mounts`, create a folder for each container that needs a data mount.
@@ -215,7 +215,7 @@ networks:
 and then a Tailscale "sidecar" container is added to the compose file
 This means that each container is its own "host" but they can talk to each other.
 
-This means that in the `tailscale-confg\tailscal-config.json` fie you must tell it the name of the container that it connects to.
+This means that in the `tailscale-config/tailscale-config.json` file you must tell it the name of the container that it connects to.
 
 The main benefit of this is that you can easily perform an HTTPS proxy with Tailscale, giving you automatic SSL certificates without exposing anything else.
 
@@ -228,17 +228,17 @@ This also allows you to run an unlimited number fo such services, since every on
 You **can** if you want to, still expose a container's ports to the host. This is useful both:
 
 1. If you want to access a port other than the one you have exposed to tailscale.
-2. You want direct access to it, asside from tailscale, for faster zero-cpu usage operations.
+2. You want direct access to it, aside from tailscale, for faster zero-cpu usage operations.
 
 ## Tailscale Network Only
 
 Another option is instead of the network that all hosts are on, you use `network_mode: service:ts`, where "ts" is the name of the tailscale container, in the container running the application.
 
-You still also have a tailscale "sidecar" container, but now instead of a docker network that both are on, the application container is seen to be on the SAME network as the talescale container.
+You still also have a tailscale "sidecar" container, but now instead of a docker network that both are on, the application container is seen to be on the SAME network as the tailscale container.
 
 The benefit (or drawback) of this is that you can see all the ports of the application container via tailscale.
 
-Note that when you set it up this way your `tailscale-confg\tailscal-config.json`, if set for proxy HTTPS, must point to localhost/127.0.0.1 because the container lives in the tailscale container network, not its own network.
+Note that when you set it up this way your `tailscale-config/tailscale-config.json`, if set for proxy HTTPS, must point to localhost/127.0.0.1 because the container lives in the tailscale container network, not its own network.
 
 This works great for minecraft, since it means clients can connect to whatever ports it wants to use.
 
@@ -301,7 +301,7 @@ Note that you do not need to follow the links labeled `Source Reference:`, but i
 
 These are notes I made to help a friend set up their own box based on my setup.
 
-**Throughout this text replace `neuromancer` with your own server name**
+**Throughout this text replace `your-host-name` with your own server name**
 
 ## Install the OS
 
@@ -338,7 +338,7 @@ Reboot now to get everything to "come up" and ensure the Desktop works.
 
 We will install some other software that requires more setup later, but this will get is going.
 
-## SSH Lockdown
+## SSH Lock Down
 
 - Connect remotely to it over SSH using the password, then:
 
@@ -704,10 +704,11 @@ System Mail Name: `example.com`
 SMTP relay host: `[smtp.fastmail.com]:587`
 
 Edit `/etc/hosts` replacing:  
-`127.0.1.1 neuromancer`  
+`127.0.1.1 your-host-name`  
 with  
-`127.0.1.1 Neuromancer.example.com Neuromancer`  
+`127.0.1.1 Your-host-name.example.com your-host-name`  
 _This may not be required_
+**Be sure to replace _your-host-name_ with whatever you named your computer, and _example.com_ with the domain you chose to use.**
 
 Source Reference: https://askubuntu.com/a/1083644/452730  
 To make `mail` send from the right domain  
@@ -730,7 +731,7 @@ smtp_sasl_tls_security_options = noanonymous
 ```
 
 `sudo vim /etc/postfix/sasl/sasl_passwd`  
-`[smtp.fastmail.com]:587 neuromancer@example.com:PASSWORD`
+`[smtp.fastmail.com]:587 your-host-name@example.com:PASSWORD`
 
 `sudo vim /etc/aliases`
 
@@ -828,8 +829,9 @@ cat /mnt/250a/container-mounts/netdata/netdataconfig/go.d/apcupsd.conf
 
 jobs:
   - name: local
-    address: neuromancer.jamnapari-goblin.ts.net:3551
+    address: your-host-name.your-ts-domain.ts.net:3551
 ```
+**Be sure to replace _your-host-name_ with your Tailscale host name, and _your-ts-domain_ with your Tailscale domain.**
 
 ## Rustdesk Remote Desktop for GUI
 
@@ -838,7 +840,7 @@ _Optional_
 Download latest `.deb`, but not nightly, from https://github.com/rustdesk/rustdesk/releases
 
 ```
-sudo apt install -f /mnt/500/samba/Multivac/rustdesk-1.3.2-x86_64.deb
+sudo apt install -f rustdesk-1.3.2-x86_64.deb
 ```
 
 `sudo vim /etc/gdm3/custom.conf`  
@@ -852,7 +854,7 @@ Then you can connect to it via the local or TailScale IP.
 
 ## Git Credential Manager
 
-So that I can push/pull to/from Gitea without pasting my password every time
+So that I can push/pull to/from Forgejo without pasting my password every time
 
 ### Install
 
@@ -870,12 +872,12 @@ Go to a folder with a repo in it and do a pull, the first time will cause an err
 ```
 git pull
 fatal: Must specify at least one OAuthAuthenticationModes (Parameter 'modes')
-Username for 'https://gitea.jamnapari-goblin.ts.net': chrisl8
-Password for 'https://chrisl8@gitea.jamnapari-goblin.ts.net':
+Username for 'https://forgejo.your-tailscale-domain.ts.net': your-user-name
+Password for 'https://your-user-name@forgejo.your-tailscale-domain.ts.net':
 ```
 
 The credentials for this example will be here:  
-`~/.gcm/store/git/https/gitea.jamnapari-goblin.ts.net/chrisl8.credential`
+`~/.gcm/store/git/https/forgejo.your-tailscale-domain.ts.net/chrisl8.credential`
 
 Note that this means the password is in plain text and accessible by root and in backups.
 I'm not worried about it as this git instance is locked in my VPN, but be aware.
@@ -886,7 +888,7 @@ I'm not worried about it as this git instance is locked in my VPN, but be aware.
 
 Source Reference: [Ask Ubuntu](https://askubuntu.com/questions/1217252/boot-process-hangs-at-systemd-networkd-wait-online/1501504#1501504)
 
-If your system hangs during bootup and you see this when it does hang:  
+If your system hangs during boot and you see this when it does hang:  
 **job systemd-network-wait-online.service/start running**
 
 This appears to be due to adding Desktop to a Server install and now we have two network services active.
@@ -902,7 +904,7 @@ That disables the "server" one in favor of the "desktop" one, which is hopefully
 ### Suspense and Hibernation
 
 ~~If the system seems to crash sometimes, by just going blank, but when you power cycle it it seems like it was always running, it may see the UPS as a "battery" and be putting itself to sleep!~~
-I don't think that actually happend, instead it was a combination of crashing due to BIOS automatically overclocking the CPU to 4.4 GHz and Docker set to restart `always`, **but I never want to suspend this machine so:**
+I don't think that actually happened, instead it was a combination of crashing due to BIOS automatically overclocking the CPU to 4.4 GHz and Docker set to restart `always`, **but I never want to suspend this machine so:**
 
 Make sure all suspend options are turned off in the Desktop settings for Power!
 
@@ -946,11 +948,11 @@ Remember to replace my user ID with your own!
 
 ## That's it!
 
-The `all-contaienrs.sh` script should work and if you reboot you'll see the crontab calls that script to start everything for you!
+The `all-containers.sh` script should work and if you reboot you'll see the crontab calls that script to start everything for you!
 
 ## Healthchecks
 
-I highly suggest using [Healtchecks.io](https://healthchecks.io/) and setting it up to monitor so you know if your entire domain went down.  
+I highly suggest using [Healthchecks.io](https://healthchecks.io/) and setting it up to monitor so you know if your entire domain went down.  
 You can add a config file in the scripts folder, as documented in the Readme.MD there, with your healthchecks ping key and then the system-health-check.sh script (that is in crontab above) will make calls to Healthchecks.io to let it know that your system is up or down.
 
 # System Operation
@@ -969,8 +971,8 @@ Note how it stops, starts, waits only 1 second between each, and both updates an
 
 ### DIUN
 
-If you added the diun container, it will update a list of contianers with pending update and email that to you weekly if you set that up in your crontab.  
-The email will inclulde the name of the script to run, which is `~/containers/scripts/update-from-diun-list.sh`
+If you added the diun container, it will update a list of containers with pending update and email that to you weekly if you set that up in your crontab.  
+The email will include the name of the script to run, which is `~/containers/scripts/update-from-diun-list.sh`
 
 ## System Updates
 
