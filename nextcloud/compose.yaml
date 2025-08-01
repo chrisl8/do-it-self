@@ -20,6 +20,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     healthcheck:
       test: 'runuser -s /usr/local/bin/php - www-data /var/www/html/occ status 2>/dev/null | grep -e "installed: true" -e "maintenance: false" -e "needsDbUpgrade: false" | wc -l | [ "`cat`" = "3" ]'
       start_period: 120s
@@ -56,6 +58,48 @@ services:
     # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  elasticsearch:
+    # Notes:
+    # The best documentation for this is their Install Script, but it is a bear to parse:
+    # https://github.com/nextcloud/vm/blob/main/apps/fulltextsearch.sh
+    # You must set both the Address of the Servlet, like so:
+    # http://elastic:the-actual-password@nextcloud-elasticsearch:9200/
+    # and the "Index", which can be any text string, so I just put in:
+    # my_index
+    #
+    # You can exec into the container and run this to test that it is set up correctly:
+    # php occ fulltextsearch:test
+    # And kick off the indexing:
+    # php occ fulltextsearch:index
+    #
+    # You can also run the indexing in the background:
+    # php occ fulltextsearch:index --background
+    #
+    # It should take care of indexing new/changed documents on its own.
+    container_name: nextcloud-elasticsearch
+    # The github repo for the plugin says it only works with version 8, so this may be unwise:
+    image: elasticsearch:9.1.0
+    restart: unless-stopped
+    # The install script, mentioned above, # https://github.com/nextcloud/vm/blob/main/apps/fulltextsearch.sh recommends
+    # some more settings that I left out. If you run into trouble, you can try them.
+    environment:
+      - discovery.type=single-node
+      # Use this to enable Basic Authentication:
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    volumes:
+      # Use named volume because of permission problems
+      - /mnt/2000/container-mounts/nextcloud/elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - nextcloud-net
+    healthcheck:
+      test: curl --fail -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cat/health?h=status 2>/dev/null | grep -q "green\|yellow" || exit 1
       start_period: 120s
       start_interval: 5s
       interval: 5m
