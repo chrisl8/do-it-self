@@ -20,9 +20,11 @@ sleep 30
 # Now start everything
 "/home/$CURRENT_USER/containers/scripts/all-containers.sh" --start --no-wait >> "/home/$CURRENT_USER/logs/system-cron-startup.log"
 
-# Start the Metatron and other Node.js processes
-# THIS IS A PERSONAL SCRIPT THAT I RUN ON MY SYSTEM, YOU WILL PROBABLY WANT TO REMOVE THIS LINE!
-"/home/$CURRENT_USER/Metatron/start-pm2.sh" >> "/home/$CURRENT_USER/logs/system-cron-startup.log"
+if [[ -e "/home/$CURRENT_USER/Metatron/start-pm2.sh" ]]; then
+  # Start the Metatron and other Node.js processes
+  # THIS IS A PERSONAL SCRIPT THAT I RUN ON MY SYSTEM, I DO NOT EXPECT YOU TO HAVE IT.
+  "/home/$CURRENT_USER/Metatron/start-pm2.sh" >> "/home/$CURRENT_USER/logs/system-cron-startup.log"
+fi
 
 echo "System startup complete." > "/home/$CURRENT_USER/logs/system-cron-startup.log"
 
