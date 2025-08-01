@@ -26,9 +26,11 @@ fi
 PENDING_UPDATES_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
 
 if [[ -e "$PENDING_UPDATES_FILE" ]]; then
+  # Get the current user dynamically since $USER is not set in cron
+  CURRENT_USER=$(whoami)
   echo "Pending container updates found"
   cat "$PENDING_UPDATES_FILE"
   echo ""
-  echo "/home/$USER/containers/scripts/update-from-diun-list.sh"
+  echo "/home/$CURRENT_USER/containers/scripts/update-from-diun-list.sh"
   exit 1
 fi
