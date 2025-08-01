@@ -5,7 +5,7 @@ EXCLUDED_DEVICES_FOR_ERROR_COUNT=""
 
 # If you want to exclude some tailscale devices from being checked or flagging things as "down", then add it to a file called `excluded_devices.conf` in this directory
 # with contents that look like this:
-# EXCLUDED_DEVICES_FOR_EMAIL="mycomputer1|mycomputer2|myphone"
+# EXCLUDED_DEVICES_FOR_EMAIL="my-computer1|my-computer2|my-phone"
 # EXCLUDED_DEVICES_FOR_ERROR_COUNT="this-server|something-else"
 
 # Load excluded devices configuration from config file
@@ -13,6 +13,7 @@ EXCLUDED_DEVICES_CONFIG_FILE="$(dirname "$0")/excluded_devices.conf"
 
 if [ -f "$EXCLUDED_DEVICES_CONFIG_FILE" ]; then
     # Source the config file to get the excluded devices
+    # shellcheck source=excluded_devices.conf
     . "$EXCLUDED_DEVICES_CONFIG_FILE"
 fi
 
@@ -26,6 +27,7 @@ HEALTHCHECK_PING_KEY=""
 
 if [ -f "$HEALTHCHECK_CONFIG_FILE" ]; then
     # Source the config file to get the ping key
+    # shellcheck source=healthcheck.conf
     . "$HEALTHCHECK_CONFIG_FILE"
 fi
 

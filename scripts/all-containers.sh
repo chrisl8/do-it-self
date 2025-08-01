@@ -81,7 +81,7 @@ if [[ ${START_ACTION} = false && ${STOP_ACTION} = false ]];then
   echo "You can also get updates for all containers by running:"
   echo "all-containers.sh --get-updates"
   echo ""
-  echo "Finaly, there is a --fast flag that will skip waiting for all containers to report healthy."
+  echo "Finally, there is a --fast flag that will skip waiting for all containers to report healthy."
   echo "all-containers.sh --fast"
   exit
 fi
@@ -131,8 +131,8 @@ if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
   # Filter CONTAINER_LIST to only include directories in the file list
   FILTERED_LIST=()
   for ENTRY in "${CONTAINER_LIST[@]}"; do
-    CONTAINER_DIR="$(echo $ENTRY | cut -d "/" -f 2)"
-    if [[ " ${ALLOWED_DIRS[*]} " =~ " ${CONTAINER_DIR} " ]]; then
+    CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
+    if [[ " ${ALLOWED_DIRS[*]} " == " ${CONTAINER_DIR} " ]]; then
       FILTERED_LIST+=("${ENTRY}")
     fi
   done
@@ -163,7 +163,7 @@ elif [[ ${STOP_ACTION} = true ]];then
 fi
 
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
-  CONTAINER_DIR="$(echo $ENTRY | cut -d "/" -f 2)"
+  CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
     if [[ ${MOUNT} != "" ]];then
       if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
@@ -265,12 +265,14 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
 
         if [[ ${UPDATE_GIT_REPOS} = true ]];then
         # Update any git repositories in the directory
-          for GIT_DIR in $(find . -name ".git" -type d 2>/dev/null); do
-            printf "${YELLOW}  Updating git repository in ${GIT_DIR%/*}${NC}\n"
-            cd "${GIT_DIR%/*}" || continue
+          set +e
+          find . -name ".git" -type d -exec sh -c '
+            printf "${YELLOW}  Updating git repository in ${1%/*}${NC}\n"
+            cd "${1%/*}" || continue
             git pull
             cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
-          done
+          ' sh {} \; 2>/dev/null;
+          set -e
           if [[ -e site/my-digital-garden/.git ]];then
             printf "${YELLOW}  Updating git repository in site/my-digital-garden${NC}\n"
             cd site/my-digital-garden || continue

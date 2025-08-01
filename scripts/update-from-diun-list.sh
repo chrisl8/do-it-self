@@ -33,6 +33,6 @@ if [ ! -f "$FILE_PATH" ]; then
     exit 1
 fi
 
-"/home/$USER/containers/scripts/all-containers.sh" --update-git-repos --get-updates --sleep 1 --stop --start --container-list $FILE_PATH
+"/home/$USER/containers/scripts/all-containers.sh" --update-git-repos --get-updates --sleep 1 --stop --start --container-list "$FILE_PATH"
 
-rm -rf $FILE_PATH
+rm -rf "$FILE_PATH"
