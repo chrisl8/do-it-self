@@ -1,0 +1,68 @@
+services:
+  kopia-tr0n:
+    image: kopia/kopia
+    container_name: kopia-tr0n
+    restart: always
+    # Setup the server that provides the web gui
+    command:
+      - server
+      - start
+      - --disable-csrf-token-checks
+      # - --tls-generate-cert
+      - --tls-cert-file=/app/config/kopia.cert
+      - --tls-key-file=/app/config/kopia.key
+      - --address=0.0.0.0:51515
+      - --server-username=${SERVER_USERNAME}
+      - --server-password=${SERVER_PASSWORD}
+    environment:
+      # Set repository password
+      KOPIA_PASSWORD: ${KOPIA_PASSWORD}
+      USER: ${USER}
+      SERVER_USERNAME: ${SERVER_USERNAME}
+      SERVER_PASSWORD: ${SERVER_PASSWORD}
+    volumes:
+      # Mount local folders needed by kopia
+      - /mnt/22TB/container-mounts/kopia-tr0n/config:/app/config
+      - /mnt/250/container-mounts/kopia-tr0n/cache:/app/cache
+      - /mnt/22TB/container-mounts/kopia-tr0n/logs:/app/logs
+      # Mount repository location
+      - /mnt/22TB/container-mounts/kopia-tr0n/repository:/repository
+      # Mount path for browsing mounted snaphots
+      # - /mnt/22TB/container-mounts/kopia-tr0n/tmp:/tmp:shared
+    healthcheck:
+      # Enable health check for the instance
+      test: ["CMD-SHELL", "pgrep -f /bin/kopia"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    network_mode: service:ts
+    depends_on:
+      ts:
+        condition: service_healthy
+  ts:
+    container_name: kopia-tr0n-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=kopia-tr0n
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: always
