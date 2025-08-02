@@ -55,6 +55,9 @@ do
 done
 
 if [[ ${START_ACTION} = false && ${STOP_ACTION} = false ]];then
+  echo ""
+  echo "If you want to skip a folder, and just not run that container, you can create a _DISABLED_ file in the folder."
+  echo ""
   echo "You must an action of either start or stop like this:"
   echo "all-containers.sh --start"
   echo "or"
@@ -106,6 +109,10 @@ cd "${SCRIPT_DIR}" || exit
 CONTAINER_LIST=()
 for DIR in *;do
   if [[ -d "${SCRIPT_DIR}/${DIR}" ]] && [[ -e "${SCRIPT_DIR}/${DIR}/compose.yaml" ]];then
+    # Skip folders that contain a _DISABLED_ file
+    if [[ -e "${SCRIPT_DIR}/${DIR}/_DISABLED_" ]];then
+      continue
+    fi
     STRIPPED_DIR=${DIR%*/}
     ORDER="a"
     if [[ -e "${SCRIPT_DIR}/${DIR}/.start-order" ]];then
