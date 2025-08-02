@@ -257,13 +257,6 @@ I don't know if there is any performance benefit/drawback of the two setups.
 If you are having trouble getting one to work you can see the output of the healthcheck by running:
 `docker inspect --format "{{json .State.Health }}" <container name> | jq`
 
-# Notes on specific containers
-
-## Your Spotify
-
-I'm using the lscr.io version of this instead of directly calling the author's repo because the lscr.io version combines the "client" (web site) and "server" (back end service) into one container, which I wanted and which I wasn't sure how to do myself at the time.  
-I'm pretty sure that I could convert, and I may because I tend to be dumb that way, but for now the lscr.io one works well.
-
 # Answers to Questions Nobody Asked
 
 1. Why do you use the latest version of so many things, isn't it dangerous not to pin versions?
