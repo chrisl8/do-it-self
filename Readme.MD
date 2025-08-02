@@ -831,6 +831,7 @@ jobs:
   - name: local
     address: your-host-name.your-ts-domain.ts.net:3551
 ```
+
 **Be sure to replace _your-host-name_ with your Tailscale host name, and _your-ts-domain_ with your Tailscale domain.**
 
 ## Rustdesk Remote Desktop for GUI
@@ -851,36 +852,6 @@ Make sure it starts on boot?
 
 In the client you will need to allow "Direct IP" connection.  
 Then you can connect to it via the local or TailScale IP.
-
-## Git Credential Manager
-
-So that I can push/pull to/from Forgejo without pasting my password every time
-
-### Install
-
-Source Reference: https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md
-
-```
-wget https://github.com/git-ecosystem/git-credential-manager/releases/download/v2.6.1/gcm-linux_amd64.2.6.1.deb
-sudo dpkg -i gcm-linux_amd64.2.6.1.deb
-git-credential-manager configure
-git config --global credential.credentialStore plaintext
-```
-
-Go to a folder with a repo in it and do a pull, the first time will cause an error that you can ignore and after that credentials will be stored:
-
-```
-git pull
-fatal: Must specify at least one OAuthAuthenticationModes (Parameter 'modes')
-Username for 'https://forgejo.your-tailscale-domain.ts.net': your-user-name
-Password for 'https://your-user-name@forgejo.your-tailscale-domain.ts.net':
-```
-
-The credentials for this example will be here:  
-`~/.gcm/store/git/https/forgejo.your-tailscale-domain.ts.net/chrisl8.credential`
-
-Note that this means the password is in plain text and accessible by root and in backups.
-I'm not worried about it as this git instance is locked in my VPN, but be aware.
 
 ## Fixes Potential Problems
 
@@ -1013,3 +984,35 @@ If you want to shut the system down instead of rebooting, leave out the `-r`:
 When the system starts up, if you added the `@reboot` line with the `system-cron-startup.sh` scripts to your crontab, then everything should come up by itself.  
 There will be a log file created called `~/logs/system-cron-startup.log` which will be emailed to you _when it is done_, but if you want to see how things are going after a reboot, log in and run:  
 `tail -f ~/logs/system-cron-startup.log`
+
+# Other settings that may help you later
+
+## Git Credential Manager
+
+So that I can push/pull to/from Forgejo without pasting my password every time
+
+### Install
+
+Source Reference: https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md
+
+```
+wget https://github.com/git-ecosystem/git-credential-manager/releases/download/v2.6.1/gcm-linux_amd64.2.6.1.deb
+sudo dpkg -i gcm-linux_amd64.2.6.1.deb
+git-credential-manager configure
+git config --global credential.credentialStore plaintext
+```
+
+Go to a folder with a repo in it and do a pull, the first time will cause an error that you can ignore and after that credentials will be stored:
+
+```
+git pull
+fatal: Must specify at least one OAuthAuthenticationModes (Parameter 'modes')
+Username for 'https://forgejo.your-tailscale-domain.ts.net': your-user-name
+Password for 'https://your-user-name@forgejo.your-tailscale-domain.ts.net':
+```
+
+The credentials for this example will be here:  
+`~/.gcm/store/git/https/forgejo.your-tailscale-domain.ts.net/chrisl8.credential`
+
+Note that this means the password is in plain text and accessible by root and in backups.
+I'm not worried about it as this git instance is locked in my VPN, but be aware.
