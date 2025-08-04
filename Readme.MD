@@ -723,10 +723,10 @@ smtp_sasl_security_options = noanonymous
 smtp_sasl_tls_security_options = noanonymous
 ```
 
-`sudo vim /etc/postfix/sasl/sasl_passwd`  
+Edit: `/etc/postfix/sasl/sasl_passwd`  
 `[smtp.fastmail.com]:587 your-host-name@example.com:PASSWORD`
 
-`sudo vim /etc/aliases`
+Edit: `/etc/aliases`
 
 ```
 # See man 5 aliases for format
@@ -735,7 +735,8 @@ root: yourself@example2.com
 yourself: yourself@example2.com
 ```
 
-Note that it does NOT work to set the alias to the same domain as your own system, as postfix then strips off the FQDN and gets confused.
+**Note that it does NOT work to set the alias to the same domain as your own system, as postfix then strips off the FQDN and gets confused.**  
+_**This means that you must send email to an address on a DIFFERENT DOMAIN than the domain you set everywhere else!**_
 
 Run:
 
@@ -751,6 +752,10 @@ systemctl start postfix.service
 exit
 ```
 
+**If you edit `/etc/postfix/sasl/sasl_passwd` you must run `postmap /etc/postfix/sasl/sasl_passwd` again!**
+
+**If you edit `/etc/aliases` you must run `newaliases` again!**
+
 NOTE: Make sure that Fastmail allows sending FROM `yourself@example.com` from the user you set up in the sasl_passwd file. The system will send from `yourself` because well that's the user, it doesn't change that.
 You should also set up `root@example.com` as a valid alias for that account in FastMail.
 
@@ -761,7 +766,7 @@ echo "Test to root." | mail -s "Test message to root" root
 ```
 
 Postfix logs are in journal, so to see them run:  
-`journalctl -t postfix/smtpd -t postfix/smtp`  
+`journalctl -f`  
 if you need to debug.
 
 ## SMART Disk Monitoring
