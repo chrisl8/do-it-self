@@ -35,4 +35,7 @@ fi
 
 "/home/$USER/containers/scripts/all-containers.sh" --update-git-repos --get-updates --sleep 1 --stop --start --container-list "$FILE_PATH"
 
-rm -rf "$FILE_PATH"
+# Only remove the file if the all-containers command was successful
+if [ $? -eq 0 ]; then
+    rm -rf "$FILE_PATH"
+fi
