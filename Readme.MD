@@ -323,7 +323,7 @@ I've tried to place everything I know we will need here to make it quick to star
 sudo apt update
 sudo apt upgrade
 sudo apt autoremove
-sudo apt install ubuntu-desktop-minimal ubuntu-advantage-tools vim ca-certificates curl samba wsdd-server
+sudo apt install ubuntu-desktop-minimal ubuntu-advantage-tools vim nano ca-certificates curl samba wsdd-server
 ```
 
 Reboot now to get everything to "come up" and ensure the Desktop works.  
