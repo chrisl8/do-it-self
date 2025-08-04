@@ -320,6 +320,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     fi
   else
     printf "${RED} - ${CONTAINER_DIR} is not a valid container directory${NC}\n"
+    exit 1
   fi
 done
 
