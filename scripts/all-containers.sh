@@ -139,7 +139,7 @@ if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
   FILTERED_LIST=()
   for ENTRY in "${CONTAINER_LIST[@]}"; do
     CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
-    if [[ " ${ALLOWED_DIRS[*]} " == " ${CONTAINER_DIR} " ]]; then
+    if [[ " ${ALLOWED_DIRS[*]} " == *" ${CONTAINER_DIR} "* ]]; then
       FILTERED_LIST+=("${ENTRY}")
     fi
   done
