@@ -429,6 +429,34 @@ After that if you want to shove the swap out into RAM run:
 `sudo swapoff -a; sudo swapon -a`  
 Watch `htop` while it runs to see it happen.
 
+## inotify limits
+
+Reference Site: [Ask Ubuntu](https://askubuntu.com/a/1472450)  
+Docker is going to keep a LOT of things open, so use this to avoid errors.
+
+Edit (as root) `/etc/sysctl.conf`  
+Add:  
+`fs.inotify.max_user_instances=256`  
+Apply it:  
+`sysctl -p`  
+Check:  
+`sysctl fs.inotify`
+
+Should show:
+
+fs.inotify.max_queued_events = 16384  
+fs.inotify.max_user_instances = 256  
+fs.inotify.max_user_watches = 65536
+
+## Kill things faster on Shutdown
+
+If you find things getting hung on shutdown, you can reduce the timeout:
+
+Edit `/etc/systemd/system.conf`
+
+and set:  
+`DefaultTimeoutStopSec=10s`
+
 ## Docker
 
 Source Reference: https://docs.docker.com/engine/install/ubuntu/#installation-methods
