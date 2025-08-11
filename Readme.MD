@@ -1,3 +1,11 @@
+# SOURCE
+
+The primary repository for this code is at [https://codeberg.org/Chris10/do-it-self](https://codeberg.org/Chris10/do-it-self)
+
+Other copies, on other git hosting services, exist for convenience and exposure only.
+
+Please file any Issues and Pull Requests at the [Codeberg](https://codeberg.org/Chris10/do-it-self) location, regardless of where you are finding this code.
+
 # My Do It Self Setup
 
 This is a collection of docker-compose files for various services that I run on my home server.
