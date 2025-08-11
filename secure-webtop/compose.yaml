@@ -1,0 +1,79 @@
+services:
+  webtop:
+    image: lscr.io/linuxserver/webtop:ubuntu-mate
+    container_name: webtop
+    # security_opt:
+    #   - seccomp:unconfined #optional
+    volumes:
+      - /mnt/250/container-mounts/secure-webtop/config:/config
+      - /mnt/22TB/container-mounts/secure-webtop/downloads:/config/Downloads
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - SUBFOLDER=/ #optional
+      - TITLE=Webtop #optional
+    shm_size: "1gb" #optional
+    restart: unless-stopped
+    network_mode: service:gluetun
+    labels:
+      # For homepage
+      - homepage.group=Desktop Apps
+      - homepage.name=Webtop
+      - homepage.weight=100
+      - homepage.icon=/dashboard-icons/svg/linuxserver-io.svg
+      - homepage.href=${HOME_PAGE_URL}
+    healthcheck:
+      test: 'curl --fail http://localhost:3000/manifest.json 2>/dev/null | grep -o "Webtop" || exit 1'
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      gluetun:
+        condition: service_healthy
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    # line above must be uncommented to allow external containers to connect.
+    # See https://github.com/qdm12/gluetun-wiki/blob/main/setup/connect-a-container-to-gluetun.md#external-container-to-gluetun
+    volumes:
+      - /mnt/250/container-mounts/secure-webtop/gluetun:/gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY} # Get this from the downloaded file NOT the webpage
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES} # Get this from the downloaded file too
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+  ts:
+    container_name: webtop-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=remote-webtop
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: always
