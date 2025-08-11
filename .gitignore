@@ -3,6 +3,7 @@
 
 # Environment and Configuration Files
 .env
+_DISABLED_
 tailscale.env
 tailscale-state/
 
