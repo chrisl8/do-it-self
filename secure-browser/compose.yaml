@@ -44,7 +44,7 @@ services:
       - VPN_TYPE=wireguard
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY} # Get this from the downloaded file NOT the webpage
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES} # Get this from the downloaded file too
-      - SERVER_COUNTRIES=Sweden,Netherlands # Reddit seems to block Switzerland
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
   ts:
     container_name: librewolf-ts
     image: tailscale/tailscale
