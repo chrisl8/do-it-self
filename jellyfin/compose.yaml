@@ -10,8 +10,15 @@ services:
       - /mnt/2000/container-mounts/jellyfin/music:/media/music
       - /mnt/2000/container-mounts/jellyfin/videos:/media/videos
       - /mnt/2000/container-mounts/jellyfin/movies:/media/movies
+      - /mnt/22TB/container-mounts/secure-webtop/downloads:/media/downloads
       - /mnt/2000/container-mounts/jellyfin/audiobooks:/media/audiobooks
+    runtime: nvidia
     restart: no
+    ports:
+      - 8096:8096
+      - 8920:8920
+      - 7359:7359/udp # Client discovery
+      - 1900:1900/udp # DLNA
     networks:
       - jellyfin-net
     # Note that jellyfin has a health check built into the Dockerfile, so no need to add it here.
@@ -27,6 +34,13 @@ services:
       - homepage.widget.url=${HOME_PAGE_URL}
       - homepage.widget.enableBlocks=true
       - homepage.widget.fields=["movies", "songs"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
   ts:
     container_name: jellyfin-ts
     image: tailscale/tailscale
