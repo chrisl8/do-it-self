@@ -1055,9 +1055,11 @@ I'm not worried about it as this git instance is locked in my VPN, but be aware.
 
 Much of what I put up here isn't even worth "licensing" as it only serves as examples, not a fully functioning system.
 
-I place all of my code online under AGPL so as to keep it as free as possible while preventing anyone from claiming it as their own or trying to sell it to anyone.
+I place all of my code online under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html) license so as to keep it as free as possible while preventing anyone from claiming it as their own or trying to sell it to anyone.
 
-I place all of my "scripts" online under the Apache license as I expect people to just copy and paste them, or pieces of them, into their own projects, and those copies should not be encumbered in any way.
+I place all of my "scripts" online under the [Apache](https://www.apache.org/licenses/LICENSE-2.0.html) license as I expect people to just copy and paste them, or pieces of them, into their own projects, and those copies should not be encumbered in any way.
+
+I place my documentation and general writing under the [Creative Commons Attribution Share Alike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/) license.
 
 My work that interfaces with ROS (Robot Operating System) is BSD licensed to be more compatible with their preferred licensing.
 
@@ -1069,4 +1071,4 @@ If you want to use this code under a different license, contact me and offer to 
 
 If you simply want to learn from this code, that is really why it is here, so please do that and don't worry about it.
 
-See the LICENSE file in this repository for the exact boilerplate license for this repository.
+See the LICENSE file in this repository for the exact boilerplate license for this particular repository.
