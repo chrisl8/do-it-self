@@ -68,36 +68,38 @@ if ! diff /tmp/docker-ps-wc-previous.txt /tmp/docker-ps-wc-now.txt > /dev/null; 
 fi
 
 # Check Tailscale health
-if [ -n "$EXCLUDED_DEVICES_FOR_EMAIL" ]; then
-  TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_EMAIL")
-else
-  TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline)
-fi
-
-if [ -n "$TAILSCALE_ISSUES" ]; then
-  # Wait 15 seconds and check again as often there are transient issues with tailscale status reporting
-  sleep 15
+if [ -e /usr/bin/tailscale ]; then
   if [ -n "$EXCLUDED_DEVICES_FOR_EMAIL" ]; then
     TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_EMAIL")
   else
     TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline)
   fi
+
   if [ -n "$TAILSCALE_ISSUES" ]; then
-    echo ""
-    echo "Tailscale issues detected:"
-    echo "$TAILSCALE_ISSUES"
-    echo ""
-    if [ -n "$EXCLUDED_DEVICES_FOR_ERROR_COUNT" ] && [ -n "$EXCLUDED_DEVICES_FOR_EMAIL" ]; then
-      TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_ERROR_COUNT|$EXCLUDED_DEVICES_FOR_EMAIL")
-    elif [ -n "$EXCLUDED_DEVICES_FOR_ERROR_COUNT" ]; then
-      TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_ERROR_COUNT")
-    elif [ -n "$EXCLUDED_DEVICES_FOR_EMAIL" ]; then
+    # Wait 15 seconds and check again as often there are transient issues with tailscale status reporting
+    sleep 15
+    if [ -n "$EXCLUDED_DEVICES_FOR_EMAIL" ]; then
       TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_EMAIL")
     else
       TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline)
     fi
     if [ -n "$TAILSCALE_ISSUES" ]; then
-      ERROR_COUNT=$((ERROR_COUNT + 1))
+      echo ""
+      echo "Tailscale issues detected:"
+      echo "$TAILSCALE_ISSUES"
+      echo ""
+      if [ -n "$EXCLUDED_DEVICES_FOR_ERROR_COUNT" ] && [ -n "$EXCLUDED_DEVICES_FOR_EMAIL" ]; then
+        TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_ERROR_COUNT|$EXCLUDED_DEVICES_FOR_EMAIL")
+      elif [ -n "$EXCLUDED_DEVICES_FOR_ERROR_COUNT" ]; then
+        TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_ERROR_COUNT")
+      elif [ -n "$EXCLUDED_DEVICES_FOR_EMAIL" ]; then
+        TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EXCLUDED_DEVICES_FOR_EMAIL")
+      else
+        TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline)
+      fi
+      if [ -n "$TAILSCALE_ISSUES" ]; then
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+      fi
     fi
   fi
 fi
