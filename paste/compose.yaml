@@ -20,7 +20,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
+    restart: unless-stopped
     labels:
       # For homepage
       - homepage.group=Tools
