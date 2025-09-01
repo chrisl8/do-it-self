@@ -135,6 +135,15 @@ if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
   # Read the container list file into an array
   mapfile -t ALLOWED_DIRS < "${CONTAINER_LIST_FILE}"
   
+  # Ensure that each entry in the CONTAINER_LIST exists as a folder in the containers directory
+  for ENTRY in "${ALLOWED_DIRS[@]}"; do
+    CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
+    if [[ ! -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] || [[ ! -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]]; then
+      printf "${RED}Error: Container directory ${CONTAINER_DIR} does not exist or does not contain a compose.yaml file${NC}\n"
+      exit 1
+    fi
+  done
+
   # Filter CONTAINER_LIST to only include directories in the file list
   FILTERED_LIST=()
   for ENTRY in "${CONTAINER_LIST[@]}"; do
@@ -316,6 +325,12 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           sleep "${SLEEP_TIME}"
           printf "\n"
         fi
+
+        # If the container came from a list of containers to process, we need to remove it from the file so we don't try to process it again.
+        if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
+          sed -i "/^${CONTAINER_DIR}\$/d" "${CONTAINER_LIST_FILE}"
+        fi
+
       fi
     fi
   else
