@@ -1,0 +1,72 @@
+services:
+  mame:
+    image: lscr.io/linuxserver/mame
+    container_name: mame
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Chicago
+    volumes:
+      - /mnt/2000/container-mounts/mame/config:/config
+      - /mnt/22TB/container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs:/mame
+      - /mnt/22TB/container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged):/mame/roms:ro
+      - /mnt/22TB/container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged):/mame/chds:ro
+    shm_size: "1gb"
+    restart: unless-stopped
+    networks:
+      - mame-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [compute,video,graphics,utility]
+    labels:
+      # For homepage
+      - homepage.group=Desktop Apps
+      - homepage.name=MAME
+      - homepage.weight=110
+      - homepage.icon=/icons/mame.ico
+      - homepage.href=${HOME_PAGE_URL}
+    healthcheck:
+      test: 'curl --fail http://localhost:3000/manifest.json 2>/dev/null | grep -o "MAME" || exit 1'
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  ts:
+    container_name: mame-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=mame
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - mame-net
+    restart: unless-stopped
+    depends_on:
+      mame:
+        condition: service_healthy
+networks:
+  mame-net:
