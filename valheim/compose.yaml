@@ -1,7 +1,11 @@
 services:
   valheim:
     container_name: valheim
-    image: ghcr.io/lloesche/valheim-server
+    build:
+      # get clone https://github.com/JustinTArthur/valheim-server-docker.git
+      # git checkout update-libdoorstop-env-var-scheme
+      context: ./valheim-server-docker
+      dockerfile: Dockerfile
     init: true
     cap_add:
       - sys_nice
@@ -22,8 +26,8 @@ services:
       - ADMINLIST_IDS=${ADMINLIST_IDS}
       - BEPINEX=true
       - SUPERVISOR_HTTP=true
-      - PUID=1029
-      - PGID=1029
+      # - PUID=1029
+      # - PGID=1029
     healthcheck:
       test: wget --no-verbose -O - "http://127.0.0.1:9001" 2>/dev/null | grep running | wc -l | [ "`cat`" = "5" ] || exit 1
       start_period: 120s
