@@ -8,6 +8,8 @@ services:
       - host.docker.internal:host-gateway
     ports:
       - 8090:8090
+    environment:
+      - USER_CREATION=true
     volumes:
       - /mnt/250/container-mounts/beszel/data:/beszel_data
       - ./healthcheck:/healthcheck
@@ -55,7 +57,6 @@ services:
       - ./healthcheck:/healthcheck
     environment:
       PORT: 45876
-      # Do not remove quotes around the key
       KEY: ${KEY}
     healthcheck:
       test: ["CMD", "/healthcheck/checkForAgentProcess"]
