@@ -4,7 +4,6 @@ FROM debian
 RUN apt-get update && apt-get install -y --no-install-recommends --no-install-suggests \
     locales \
     ca-certificates \
-    software-properties-common \
     lib32gcc-s1 \
     libstdc++6 \
     curl \
