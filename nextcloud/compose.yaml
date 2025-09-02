@@ -3,7 +3,6 @@ services:
   nextcloud:
     image: nextcloud
     container_name: nextcloud
-    #user: 1017:1017
     volumes:
       - /mnt/2000/container-mounts/nextcloud/html:/var/www/html
     environment:
@@ -43,7 +42,6 @@ services:
       - homepage.widget.fields=["freespace", "numfiles"]
   db:
     container_name: nextcloud-db
-    user: 1017:1017
     image: mariadb:10
     volumes:
       - /mnt/2000/container-mounts/nextcloud/db:/var/lib/mysql
@@ -107,7 +105,6 @@ services:
       retries: 3
   ts-nextcloud:
     container_name: nextcloud-ts
-    user: 1017:1017
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

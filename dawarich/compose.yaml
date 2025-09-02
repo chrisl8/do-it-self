@@ -182,7 +182,6 @@ services:
 
   ts:
     container_name: dawarich-ts
-    user: 1007:1007
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

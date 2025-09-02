@@ -27,7 +27,6 @@ services:
     # healthcheck: is built into this app, no need to add one.
   ts:
     container_name: homepage-ts
-    user: 1011:1011
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

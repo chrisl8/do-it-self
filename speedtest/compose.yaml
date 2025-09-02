@@ -1,7 +1,6 @@
 services:
   speedtest:
     container_name: speedtest
-    # user: 1025:1025
     image: lscr.io/linuxserver/speedtest-tracker
     ports:
       - 8765:80
@@ -33,5 +32,4 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-
 # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.

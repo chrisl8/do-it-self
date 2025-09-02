@@ -37,7 +37,6 @@ services:
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: wallabag-ts
-    user: 1030:1030
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

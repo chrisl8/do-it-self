@@ -28,7 +28,6 @@ services:
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: forgejo-ts
-    user: 1010:1010
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

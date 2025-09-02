@@ -63,7 +63,6 @@ services:
         condition: service_healthy
   ts:
     container_name: searxng-ts
-    user: 1024:1024
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

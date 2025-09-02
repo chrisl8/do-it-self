@@ -1,9 +1,6 @@
 services:
   freshrss:
     container_name: freshrss
-    # Making FreshRSS run as non-root is non-trivial.
-    # https://github.com/FreshRSS/FreshRSS/issues/2400
-    # user: 1009:1009
     image: freshrss/freshrss
     restart: no
     logging:
@@ -38,7 +35,6 @@ services:
       - homepage.widget.password=${FRESHRSS_PASSWORD}
   ts:
     container_name: freshrss-ts
-    user: 1009:1009
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

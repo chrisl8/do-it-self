@@ -20,7 +20,6 @@ services:
         condition: service_healthy
   ts:
     container_name: minecraft-ts
-    user: 1015:1015
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:
