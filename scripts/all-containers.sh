@@ -181,6 +181,22 @@ fi
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
   CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
+
+    # Check for a reference to a tailscale.env file in the local folder by looking for
+    # env_file: tailscale.env in the compose.yaml file
+    if grep -q "env_file: tailscale.env" "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml"; then
+      # Check that a tailscale.env file exists in the local folder
+      if [[ ! -f "${SCRIPT_DIR}/${CONTAINER_DIR}/tailscale.env" ]]; then
+        printf "${RED}     Error: tailscale.env file not found in ${CONTAINER_DIR}\n${NC}"
+        # Check for such a file in the user's home folder under the credentials folder
+        if [[ -f "${HOME}/credentials/tailscale.env" ]]; then
+          printf "${YELLOW}     Found tailscale.env file in ${HOME}/credentials/\n     Adding a symbolic link to it here...${NC}\n"
+          ln -s "${HOME}/credentials/tailscale.env" "${SCRIPT_DIR}/${CONTAINER_DIR}/tailscale.env"
+        fi
+      fi
+    fi
+
+
     if [[ ${MOUNT} != "" ]];then
       if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
         continue
