@@ -172,7 +172,36 @@ Put anything generic, even if it is personal preference, in the `compose.yaml` f
 
 ### Credentials
 
-Use the same credentials for every container. Make a `tailscale.env` link back to the same file in my `~/credentials` folder.
+The simple and non-expiring way is to use an OAuth Client, as mentioned here:  
+https://tailscale.com/kb/1282/docker#ts_authkey  
+and further explained here:
+https://tailscale.com/kb/1215/oauth-clients#registering-new-nodes-using-oauth-credentials
+
+TL;DR:
+
+1. You need a "container" tag, so go to https://login.tailscale.com/admin/acls/visual/tags
+2. Create a Tag called "container"
+3. Go to https://login.tailscale.com/admin/settings/oauth and Generate OAuth client...
+4. Give it a descriptive name, and check the Keys -> Auth Keys -> Write option
+5. Add the "container" tag that you just made.
+6. Create the OAuth Client Key and copy the client key that it gives you that will look something like this:  
+   `tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx`
+
+![OAuth Client Setup](cd6a0328d6ceeadd9d6297bd8e296168_MD5.jpeg)
+
+Now make a file called `~/credentials/tailscale.env` and add this to it:  
+`TS_AUTHKEY=tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx`
+
+Now the `all-containers.sh` script will make a link to that file in the container file automatically if it exists.
+
+You can also do this by hand like so:
+
+```
+cd ~/containers/nextcloud
+ln -s ~/credentials/tailscale.env .
+```
+
+This will allow the container to use this key to create and update its tailscale connection when it starts.
 
 ## Mounted Volumes
 
