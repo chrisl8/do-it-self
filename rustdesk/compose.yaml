@@ -41,7 +41,6 @@ services:
       retries: 3
   ts:
     container_name: rustdesk-ts
-    user: 1023:1023
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

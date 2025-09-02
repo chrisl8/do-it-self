@@ -21,7 +21,6 @@ services:
       # Uptime has a built-in healthcheck
   ts:
     container_name: uptime-ts
-    user: 1028:1028
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

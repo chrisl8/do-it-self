@@ -30,7 +30,6 @@ services:
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: stirling-pdf-ts
-    user: 1027:1027
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

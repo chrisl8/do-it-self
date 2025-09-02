@@ -1,8 +1,6 @@
 services:
   kanboard:
     container_name: kanboard
-    # I haven't figured out how to run this as a non-root user.
-    # user: 1013:1013
     image: kanboard/kanboard
     volumes:
       - /mnt/2000/container-mounts/kanboard/data:/var/www/app/data
@@ -27,7 +25,6 @@ services:
       - homepage.href=${HOME_PAGE_URL}
   ts:
     container_name: kanboard-ts
-    user: 1013:1013
     image: tailscale/tailscale
     env_file: tailscale.env
     environment:

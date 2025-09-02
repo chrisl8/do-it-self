@@ -1,7 +1,6 @@
 services:
   starbound:
     container_name: starbound
-    user: 1026:1026
     build:
       dockerfile: Dockerfile
     restart: no
