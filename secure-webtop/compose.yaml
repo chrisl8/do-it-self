@@ -33,6 +33,13 @@ services:
     depends_on:
       gluetun:
         condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [compute,video,graphics,utility]
   gluetun:
     image: qmcgaw/gluetun
     container_name: gluetun
