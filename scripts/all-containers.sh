@@ -17,6 +17,7 @@ CONTAINER_LIST_FILE=""
 NO_WAIT=false
 UPDATE_GIT_REPOS=false
 GET_UPDATES=false
+NO_FAIL=false
 
 while test $# -gt 0
 do
@@ -49,6 +50,9 @@ do
                   ;;
                 --get-updates)
                   GET_UPDATES=true
+                  ;;
+                --no-fail)
+                  NO_FAIL=true
                   ;;
         esac
         shift
@@ -319,12 +323,16 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
           fi
         fi
+        if [[ ${NO_FAIL} = true ]];then
+          set +e
+        fi
         if [[ ${GET_UPDATES} = true ]];then
           printf "${YELLOW}  Pulling updates and rebuilding...${NC}\n"
           docker compose pull
           docker compose build
         fi
-        docker compose up -d
+        docker compose up -d --wait
+        set -e
         if [[ ${CONTAINER_DIR} = "homepage" ]];then
           # This is my personal hack to get icons the way I want them in homepage.
           docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/* /app/public"
