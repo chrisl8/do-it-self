@@ -62,8 +62,8 @@ services:
       PAPERLESS_TIME_ZONE: America/Chicago
       PAPERLESS_URL: ${HOME_PAGE_URL}
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
-      USERMAP_UID: 1019
-      USERMAP_GID: 1019
+      USERMAP_UID: 1000
+      USERMAP_GID: 1000
     networks:
       - paperless-net
     # Note that papaerless (webserver) has a health check built into the Dockerfile, so no need to add it here.

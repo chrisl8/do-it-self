@@ -3,8 +3,8 @@ services:
     container_name: forgejo
     image: codeberg.org/forgejo/forgejo:12
     environment:
-      - USER_UID=1010
-      - USER_GID=1010
+      - USER_UID=1000
+      - USER_GID=1000
     volumes:
       - /mnt/2000/container-mounts/forgejo/data:/data
       - /etc/timezone:/etc/timezone:ro

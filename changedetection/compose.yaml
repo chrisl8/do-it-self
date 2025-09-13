@@ -3,7 +3,7 @@ services:
   changedetection:
     image: ghcr.io/dgtlmoon/changedetection.io
     container_name: changedetection
-    user: 1005:1005
+    user: 1000:1000
     hostname: changedetection
     volumes:
       - /mnt/2000/container-mounts/changedetection/data:/datastore
@@ -44,7 +44,7 @@ services:
   # RECOMMENDED FOR FETCHING PAGES WITH CHROME
   changedetection_sockpuppetbrowser:
     container_name: changedetection-sockpuppetbrowser
-    user: 1005:1005
+    user: 1000:1000
     hostname: sockpuppetbrowser
     image: dgtlmoon/sockpuppetbrowser
     restart: no

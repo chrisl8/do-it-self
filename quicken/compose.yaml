@@ -2,7 +2,7 @@
 services:
   quicken_server:
     container_name: quicken-server
-    user: 1022:1022
+    user: 1000:1000
     image: docker.io/actualbudget/actual-server
     # environment:
     # Uncomment any of the lines below to set configuration options.

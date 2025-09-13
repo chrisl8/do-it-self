@@ -2,11 +2,10 @@ services:
   homepage:
     image: ghcr.io/gethomepage/homepage
     container_name: homepage
-    user: 1011:1011
+    user: 1000:1000
     # This must be the ID of the Docker group.
     group_add:
       - 985
-      - 1000
     volumes:
       - ./config:/app/config # Make sure your local config directory exists
       - ./images:/app/public/images
@@ -14,7 +13,6 @@ services:
       - ./dashboard-icons:/app/public/dashboard-icons
       - /var/run/docker.sock:/var/run/docker.sock # pass local proxy
       # To allow homepage to show disk space free on all disks I have an empty folder on each disk that I mount here.
-      - /home/chrisl8/for-homepage:/mnt/root
       - /mnt/120/for-homepage:/mnt/120
       - /mnt/250/for-homepage:/mnt/250
       - /mnt/2000/for-homepage:/mnt/2000

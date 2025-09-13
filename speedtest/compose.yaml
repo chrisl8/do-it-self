@@ -8,8 +8,8 @@ services:
       - /mnt/2000/container-mounts/speedtest/config:/config
     environment:
       - DISPLAY_TIMEZONE=America/Chicago
-      - PUID=1025
-      - PGID=1025
+      - PUID=1000
+      - PGID=1000
       - APP_KEY=base64:telXO1fQNhw+TekIMlVtP8JVhLHIFB50f+QDWL2dedc=
       - APP_URL=${HOME_PAGE_URL}
       - DB_CONNECTION=sqlite

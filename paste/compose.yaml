@@ -2,7 +2,7 @@
 services:
   paste:
     container_name: paste
-    user: 1020:1020
+    user: 1000:1000
     image: ghcr.io/tailscale-dev/tclip
     # NOTE that this needs its OWN "auth key" and it is NOT the same as the tailscale OAuth key other containers use.
     # Instead you need a key from here: https://login.tailscale.com/admin/settings/keys

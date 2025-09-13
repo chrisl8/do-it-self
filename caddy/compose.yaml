@@ -1,7 +1,7 @@
 services:
   caddy:
     container_name: caddy
-    user: 1032:1032
+    user: 1000:1000
     image: caddy
     restart: no
     ports:
@@ -25,7 +25,7 @@ services:
       retries: 3
   spacymote:
     container_name: caddy-spacymote
-    user: 1032:1032
+    user: 1000:1000
     build:
       context: ./spacymote
       dockerfile: Dockerfile
@@ -43,7 +43,7 @@ services:
       retries: 3
   witchazzan:
     container_name: caddy-witchazzan
-    user: 1032:1032
+    user: 1000:1000
     build:
       context: ./Witchazzan
       dockerfile: Dockerfile
@@ -63,7 +63,7 @@ services:
       retries: 3
   space-game:
     container_name: caddy-space-game
-    user: 1032:1032
+    user: 1000:1000
     build:
       context: ./space-game
       dockerfile: Dockerfile
