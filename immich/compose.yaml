@@ -17,7 +17,7 @@ services:
     volumes:
       # Do not edit the next line. If you want to change the media storage location on your system, edit the value of UPLOAD_LOCATION in the .env file
       # /mnt/2000/container-mounts/immich/photos
-      - ${UPLOAD_LOCATION}:/usr/src/app/upload
+      - ${UPLOAD_LOCATION}:/data
       - /etc/localtime:/etc/localtime:ro
     # Note them doing here exactly what I say not to, but here is an example of a big project disagreeing.
     env_file:
