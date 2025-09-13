@@ -2,7 +2,7 @@
 services:
   actual_server:
     container_name: actual-server
-    user: 1003:1003
+    user: 1000:1000
     image: docker.io/actualbudget/actual-server
     # environment:
     # Uncomment any of the lines below to set configuration options.

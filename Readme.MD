@@ -54,34 +54,9 @@ The compose files all have my specific mount points in them. You will need to up
 
 ### User
 
-_NOTE: This doesn't work for every container. I have had to "undo" this in some cases to restore reliable operation._
+If a container was designed to easily run as non-root, then I run it as user `1000` which typically is "you", that is, the first user you add to the server. This means things run as "you" which should be safer than root.
 
-One time I had a dumb idea, fueled by the Internet's "don't run as root!" craze. I regret this now.
-
-I attempted once to run each "stack" of services as a user, using the format `stack-name-docker`.
-
-For each stack that is still this way you must make a user, get the UUID, and then use that in the compose file.
-
-Then you also must create the data volume mounts and make the container user the owner of them.
-
-Adding yourself to the container's run-as group is also a good idea so that you can easily edit the files from the host. _Remember that you must log out and back in to apply your new group membership._
-
-I am also made the Tailscale sidecar container run as the same user, meaning that you must also ensure that the container user owns their config files.
-
-Here is a bit of a walkthrough with some helpful one-liners.
-
-```bash
-cd ~/containers/stack-name
-sudo mkdir -p /mnt/2000/container-mounts/$(basename "$PWD")/data
-sudo useradd --no-create-home $(basename "$PWD")-docker
-id $(basename "$PWD")-docker
-sudo usermod -a -G $(basename "$PWD")-docker $USER
-sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker /mnt/2000/container-mounts/$(basename "$PWD")/*
-sudo chmod ug+rX,o-rwx -R /mnt/2000/container-mounts/$(basename "$PWD")/*
-sudo chown -R $(basename "$PWD")-docker:$(basename "$PWD")-docker tailscale-config tailscale-state
-```
-
-_Note that many containers will only start or even run as root. I made some attempt to not do this, but I was only willing to put in so much effort._
+However, if the container was designed to run as root and/or isn't easily configured to run as non-root, then I leave it that way.
 
 My experience is that many many users on Reddit think running anything in a container as root is the end of the world, while most developers who provide containers don't think this matters at all. The disconnect means that unless I am willing to rebuild the containers myself, I will need to run them as the author intended.
 
@@ -323,7 +298,7 @@ I could see myself using them more in the future, especially if I could get invo
 
 One day I thought, "Let's make everything run 'not as root'!". Then I spent a lot of time digging through documentation on every stack I use, trying things, running into a lot of walls and bug and issues. Eventually I got **most** of them to run as non-root. Then they started to fail randomly and I found odd side-effects to this change. Basically running as non-root is non-trivial and brittle when the container author didn't make it easy.
 
-TL;DR: This is a personal setup, I don't have time or patience for this, and I'm not worried about it, but see the section above on "user" for more information about my one time attempt and the fallout that remains.
+TL;DR: This is a personal setup, I don't have time or patience for this, and I'm not worried about it. You do you.
 
 # OS Setup Notes
 

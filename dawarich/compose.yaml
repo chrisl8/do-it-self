@@ -5,7 +5,7 @@ services:
   dawarich_redis:
     image: redis:7.4-alpine
     container_name: dawarich_redis
-    user: 1007:1007
+    user: 1000:1000
     command: redis-server
     networks:
       - dawarich
@@ -23,7 +23,7 @@ services:
     image: postgis/postgis:17-3.5-alpine
     shm_size: 1G
     container_name: dawarich_db
-    user: 1007:1007
+    user: 1000:1000
     volumes:
       - /mnt/2000/container-mounts/dawarich/db_data:/var/lib/postgresql/data
     networks:
@@ -179,7 +179,6 @@ services:
         limits:
           cpus: "0.50" # Limit CPU usage to 50% of one core
           memory: "4G" # Limit memory usage to 4GB
-
   ts:
     container_name: dawarich-ts
     image: tailscale/tailscale

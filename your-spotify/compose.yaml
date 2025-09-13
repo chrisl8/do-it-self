@@ -3,8 +3,8 @@ services:
     container_name: your_spotify
     image: lscr.io/linuxserver/your_spotify
     environment:
-      - PUID=1031
-      - PGID=1031
+      - PUID=1000
+      - PGID=1000
       - TZ=Etc/UTC
       - MONGO_ENDPOINT=mongodb://mongo:27017/your_spotify
       - APP_URL=${APP_URL}
@@ -33,7 +33,7 @@ services:
       - homepage.href=${APP_URL}
   mongo:
     container_name: your_spotify-mongo
-    user: 1031:1031
+    user: 1000:1000
     image: mongo:6
     volumes:
       - /mnt/2000/container-mounts/your-spotify/db:/data/db

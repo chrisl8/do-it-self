@@ -1,7 +1,7 @@
 services:
   minecraft:
     container_name: minecraft
-    user: 1015:1015
+    user: 1000:1000
     build:
       # git clone https://github.com/itzg/docker-minecraft-bedrock-server.git
       context: ./docker-minecraft-bedrock-server

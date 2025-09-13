@@ -1,7 +1,7 @@
 services:
   hbbs:
     container_name: rustdesk-rendezvous_server
-    user: 1023:1023
+    user: 1000:1000
     image: rustdesk/rustdesk-server
     command: hbbs
     volumes:
@@ -21,7 +21,7 @@ services:
       retries: 3
   hbbr:
     container_name: rustdesk-relay_server
-    user: 1023:1023
+    user: 1000:1000
     image: rustdesk/rustdesk-server
     command: hbbr
     volumes:
