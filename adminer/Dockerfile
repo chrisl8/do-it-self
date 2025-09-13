@@ -1,8 +1,15 @@
+# This is based on AdminerEvo at https://github.com/anomaloushuman/AdminerEvo
+# Supposedly Adminer is being maintained again at https://github.com/vrana/adminer but I haven't looked into it yet
+
+# There are a few "official" adminer Docker images, but this has been more reliable for me over time.
+
 FROM php:8.3
 
 RUN apt-get update && apt-get install --no-install-recommends -y libpq-dev git
 
 RUN docker-php-ext-install mysqli pdo pdo_mysql pgsql pdo_pgsql && docker-php-ext-enable pdo_mysql pdo_pgsql
+
+# There are two ways to do this. You can Build from the git main branch. OR You can Pull from release
 
 # Build from main
 # WORKDIR /source
