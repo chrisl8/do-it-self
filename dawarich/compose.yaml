@@ -219,14 +219,14 @@ services:
       dockerfile: Dockerfile
       args:
         # Watch https://github.com/komoot/photon for the latest version
-        PHOTON_VERSION: 0.6.2
+        PHOTON_VERSION: 0.7.3
     volumes:
       - /mnt/250/container-mounts/photon/photon_data:/photon/photon_data
     networks:
       - dawarich
     restart: no
     healthcheck:
-      test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"," || exit 1'
+      test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"" || exit 1'
       start_period: 120s
       start_interval: 5s
       interval: 5m
