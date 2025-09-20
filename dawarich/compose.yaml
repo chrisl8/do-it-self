@@ -76,8 +76,8 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       RAILS_LOG_TO_STDOUT: "true"
       ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
-      PHOTON_API_HOST: ${PHOTON_API_HOST}
-      PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
+      PHOTON_API_HOST: dawarich_photon:2322
+      PHOTON_API_USE_HTTPS: false
       REVERSE_GEOCODING_ENABLED: true
       SELF_HOSTED: true
       STORE_GEODATA: false
@@ -143,8 +143,8 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       RAILS_LOG_TO_STDOUT: "true"
       ENABLE_TELEMETRY: false # More on telemetry: https://dawarich.app/docs/tutorials/telemetry
-      PHOTON_API_HOST: ${PHOTON_API_HOST}
-      PHOTON_API_USE_HTTPS: ${PHOTON_API_USE_HTTPS}
+      PHOTON_API_HOST: dawarich_photon:2322
+      PHOTON_API_USE_HTTPS: false
       REVERSE_GEOCODING_ENABLED: true
       TIME_ZONE: America/Chicago
       SELF_HOSTED: true
@@ -219,7 +219,7 @@ services:
       dockerfile: Dockerfile
       args:
         # Watch https://github.com/komoot/photon for the latest version
-        PHOTON_VERSION: 0.7.3
+        PHOTON_VERSION: 0.7.4
     volumes:
       - /mnt/250/container-mounts/photon/photon_data:/photon/photon_data
     networks:
