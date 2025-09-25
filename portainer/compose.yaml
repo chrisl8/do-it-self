@@ -11,7 +11,6 @@ services:
       - /mnt/2000/container-mounts/portainer/data:/data
     networks:
       - portainer-net
-    restart: no
     labels:
       # For homepage
       - homepage.group=System Monitoring
@@ -56,7 +55,6 @@ services:
       retries: 3
     networks:
       - portainer-net
-    restart: always
     depends_on:
       portainer:
         condition: service_healthy

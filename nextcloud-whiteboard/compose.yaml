@@ -12,7 +12,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
     networks:
       - nextcloud-whiteboard-net
   ts:
@@ -41,7 +40,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
     networks:
       - nextcloud-whiteboard-net
     depends_on:

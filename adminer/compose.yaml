@@ -3,7 +3,6 @@ services:
     container_name: adminer
     build:
       dockerfile: Dockerfile
-    restart: no
     user: 1000:1000
     # Must be host as this is going to connect to a variety of locally exposed databases.
     # There are other ways to do this, but this is what I'm going with for now.

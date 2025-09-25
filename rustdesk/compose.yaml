@@ -11,7 +11,6 @@ services:
     depends_on:
       hbbr:
         condition: service_healthy
-    restart: no
     healthcheck:
       test: ["CMD", "/healthcheck/checkForHbbsProcess"]
       start_period: 120s
@@ -28,7 +27,6 @@ services:
       - /mnt/2000/container-mounts/rustdesk/data:/root
       - ./healthcheck:/healthcheck
     network_mode: service:ts
-    restart: no
     depends_on:
       ts:
         condition: service_healthy
@@ -63,7 +61,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
 # Because using docker host mode
 # Just in case you forgot the ports:
 # 21114 TCP for web console, only available in Pro version

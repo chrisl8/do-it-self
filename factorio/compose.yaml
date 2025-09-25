@@ -18,7 +18,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
   ts:
     container_name: factorio-ts
     image: tailscale/tailscale
@@ -43,7 +42,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
     ports:
       # These ports are exposed here so that players on the LAN can connect to the server without going through Tailscale encryption, which uses valuable CPU resources and causes game latency.
       # These ports are HERE because the server container above is running ON the ts container's network,

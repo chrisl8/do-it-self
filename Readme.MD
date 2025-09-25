@@ -143,6 +143,18 @@ i.e. `ln -s $HOME/credentials/wallabag.env .env`
 Put anything else sensitive such as personal URLs in the same file linked to by `.env`.  
 Put anything generic, even if it is personal preference, in the `compose.yaml` file.
 
+### Restart
+
+The default is `no`, so I never include a `restart` option.
+
+I have had multiple issues caused by Docker trying to start containers after a reboot or after some other failure that put things into a spiral of death.
+
+It works better for me to monitor things and restart them if they go down.
+
+So far I haven't had containers just randomly dying and benefiting from Docker's auto-restart. If that changes I will revisit this.
+
+For now, I want my personal script `all-containers.sh` to always manage the containers and not have Docker doing things automatically.
+
 ## Tailscale
 
 ### Credentials
@@ -157,9 +169,10 @@ TL;DR:
 1. You need a "container" tag, so go to https://login.tailscale.com/admin/acls/visual/tags
 2. Create a Tag called "container"
 3. Go to https://login.tailscale.com/admin/settings/oauth and Generate OAuth client...
-4. Give it a descriptive name, and check the Keys -> Auth Keys -> Write option
-5. Add the "container" tag that you just made.
-6. Create the OAuth Client Key and copy the client key that it gives you that will look something like this:  
+4. Give it a descriptive name
+5. Check the Keys -> Auth Keys -> Write option
+6. Add the "container" tag that you just made.
+7. Create the OAuth Client Key and copy the client key that it gives you that will look something like this:  
    `tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx`
 
 ![OAuth Client Setup](cd6a0328d6ceeadd9d6297bd8e296168_MD5.jpeg)

@@ -26,7 +26,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: no
     networks:
       - actual-net
     labels:
@@ -62,7 +61,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
     networks:
       - actual-net
     depends_on:

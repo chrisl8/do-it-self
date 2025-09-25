@@ -8,7 +8,6 @@ services:
       - TZ=Etc/UTC
     volumes:
       - ./config:/config
-    restart: no
     labels:
       # For homepage
       - homepage.group=Home
@@ -53,7 +52,6 @@ services:
       retries: 3
     networks:
       - the_lounge-net
-    restart: always
     depends_on:
       the_lounge:
         condition: service_healthy

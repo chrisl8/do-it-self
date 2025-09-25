@@ -15,7 +15,6 @@ services:
       - PHP_MEMORY_LIMIT=2048M
     networks:
       - nextcloud-net
-    restart: no
     depends_on:
       db:
         condition: service_healthy
@@ -52,7 +51,6 @@ services:
       - MYSQL_USER=nextcloud
     networks:
       - nextcloud-net
-    restart: no
     # https://mariadb.com/kb/en/using-healthcheck-sh/
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -82,7 +80,6 @@ services:
     container_name: nextcloud-elasticsearch
     # The github repo for the plugin says it only works with version 8, so this may be unwise:
     image: elasticsearch:9.1.0
-    restart: unless-stopped
     # The install script, mentioned above, # https://github.com/nextcloud/vm/blob/main/apps/fulltextsearch.sh recommends
     # some more settings that I left out. If you run into trouble, you can try them.
     environment:
@@ -131,7 +128,6 @@ services:
       retries: 3
     networks:
       - nextcloud-net
-    restart: always
     depends_on:
       nextcloud:
         condition: service_healthy

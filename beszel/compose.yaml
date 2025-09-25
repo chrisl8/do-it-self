@@ -3,7 +3,6 @@ services:
     image: henrygd/beszel
     container_name: beszel
     user: 1000:1000
-    restart: no
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:
@@ -42,7 +41,6 @@ services:
     # This must be the ID of the Docker group.
     group_add:
       - 985
-    restart: no
     # The agent must run as root to get metrics from all docker containers.
     # The agent must use host network mode to access network interface metrics.
     network_mode: host

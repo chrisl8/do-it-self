@@ -7,7 +7,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - uptime-net
-    restart: no
     labels:
       # For homepage
       - homepage.group=System Monitoring
@@ -47,7 +46,6 @@ services:
       retries: 3
     networks:
       - uptime-net
-    restart: always
     depends_on:
       uptime:
         condition: service_healthy

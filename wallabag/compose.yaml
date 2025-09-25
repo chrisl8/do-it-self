@@ -27,7 +27,6 @@ services:
       retries: 3
     networks:
       - wallabag-net
-    restart: no
     labels:
       # For homepage
       - homepage.group=Reading
@@ -63,7 +62,6 @@ services:
       retries: 3
     networks:
       - wallabag-net
-    restart: always
     depends_on:
       wallabag:
         condition: service_healthy

@@ -2,7 +2,6 @@ services:
   vaultwarden:
     image: vaultwarden/server
     container_name: vaultwarden
-    restart: unless-stopped
     environment:
       - DOMAIN=${DOMAIN}
     volumes:
@@ -44,7 +43,6 @@ services:
       retries: 3
     networks:
       - vaultwarden-net
-    restart: always
     depends_on:
       vaultwarden:
         condition: service_healthy

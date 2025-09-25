@@ -2,7 +2,6 @@ services:
   couchdb:
     container_name: obsidian-babel-livesync
     image: couchdb
-    restart: no
     environment:
       - COUCHDB_USER=${COUCHDB_USER}
       - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
@@ -44,7 +43,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
     networks:
       - obsidian-babel-livesync-net
     depends_on:

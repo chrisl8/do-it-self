@@ -10,7 +10,6 @@ services:
       - /mnt/2000/container-mounts/retroarch/config:/config
       - /mnt/22TB/container-mounts/secure-webtop/downloads/mame:/mame:ro
     shm_size: "1gb"
-    restart: unless-stopped
     networks:
       - retroarch-net
     deploy:
@@ -19,7 +18,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [compute,video,graphics,utility]
+              capabilities: [compute, video, graphics, utility]
     labels:
       # For homepage
       - homepage.group=Desktop Apps
@@ -62,7 +61,6 @@ services:
       retries: 3
     networks:
       - retroarch-net
-    restart: unless-stopped
     depends_on:
       retroarch:
         condition: service_healthy

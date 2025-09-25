@@ -10,7 +10,6 @@ services:
       - SUBFOLDER=/ #optional
       - TITLE=LibreWolf #optional
     shm_size: "1gb" #optional
-    restart: unless-stopped
     network_mode: service:gluetun-librewolf
     labels:
       # For homepage
@@ -71,4 +70,3 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always

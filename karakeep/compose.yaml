@@ -2,7 +2,6 @@ services:
   karakeep:
     container_name: karakeep
     image: ghcr.io/karakeep-app/karakeep:release
-    restart: always
     volumes:
       - /mnt/2000/container-mounts/karakeep/data:/data
     networks:
@@ -34,7 +33,6 @@ services:
   karakeep-chrome:
     image: gcr.io/zenika-hub/alpine-chrome:123
     container_name: karakeep-chrome
-    restart: always
     command:
       - --no-sandbox
       - --disable-gpu
@@ -58,7 +56,6 @@ services:
   karakeep-meilisearch:
     image: getmeili/meilisearch:v1.13.3
     container_name: karakeep-meilisearch
-    restart: always
     environment:
       - MEILI_NO_ANALYTICS=true
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
@@ -99,7 +96,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
     networks:
       - karakeep-net
     depends_on:

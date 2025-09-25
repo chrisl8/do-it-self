@@ -3,7 +3,6 @@ services:
     container_name: caddy
     user: 1000:1000
     image: caddy
-    restart: no
     ports:
       - "443:443"
     volumes:
@@ -29,7 +28,6 @@ services:
     build:
       context: ./spacymote
       dockerfile: Dockerfile
-    restart: no
     healthcheck:
       test:
         [
@@ -47,7 +45,6 @@ services:
     build:
       context: ./Witchazzan
       dockerfile: Dockerfile
-    restart: no
     volumes:
       - /mnt/2000/container-mounts/caddy/witchazzan/persistentData:/app/persistentData
     healthcheck:
@@ -67,7 +64,6 @@ services:
     build:
       context: ./space-game
       dockerfile: Dockerfile
-    restart: no
     volumes:
       - /mnt/2000/container-mounts/caddy/space-game:/space-game
       - ./healthcheck:/healthcheck
@@ -83,7 +79,6 @@ services:
   ghost-for-jeriblog:
     container_name: caddy-ghost-for-jeriblog
     image: ghost:5
-    restart: no
     environment:
       # see https://ghost.org/docs/config/#configuration-options
       database__client: mysql
@@ -118,7 +113,6 @@ services:
   ghost-db-for-jeriblog:
     container_name: caddy-ghost-db-for-jeriblog
     image: mysql:8
-    restart: no
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:

@@ -22,7 +22,6 @@ services:
       - DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT=true
     labels:
       - "diun.enable=true"
-    restart: no
     healthcheck:
       test: diun image list
       start_period: 120s
