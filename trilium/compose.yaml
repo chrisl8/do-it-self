@@ -8,7 +8,6 @@ services:
     # Using `latest` may cause unintended updates to the container
     image: triliumnext/notes:latest
     # Restart the container unless it was stopped by the user
-    restart: unless-stopped
     environment:
       - TRILIUM_DATA_DIR=/home/node/trilium-data
     volumes:
@@ -52,7 +51,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
     networks:
       - trilium-net
     depends_on:

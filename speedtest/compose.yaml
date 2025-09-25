@@ -15,7 +15,6 @@ services:
       - DB_CONNECTION=sqlite
       - SPEEDTEST_SCHEDULE="35 3,15 * * *"
       - PUBLIC_DASHBOARD=true
-    restart: no
     labels:
       # For homepage
       - homepage.group=System Monitoring

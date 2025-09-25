@@ -11,7 +11,6 @@ services:
       - /etc/localtime:/etc/localtime:ro
     networks:
       - forgejo-net
-    restart: no
     healthcheck:
       test: 'curl --fail http://localhost:3000/api/healthz 2>/dev/null | grep "\"status\": \"pass\"," | wc -l | [ "`cat`" = "3" ] || exit 1'
       start_period: 120s
@@ -54,7 +53,6 @@ services:
       retries: 3
     networks:
       - forgejo-net
-    restart: no
     depends_on:
       forgejo:
         condition: service_healthy

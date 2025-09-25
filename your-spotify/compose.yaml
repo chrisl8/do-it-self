@@ -14,7 +14,6 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
-    restart: no
     healthcheck:
       test: curl --fail http://localhost/api/ | grep "Hello" || exit 1
       start_period: 120s
@@ -37,7 +36,6 @@ services:
     image: mongo:6
     volumes:
       - /mnt/2000/container-mounts/your-spotify/db:/data/db
-    restart: no
     healthcheck:
       test: echo 'db.runCommand({find:"app_db_name.devUser"}).ok' | mongosh --host localhost --quiet | grep -q 1
       start_period: 120s
@@ -75,7 +73,6 @@ services:
       retries: 3
     networks:
       - your_spotify-net
-    restart: always
     depends_on:
       your_spotify:
         condition: service_healthy

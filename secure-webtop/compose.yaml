@@ -14,7 +14,6 @@ services:
       - SUBFOLDER=/ #optional
       - TITLE=Webtop #optional
     shm_size: "1gb" #optional
-    restart: unless-stopped
     network_mode: service:gluetun
     labels:
       # For homepage
@@ -39,7 +38,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [compute,video,graphics,utility]
+              capabilities: [compute, video, graphics, utility]
   gluetun:
     image: qmcgaw/gluetun
     container_name: gluetun
@@ -83,4 +82,3 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always

@@ -30,7 +30,6 @@ services:
   webserver:
     container_name: paperless
     image: ghcr.io/paperless-ngx/paperless-ngx
-    restart: no
     depends_on:
       db:
         condition: service_healthy
@@ -80,7 +79,6 @@ services:
   broker:
     container_name: paperless-broker
     image: docker.io/library/redis:7
-    restart: no
     volumes:
       - redisdata:/data
     # https://stackoverflow.com/questions/67904609/how-do-you-perform-a-healthcheck-in-the-redis-docker-image
@@ -96,7 +94,6 @@ services:
   db:
     container_name: paperless-db
     image: docker.io/library/postgres:16
-    restart: no
     volumes:
       - /mnt/2000/container-mounts/paperless-ngx/database:/var/lib/postgresql/data
     environment:
@@ -115,7 +112,6 @@ services:
   gotenberg:
     container_name: paperless-gotenberg
     image: docker.io/gotenberg/gotenberg:8.7
-    restart: no
     networks:
       - paperless-net
     # The gotenberg chromium route is used to convert .eml files. We do not
@@ -137,7 +133,6 @@ services:
   tika:
     container_name: paperless-tika
     image: docker.io/apache/tika
-    restart: no
     networks:
       - paperless-net
     healthcheck:
@@ -175,7 +170,6 @@ services:
       retries: 3
     networks:
       - paperless-net
-    restart: always
     depends_on:
       webserver:
         condition: service_healthy

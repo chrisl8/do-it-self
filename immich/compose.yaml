@@ -27,7 +27,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: no
     healthcheck:
       disable: false
     networks:
@@ -56,7 +55,6 @@ services:
       - model-cache:/cache
     env_file:
       - .env
-    restart: no
     healthcheck:
       disable: false
     networks:
@@ -69,7 +67,6 @@ services:
     image: docker.io/valkey/valkey:8-bookworm
     healthcheck:
       test: redis-cli ping || exit 1
-    restart: no
     networks:
       - immich-net
   database:
@@ -85,7 +82,6 @@ services:
     volumes:
       # Do not edit the next line. If you want to change the database storage location on your system, edit the value of DB_DATA_LOCATION in the .env file
       - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
-    restart: no
     networks:
       - immich-net
   ts:
@@ -116,7 +112,6 @@ services:
       retries: 3
     networks:
       - immich-net
-    restart: always
     depends_on:
       immich-machine-learning:
         condition: service_healthy

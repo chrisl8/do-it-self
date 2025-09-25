@@ -15,7 +15,6 @@ services:
       retries: 3
     networks:
       - kanboard-net
-    restart: no
     labels:
       # For homepage
       - homepage.group=KanBoard
@@ -51,7 +50,6 @@ services:
       retries: 3
     networks:
       - kanboard-net
-    restart: always
     depends_on:
       kanboard:
         condition: service_healthy

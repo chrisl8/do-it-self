@@ -11,7 +11,6 @@ services:
       - PLAYWRIGHT_DRIVER_URL=ws://sockpuppetbrowser:3000
       #        Hides the `Referer` header so that monitored websites can't see the changedetection.io hostname.
       - HIDE_REFERER=true
-    restart: no
     networks:
       - changedetection-net
     # https://github.com/dgtlmoon/changedetection.io/issues/1411#issuecomment-2274249829
@@ -47,7 +46,6 @@ services:
     user: 1000:1000
     hostname: sockpuppetbrowser
     image: dgtlmoon/sockpuppetbrowser
-    restart: no
     environment:
       - SCREEN_WIDTH=1920
       - SCREEN_HEIGHT=1024
@@ -91,7 +89,6 @@ services:
       retries: 3
     networks:
       - changedetection-net
-    restart: always
     depends_on:
       changedetection:
         condition: service_healthy

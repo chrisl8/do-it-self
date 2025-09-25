@@ -17,7 +17,6 @@ services:
       - /mnt/250/for-homepage:/mnt/250
       - /mnt/2000/for-homepage:/mnt/2000
       - /mnt/22TB/for-homepage:/mnt/22TB
-    restart: no
     networks:
       - homepage-net
     environment:
@@ -51,7 +50,6 @@ services:
       retries: 3
     networks:
       - homepage-net
-    restart: no
     depends_on:
       homepage:
         condition: service_healthy

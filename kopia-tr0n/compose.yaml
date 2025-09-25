@@ -2,7 +2,6 @@ services:
   kopia-tr0n:
     image: kopia/kopia
     container_name: kopia-tr0n
-    restart: always
     # Setup the server that provides the web gui
     command:
       - server
@@ -65,4 +64,3 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-    restart: always
