@@ -1,0 +1,25 @@
+services:
+  pure-ftpd:
+    container_name: pure-ftpd
+    image: stilliard/pure-ftpd
+    volumes:
+      - /mnt/2000/container-mounts/pure-ftpd/data:/data
+      - /mnt/2000/container-mounts/pure-ftpd/ftp:/etc/ssl/private
+    # network_mode: service:ts
+    environment:
+      FTP_USER_NAME: ${FTP_USER_NAME}
+      FTP_USER_PASS: ${FTP_USER_PASS}
+      FTP_USER_HOME: "/data"
+      FTP_USER_UID: 1000
+      FTP_USER_GID: 1000
+    ports:
+      - "21:21"
+      - "30000-30009:30000-30009"
+    healthcheck:
+      # Enable health check for the instance
+      test: ["CMD-SHELL", "pidof pure-ftpd"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
