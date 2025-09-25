@@ -1,29 +1,28 @@
 # https://runtimeterror.dev/tsidp-effortless-sso-tailnet/
 
 services:
-  idp:
-    image: tailscale/tsidp:unstable
-    container_name: idp
+  tsidp:
+    build:
+      dockerfile: Dockerfile
+    container_name: tsidp
     env_file:
       - tailscale.env
       - .env
     environment:
-      - TS_HOSTNAME=idp
+      - TS_HOSTNAME=tsidp
       - TAILSCALE_USE_WIP_CODE=1
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
-      - TS_ENABLE_HEALTH_CHECK=true
     volumes:
-      - ./tailscale-state:/root/.config/tsnet-tsidp
-      - /mnt/2000/container-mounts/idp/tsidp:/var/lib/tsidp
+      - /mnt/2000/container-mounts/tsidp/tsidp:/var/lib/tsidp
     labels:
       # For homepage
       - homepage.group=Tools
-      - homepage.name=Tailscale OIDC IdP (Old)
+      - homepage.name=Tailscale OIDC IdP (New)
       - homepage.weight=40
       - homepage.icon=/dashboard-icons/svg/tailscale.svg
       - homepage.href=${HOME_PAGE_URL}
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f /usr/local/bin/tsidp"]
+      test: ["CMD-SHELL", "pgrep tsidp-server"]
       start_period: 120s
       start_interval: 5s
       interval: 5m
