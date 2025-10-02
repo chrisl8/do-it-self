@@ -2,8 +2,10 @@
 
 services:
   tsidp:
-    build:
-      dockerfile: Dockerfile
+    image: ghcr.io/tailscale/tsidp
+    # build:
+    #   context: ./tsidp
+    #   dockerfile: Dockerfile
     container_name: tsidp
     env_file:
       - tailscale.env
@@ -12,8 +14,9 @@ services:
       - TS_HOSTNAME=tsidp
       - TAILSCALE_USE_WIP_CODE=1
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_STATE_DIR=/data
     volumes:
-      - /mnt/2000/container-mounts/tsidp/tsidp:/var/lib/tsidp
+      - /mnt/2000/container-mounts/tsidp/tsidp:/data
     labels:
       # For homepage
       - homepage.group=Tools
