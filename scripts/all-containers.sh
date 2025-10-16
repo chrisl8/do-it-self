@@ -273,6 +273,11 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         # If the container came from a list of containers to process, we need to remove it from the file so we don't try to process it again.
         if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
           sed -i "/^${CONTAINER_DIR}\$/d" "${CONTAINER_LIST_FILE}"
+          # If the file is empty, delete it
+          if [[ ! -s "$CONTAINER_DIR" ]]; then
+              echo "$CONTAINER_DIR file is empty, deleting..."
+              rm -rf "$CONTAINER_DIR"
+          fi
         fi
 
       fi
