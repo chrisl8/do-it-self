@@ -28,9 +28,16 @@ FILE_PATH="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
 echo "Using file path: $FILE_PATH"
 
 # Check if the pendingContainerUpdates.txt file exists
-if [ ! -f "$FILE_PATH" ]; then
+if [[ ! -f "$FILE_PATH" ]]; then
     echo "$FILE_PATH file does not exist, exiting..."
     exit 1
+fi
+
+# If the file is empty, exit
+if [[ ! -s "$FILE_PATH" ]]; then
+    echo "$FILE_PATH file is empty, exiting..."
+    rm -rf "$FILE_PATH"
+    exit 0
 fi
 
 "/home/$USER/containers/scripts/all-containers.sh" --update-git-repos --get-updates --sleep 1 --stop --start --container-list "$FILE_PATH"
