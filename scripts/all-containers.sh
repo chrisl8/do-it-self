@@ -214,7 +214,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     if [[ ${STOP_ACTION} = true ]];then
       # Run a pre-down health check to update the time out to reduce the noise of early failures
       if [[ ${START_ACTION} = true && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
-        "${HOME}/containers/scripts/system-health-check.sh --run-health-check"
+        "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
       fi
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
       docker compose down
@@ -277,10 +277,10 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         # If the container came from a list of containers to process, we need to remove it from the file so we don't try to process it again.
         if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
           sed -i "/^${CONTAINER_DIR}\$/d" "${CONTAINER_LIST_FILE}"
-          # If the file is empty, delete it
-          if [[ ! -s "$CONTAINER_DIR" ]]; then
-              echo "$CONTAINER_DIR file is empty, deleting..."
-              rm -rf "$CONTAINER_DIR"
+          # If the container list file is empty, delete it
+          if [[ ! -s "$CONTAINER_LIST_FILE" ]]; then
+              echo "$CONTAINER_LIST_FILE file is empty, deleting..."
+              rm -rf "$CONTAINER_LIST_FILE"
           fi
         fi
       fi
@@ -319,5 +319,5 @@ fi
 
 # Run my check script to go ahead and let everyone know we are back up.
 if [[ ${START_ACTION} = true && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
-  "${HOME}/containers/scripts/system-health-check.sh --run-health-check"
+  "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
 fi
