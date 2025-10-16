@@ -212,6 +212,10 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     fi
     cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
     if [[ ${STOP_ACTION} = true ]];then
+      # Run a pre-down health check to update the time out to reduce the noise of early failures
+      if [[ ${START_ACTION} = true && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
+        "${HOME}/containers/scripts/system-health-check.sh --run-health-check"
+      fi
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
       docker compose down
     fi
@@ -279,7 +283,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
               rm -rf "$CONTAINER_DIR"
           fi
         fi
-
       fi
     fi
   else
@@ -316,5 +319,5 @@ fi
 
 # Run my check script to go ahead and let everyone know we are back up.
 if [[ ${START_ACTION} = true && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
-  "${HOME}/containers/scripts/system-health-check.sh"
+  "${HOME}/containers/scripts/system-health-check.sh --run-health-check"
 fi
