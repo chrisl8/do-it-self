@@ -6,10 +6,11 @@ services:
     image: ghcr.io/tailscale-dev/tclip
     # NOTE that this needs its OWN "auth key" and it is NOT the same as the tailscale OAuth key other containers use.
     # Instead you need a key from here: https://login.tailscale.com/admin/settings/keys
+    env_file:
+      - tailscale.env
+      - paste.env
     environment:
       - DATA_DIR=/data
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - HOME_PAGE_URL=${HOME_PAGE_URL}
     volumes:
       - /mnt/2000/container-mounts/paste/data:/data
       - ./healthcheck:/healthcheck
