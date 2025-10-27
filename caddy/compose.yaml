@@ -20,8 +20,8 @@ services:
       start_period: 120s
       start_interval: 5s
       interval: 5m
-      timeout: 5s
-      retries: 3
+      timeout: 30s
+      retries: 5
   spacymote:
     container_name: caddy-spacymote
     user: 1000:1000
@@ -37,8 +37,8 @@ services:
       start_period: 120s
       start_interval: 5s
       interval: 5m
-      timeout: 5s
-      retries: 3
+      timeout: 30s
+      retries: 5
   witchazzan:
     container_name: caddy-witchazzan
     user: 1000:1000
@@ -56,8 +56,8 @@ services:
       start_period: 120s
       start_interval: 5s
       interval: 5m
-      timeout: 5s
-      retries: 3
+      timeout: 30s
+      retries: 5
   space-game:
     container_name: caddy-space-game
     user: 1000:1000
@@ -74,8 +74,8 @@ services:
       start_period: 120s
       start_interval: 5s
       interval: 5m
-      timeout: 5s
-      retries: 3
+      timeout: 30s
+      retries: 5
   ghost-for-jeriblog:
     container_name: caddy-ghost-for-jeriblog
     image: ghost:5
@@ -108,7 +108,7 @@ services:
       start_period: 120s
       start_interval: 5s
       interval: 5m
-      timeout: 5s
+      timeout: 25s
       retries: 3
   ghost-db-for-jeriblog:
     container_name: caddy-ghost-db-for-jeriblog
@@ -130,5 +130,5 @@ services:
       start_period: 120s
       start_interval: 5s
       interval: 5m
-      timeout: 5s
-      retries: 3
+      timeout: 30s
+      retries: 5
