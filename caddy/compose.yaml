@@ -76,6 +76,24 @@ services:
       interval: 5m
       timeout: 30s
       retries: 5
+  crater-manipulator:
+    container_name: caddy-crater-manipulator
+    user: 1000:1000
+    build:
+      context: ./crater-manipulator
+      dockerfile: Dockerfile
+    volumes:
+      - /mnt/2000/container-mounts/caddy/crater-manipulator:/crater-manipulator
+      - ./healthcheck:/healthcheck
+    environment:
+      - HOME=/crater-manipulator
+    healthcheck:
+      test: ["CMD", "/healthcheck/checkForCraterManipulatorProcess"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 30s
+      retries: 5
   ghost-for-jeriblog:
     container_name: caddy-ghost-for-jeriblog
     image: ghost:5
