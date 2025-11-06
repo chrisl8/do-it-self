@@ -32,7 +32,7 @@ services:
       # For homepage
       - homepage.group=My Stuff
       - homepage.name=Actual
-      - homepage.weight=60
+      - homepage.weight=70
       - homepage.icon=/dashboard-icons/svg/actual-budget.svg # https://github.com/homarr-labs/dashboard-icons/
       - homepage.href=${HOME_PAGE_URL}
   ts:
