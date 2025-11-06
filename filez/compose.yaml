@@ -1,0 +1,57 @@
+# https://github.com/prasathmani/tinyfilemanager
+services:
+  filez:
+    container_name: filez
+    image: tinyfilemanager/tinyfilemanager:master
+    volumes:
+      - /mnt/22TB/container-mounts/filez/data:/var/www/html/data
+      - ./config.php:/var/www/html/config.php:ro
+    healthcheck:
+      test: curl --fail http://localhost/ || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - filez-net
+    labels:
+      # For homepage
+      - homepage.group=My Stuff
+      - homepage.name=Filez
+      - homepage.weight=40
+      - homepage.icon=/dashboard-icons/svg/homebox.svg #
+      - homepage.href=${HOME_PAGE_URL}
+  ts:
+    container_name: filez-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TS_HOSTNAME=filez
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - filez-net
+    depends_on:
+      filez:
+        condition: service_healthy
+networks:
+  filez-net:
