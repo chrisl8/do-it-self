@@ -7,6 +7,10 @@ services:
     image: codercom/code-server
     volumes:
       - /mnt/2000/container-mounts/code/home:/home/coder
+    environment:
+      # Executable scripts placed in this folder will run when the container starts.
+      # They can be used for setting up dependencies and such that cannot "just live in $HOME"
+      - ENTRYPOINTD=/home/coder/code-entrypoint-scripts
     healthcheck:
       test: curl --fail http://localhost:8080/ || exit 1
       start_period: 120s
