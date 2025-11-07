@@ -94,6 +94,24 @@ services:
       interval: 5m
       timeout: 30s
       retries: 5
+  geomyidae:
+    container_name: caddy-geomyidae
+    user: 1000:1000
+    build:
+      context: ./geomyidae
+      dockerfile: Dockerfile
+    volumes:
+      - /mnt/2000/container-mounts/caddy/geomyidae:/geomyidae
+      - ./healthcheck:/healthcheck
+    environment:
+      - HOME=/geomyidae
+    healthcheck:
+      test: ["CMD", "/healthcheck/checkForGeomyidaeProcess"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 30s
+      retries: 5
   ghost-for-jeriblog:
     container_name: caddy-ghost-for-jeriblog
     image: ghost:5
