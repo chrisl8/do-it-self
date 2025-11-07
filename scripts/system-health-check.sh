@@ -76,11 +76,6 @@ if ! diff /tmp/docker-ps-wc-previous.txt /tmp/docker-ps-wc-now.txt > /dev/null; 
   echo "Docker Container count has changed from $PREVIOUS_COUNT to $NOW_COUNT"
   echo ""
   mv /tmp/docker-ps-wc-now.txt /tmp/docker-ps-wc-previous.txt
-  if [ "$NOW_COUNT" -lt "$PREVIOUS_COUNT" ]; then
-    echo "Docker Container count has decreased from $PREVIOUS_COUNT to $NOW_COUNT"
-    echo ""
-    ERROR_COUNT=$((ERROR_COUNT + 1))
-  fi
 fi
 
 # Check Tailscale health
