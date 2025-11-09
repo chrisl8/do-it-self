@@ -1,1 +1,4 @@
-/home/chrisl8/credentials/diun.yml
+notif:
+  script:
+    cmd: "/script/diunUpdate.sh"
+    dir: "/script"
