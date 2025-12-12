@@ -39,8 +39,9 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      - VPN_SERVICE_PROVIDER=mullvad
-      - VPN_TYPE=wireguard
+      # https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=${VPN_TYPE}
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY} # Get this from the downloaded file NOT the webpage
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES} # Get this from the downloaded file too
       - SERVER_COUNTRIES=${SERVER_COUNTRIES}
