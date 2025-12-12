@@ -1,0 +1,360 @@
+services:
+  gluetun:
+    # https://github.com/qdm12/gluetun-wiki
+    image: qmcgaw/gluetun
+    container_name: recon-gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      # https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
+      - HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE='{"auth":"none"}'
+      # https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=${VPN_TYPE}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY} # Get this from the downloaded file NOT the webpage
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8085/api/v2/app/setPreferences 2>&1'
+      - VPN_PORT_FORWARDING_DOWN_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo"}" http://127.0.0.1:8085/api/v2/app/setPreferences 2>&1'
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Gluetun VPN
+      - homepage.icon=/dashboard-icons/svg/gluetun.svg
+      - homepage.weight=10
+      - homepage.showstats=true
+      # https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
+      - homepage.widget.type=customapi
+      - homepage.widget.refreshInterval=120000
+      - homepage.widget.url=http://${HOMEPAGE_URL}:8000/v1/vpn/status
+      - homepage.widget.mappings[0].label=Status
+      - homepage.widget.mappings[0].field=status
+    restart: unless-stopped
+  ts:
+    container_name: recon-ts
+    image: tailscale/tailscale
+    env_file: tailscale.env
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - TS_HOSTNAME=recon
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    restart: unless-stopped
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+  flaresolverr:
+    # https://github.com/FlareSolverr/FlareSolverr
+    # DockerHub mirror flaresolverr/flaresolverr
+    image: ghcr.io/flaresolverr/flaresolverr
+    container_name: recon-flaresolverr
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FILE=${LOG_FILE:-none}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=Europe/London
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr
+    container_name: recon-prowlarr
+    volumes:
+      - /mnt/2000/container-mounts/recon/prowlarr/config:/config
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Prowlarr
+      - homepage.weight=30
+      - homepage.icon=/dashboard-icons/svg/prowlarr.svg
+      - homepage.showstats=true
+      - homepage.href=http://${HOMEPAGE_URL}:9696/
+      - homepage.description=The Ultimate Indexer Manager.
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent
+    container_name: recon-qbittorrent
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+      - WEBUI_PORT=8085
+      - TORRENTING_PORT=6881
+    volumes:
+      - /mnt/2000/container-mounts/recon/qbittorrent/config:/config
+      - /mnt/22TB/container-mounts/recon/data/downloads/torrent:/downloads
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    labels:
+      - homepage.group=Recon
+      - homepage.name=qBittorrent
+      - homepage.weight=20
+      - homepage.icon=/dashboard-icons/svg/qbittorrent.svg
+      - homepage.href=http://${HOMEPAGE_URL}:8085/
+      - homepage.description=an open-source software alternative to µTorrent.
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  sonarr:
+    image: lscr.io/linuxserver/sonarr
+    volumes:
+      - /mnt/2000/container-mounts/recon/sonarr/config:/config
+      - /mnt/22TB/container-mounts/recon/data/media/series:/tv
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    container_name: recon-sonarr
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Sonarr
+      - homepage.weight=40
+      - homepage.icon=/dashboard-icons/svg/sonarr.svg
+      - homepage.showstats=true
+      - homepage.href=http://${HOMEPAGE_URL}:8989/
+      - homepage.description=Internet PVR for Usenet and Torrents.
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  radarr:
+    image: lscr.io/linuxserver/radarr
+    container_name: recon-radarr
+    volumes:
+      - /mnt/2000/container-mounts/recon/radarr/config:/config
+      - /mnt/22TB/container-mounts/recon/data/media/movies:/data
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Radarr
+      - homepage.weight=50
+      - homepage.icon=/dashboard-icons/svg/radarr.svg
+      - homepage.showstats=true
+      - homepage.href=http://${HOMEPAGE_URL}:7878/
+      - homepage.description=See all your upcoming movies in one convenient location.
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  lidarr:
+    image: lscr.io/linuxserver/lidarr
+    container_name: recon-lidarr
+    volumes:
+      - /mnt/2000/container-mounts/recon/lidarr/config:/config
+      - /mnt/22TB/container-mounts/recon/data/media/music:/music
+      - /mnt/22TB/container-mounts/recon/data/downloads/music:/downloads
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Lidarr
+      - homepage.weight=60
+      - homepage.icon=/dashboard-icons/svg/lidarr.svg
+      - homepage.showstats=true
+      - homepage.href=http://${HOMEPAGE_URL}:8686/
+      - homepage.description= Music collection manager for Usenet and BitTorrent users.
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  mylar3:
+    image: lscr.io/linuxserver/mylar3
+    container_name: recon-mylar3
+    volumes:
+      - /mnt/2000/container-mounts/recon/mylar3/config:/config
+      - /mnt/22TB/container-mounts/recon/data/media/comics:/comics
+      - /mnt/22TB/container-mounts/recon/data/downloads/comics:/downloads
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Mylar
+      - homepage.weight=70
+      - homepage.icon=/dashboard-icons/png/mylar.png
+      - homepage.href=http://${HOMEPAGE_URL}:8090/
+      - homepage.description=Comic Book downloader
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian
+    container_name: recon-lazylibrarian
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+      - DOCKER_MODS=linuxserver/mods:universal-calibre|linuxserver/mods:lazylibrarian-ffmpeg #optional
+    volumes:
+      - /mnt/2000/container-mounts/recon/lazylibrarian/config:/config
+      - /mnt/22TB/container-mounts/recon/data/downloads/ebooks:/downloads
+      - /mnt/22TB/container-mounts/recon/data/media/ebooks:/books
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    labels:
+      - homepage.group=Recon
+      - homepage.name=LazyLibrarian
+      - homepage.weight=80
+      - homepage.icon=/dashboard-icons/png/lazylibrarian.png
+      - homepage.showstats=true
+      - homepage.href=http://${HOMEPAGE_URL}:5299/
+      - homepage.description=LazyLibrarian is a SickBeard, CouchPotato, Headphones-like application for ebooks, audiobooks and magazines
+    restart: unless-stopped
+    healthcheck:
+      test: curl -s ip.me | grep -v "104.54" || exit 1
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+  pinchflat:
+    image: ghcr.io/kieraneglin/pinchflat
+    container_name: recon-pinchflat
+    volumes:
+      - /mnt/2000/container-mounts/recon/pinchflat/config:/config
+      - /mnt/22TB/container-mounts/recon/data/downloads/youtube:/downloads
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Pinchflat
+      - homepage.weight=90
+      - homepage.icon=/dashboard-icons/png/pinchflat.png
+      - homepage.href=http://${HOMEPAGE_URL}:8945/
+      - homepage.description=Your next YouTube media manager
+    restart: unless-stopped
+    depends_on:
+      ts:
+        condition: service_healthy
+    network_mode: "service:gluetun"
