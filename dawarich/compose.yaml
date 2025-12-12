@@ -42,7 +42,7 @@ services:
     ports:
       - 5432:5432
   dawarich_app:
-    image: freikin/dawarich:latest
+    image: freikin/dawarich
     container_name: dawarich_app
     volumes:
       - /mnt/2000/container-mounts/dawarich/public:/var/app/public
@@ -105,7 +105,7 @@ services:
       - homepage.icon=/dashboard-icons/svg/dawarich.svg
       - homepage.href=${HOME_PAGE_URL}
   dawarich_sidekiq:
-    image: freikin/dawarich:latest
+    image: freikin/dawarich
     container_name: dawarich_sidekiq
     volumes:
       - /mnt/2000/container-mounts/dawarich/public:/var/app/public
