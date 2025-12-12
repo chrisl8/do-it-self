@@ -1,7 +1,7 @@
 services:
   stirling-pdf:
     container_name: stirling-pdf
-    image: stirlingtools/stirling-pdf
+    image: stirlingtools/stirling-pdf:V2-Beta
     volumes:
       - /mnt/2000/container-mounts/stirling-pdf/tessdata:/usr/share/tessdata #Required for extra OCR languages
       - /mnt/2000/container-mounts/stirling-pdf/configs:/configs
