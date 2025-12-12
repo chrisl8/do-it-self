@@ -1,6 +1,6 @@
 services:
   pihole:
-    image: pihole/pihole:latest
+    image: pihole/pihole
     container_name: pihole
     # networks:
     #   pihole:
@@ -34,7 +34,7 @@ services:
       - /mnt/2000/container-mounts/pihole/dnsmasq:/etc/dnsmasq.d
     restart: always
   cloudflared:
-    image: crazymax/cloudflared:latest
+    image: crazymax/cloudflared
     container_name: cloudflared
     # networks:
     #   pihole:

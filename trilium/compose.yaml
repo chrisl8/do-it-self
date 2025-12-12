@@ -6,7 +6,7 @@ services:
     container_name: trilium
     # Optionally, replace `latest` with a version tag like `v0.90.3`
     # Using `latest` may cause unintended updates to the container
-    image: triliumnext/notes:latest
+    image: triliumnext/notes
     # Restart the container unless it was stopped by the user
     environment:
       - TRILIUM_DATA_DIR=/home/node/trilium-data

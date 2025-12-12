@@ -1,6 +1,6 @@
 services:
   the_lounge:
-    image: lscr.io/linuxserver/thelounge:latest
+    image: lscr.io/linuxserver/thelounge
     container_name: the_lounge
     environment:
       - PUID=1000

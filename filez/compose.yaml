@@ -2,7 +2,7 @@
 services:
   filez:
     container_name: filez
-    image: copyparty/ac:latest
+    image: copyparty/ac
     user: 1000:1000
     volumes:
       - /mnt/22TB/container-mounts/filez/data:/data/root
