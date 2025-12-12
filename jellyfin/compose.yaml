@@ -12,6 +12,7 @@ services:
       - /mnt/2000/container-mounts/jellyfin/movies:/media/movies
       - /mnt/22TB/container-mounts/secure-webtop/downloads:/media/downloads
       - /mnt/2000/container-mounts/jellyfin/audiobooks:/media/audiobooks
+      - /mnt/22TB/container-mounts/recon/data/media:/media/recon
     runtime: nvidia
     ports:
       - 8096:8096
@@ -58,6 +59,7 @@ services:
     cap_add:
       - net_admin
       - sys_module
+    restart: unless-stopped
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
