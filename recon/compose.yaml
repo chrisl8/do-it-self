@@ -3,6 +3,8 @@ services:
     # https://github.com/qdm12/gluetun-wiki
     image: qmcgaw/gluetun
     container_name: recon-gluetun
+    volumes:
+      - /mnt/2000/container-mounts/recon/gluetun:/gluetun
     cap_add:
       - NET_ADMIN
     devices:
@@ -140,6 +142,12 @@ services:
       - homepage.icon=/dashboard-icons/svg/qbittorrent.svg
       - homepage.href=http://${HOMEPAGE_URL}:8085/
       - homepage.description=an open-source software alternative to µTorrent.
+      # https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
+      - homepage.widget.type=customapi
+      - homepage.widget.refreshInterval=120000
+      - homepage.widget.url=http://${HOMEPAGE_URL}:8000/v1/portforward
+      - homepage.widget.mappings[0].label=VPN Port
+      - homepage.widget.mappings[0].field=port
     restart: unless-stopped
     healthcheck:
       test: curl -s ip.me | grep -v "104.54" || exit 1
