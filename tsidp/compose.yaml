@@ -1,4 +1,5 @@
 # https://runtimeterror.dev/tsidp-effortless-sso-tailnet/
+# https://github.com/tailscale/tsidp
 
 services:
   tsidp:
