@@ -255,7 +255,22 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           docker compose pull
           docker compose build
         fi
-        docker compose up -d --wait
+
+        # IF the following are true, we will run this via the 1Password CLI
+        # 0. The 1password CLI is installed
+        # 1. The user's home directory contains a credentials/1password-connect.env file
+        # 2. The 1password container is already running (it should start first)
+        # 3. There is a .env file link in the container folder
+        # 4. The .env file contains at least one entry that starts with "op://"
+        if [[ -x "$(command -v op)" ]] && [[ "$(docker ps --filter "name=1password-connect-api" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/1password-connect.env" ]] && [[ -f "${SCRIPT_DIR}/${CONTAINER_DIR}/.env" ]] && grep -q "op://" "${SCRIPT_DIR}/${CONTAINER_DIR}/.env"; then
+          printf "${YELLOW}  Resolving .env entries via 1Password CLI...${NC}\n"
+          export OP_CONNECT_HOST="http://127.0.0.1:9980/"
+          OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
+          export OP_CONNECT_TOKEN
+          /usr/bin/op run --env-file .env -- docker compose up -d --wait
+        else
+          docker compose up -d --wait
+        fi
         set -e
         if [[ ${CONTAINER_DIR} = "homepage" ]];then
           # This is my personal hack to get icons the way I want them in homepage.

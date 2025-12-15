@@ -1,0 +1,38 @@
+# https://github.com/1Password/connect/blob/main/examples/docker/compose/docker-compose.yaml
+services:
+  connect-api:
+    container_name: 1password-connect-api
+    image: 1password/connect-api
+    ports:
+      - 9980:8080
+    volumes:
+      # You must to give world-write to this as the user ID is hard coded in the container :(
+      - /mnt/2000/container-mounts/1password/data:/home/opuser/.op/data
+      # You must to give world-read to this as the user ID is hard coded in the container :(
+      - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json
+    healthcheck:
+      test: ["CMD", "/bin/connect-api", "-v"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  connect-sync:
+    container_name: 1password-connect-sync
+    image: 1password/connect-sync
+    ports:
+      - 9981:8080
+    volumes:
+      # You must to give world-write to this as the user ID is hard coded in the container :(
+      - /mnt/2000/container-mounts/1password/data:/home/opuser/.op/data
+      # You must to give world-read to this as the user ID is hard coded in the container :(
+      - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json
+    healthcheck:
+      test: ["CMD", "/bin/connect-sync", "-v"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+# Test:
+# curl -H "Accept: application/json" -H "Authorization: Bearer $OP_API_TOKEN" http://localhost:9980/v1/vaults
