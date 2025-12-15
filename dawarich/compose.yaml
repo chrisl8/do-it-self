@@ -76,6 +76,13 @@ services:
       PHOTON_API_HOST: dawarich_photon:2322
       PHOTON_API_USE_HTTPS: false
       REVERSE_GEOCODING_ENABLED: true
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI}
+      OIDC_AUTO_REGISTER: false # optional, default is false
+      OIDC_PROVIDER_NAME: Tailscale # optional, default is OpenID Connect
+      ALLOW_EMAIL_PASSWORD_REGISTRATION: true # optional, default is true
     logging:
       driver: "json-file"
       options:
