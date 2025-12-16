@@ -1,4 +1,4 @@
-# https://github.com/1Password/connect/blob/main/examples/docker/compose/docker-compose.yaml
+# https://github.com/1Password/connect/blob/main/examples/docker/compose/docker-compose.yamlhttps://stackoverflow.com/questions/10856129/setting-an-environment-variable-before-a-command-in-bash-is-not-working-for-the
 services:
   connect-api:
     container_name: 1password-connect-api
@@ -7,7 +7,7 @@ services:
       - 9980:8080
     volumes:
       # You must to give world-write to this as the user ID is hard coded in the container :(
-      - /mnt/2000/container-mounts/1password/data:/home/opuser/.op/data
+      - /mnt/250/container-mounts/1password/data:/home/opuser/.op/data
       # You must to give world-read to this as the user ID is hard coded in the container :(
       - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json
     healthcheck:
@@ -24,7 +24,7 @@ services:
       - 9981:8080
     volumes:
       # You must to give world-write to this as the user ID is hard coded in the container :(
-      - /mnt/2000/container-mounts/1password/data:/home/opuser/.op/data
+      - /mnt/250/container-mounts/1password/data:/home/opuser/.op/data
       # You must to give world-read to this as the user ID is hard coded in the container :(
       - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json
     healthcheck:
