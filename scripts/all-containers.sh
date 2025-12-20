@@ -264,6 +264,9 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         # 4. The .env file contains at least one entry that starts with "op://"
         if [[ -x "$(command -v op)" ]] && [[ "$(docker ps --filter "name=1password-connect-api" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/1password-connect.env" ]] && [[ -f "${SCRIPT_DIR}/${CONTAINER_DIR}/.env" ]] && grep -q "op://" "${SCRIPT_DIR}/${CONTAINER_DIR}/.env"; then
           printf "${YELLOW}  Resolving .env entries via 1Password CLI...${NC}\n"
+          if [[ -d "${HOME}/.config/op" ]];then
+            chmod go-rx "${HOME}/.config/op"
+          fi
           export OP_CONNECT_HOST="http://127.0.0.1:9980/"
           OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
           export OP_CONNECT_TOKEN
