@@ -9,14 +9,12 @@ services:
     #   dockerfile: Dockerfile
     container_name: tsidp
     user: 1000:1000
-    env_file:
-      - tailscale.env
-      - .env
     environment:
       - TS_HOSTNAME=tsidp
       - TAILSCALE_USE_WIP_CODE=1
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_STATE_DIR=/data
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - /mnt/2000/container-mounts/tsidp/tsidp:/data
     labels:
@@ -25,7 +23,7 @@ services:
       - homepage.name=Tailscale OIDC IdP (New)
       - homepage.weight=40
       - homepage.icon=/dashboard-icons/svg/tailscale.svg
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.href=https://tsidp.${TS_DOMAIN}
     healthcheck:
       test: ["CMD-SHELL", "pgrep tsidp-server"]
       start_period: 120s

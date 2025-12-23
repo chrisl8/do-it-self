@@ -25,7 +25,7 @@
 #
 # For more extensive installation and update instructions, refer to the
 # documentation.
-
+name: paperless
 services:
   webserver:
     container_name: paperless
@@ -59,7 +59,7 @@ services:
       PAPERLESS_DATE_ORDER: MDY
       PAPERLESS_CONSUMER_DELETE_DUPLICATES: 1
       PAPERLESS_TIME_ZONE: America/Chicago
-      PAPERLESS_URL: ${HOME_PAGE_URL}
+      PAPERLESS_URL: https://paperless.${TS_DOMAIN}
       PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
       USERMAP_UID: 1000
       USERMAP_GID: 1000
@@ -71,10 +71,10 @@ services:
       - homepage.group=My Stuff
       - homepage.name=PaperlessNGX
       - homepage.weight=10
-      - homepage.icon=/dashboard-icons/svg/paperless-ngx.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/paperless-ngx.svg
+      - homepage.href=https://paperless.${TS_DOMAIN}
       - homepage.widget.type=paperlessngx
-      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.url=https://paperless.${TS_DOMAIN}
       - homepage.widget.key=${API_KEY}
   broker:
     container_name: paperless-broker
@@ -145,7 +145,6 @@ services:
   ts:
     container_name: paperless-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=paperless
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -153,6 +152,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

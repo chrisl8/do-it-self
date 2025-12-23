@@ -21,13 +21,13 @@ services:
   ts:
     container_name: factorio-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=factorio
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun

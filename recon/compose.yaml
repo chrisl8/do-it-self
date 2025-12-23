@@ -31,14 +31,13 @@ services:
       # https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
       - homepage.widget.type=customapi
       - homepage.widget.refreshInterval=120000
-      - homepage.widget.url=http://${HOMEPAGE_URL}:8000/v1/vpn/status
+      - homepage.widget.url=http://recon.${TS_DOMAIN}:8000/v1/vpn/status
       - homepage.widget.mappings[0].label=Status
       - homepage.widget.mappings[0].field=status
     restart: unless-stopped
   ts:
     container_name: recon-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TZ=America/Chicago
       - UMASK=022
@@ -47,6 +46,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
@@ -107,7 +107,7 @@ services:
       - homepage.weight=30
       - homepage.icon=/dashboard-icons/svg/prowlarr.svg
       - homepage.showstats=true
-      - homepage.href=http://${HOMEPAGE_URL}:9696/
+      - homepage.href=http://recon.${TS_DOMAIN}:9696/
       - homepage.description=The Ultimate Indexer Manager.
     restart: unless-stopped
     healthcheck:
@@ -140,12 +140,12 @@ services:
       - homepage.name=qBittorrent
       - homepage.weight=20
       - homepage.icon=/dashboard-icons/svg/qbittorrent.svg
-      - homepage.href=http://${HOMEPAGE_URL}:8085/
+      - homepage.href=http://recon.${TS_DOMAIN}:8085/
       - homepage.description=an open-source software alternative to µTorrent.
       # https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
       - homepage.widget.type=customapi
       - homepage.widget.refreshInterval=120000
-      - homepage.widget.url=http://${HOMEPAGE_URL}:8000/v1/portforward
+      - homepage.widget.url=http://recon.${TS_DOMAIN}:8000/v1/portforward
       - homepage.widget.mappings[0].label=VPN Port
       - homepage.widget.mappings[0].field=port
     restart: unless-stopped
@@ -178,7 +178,7 @@ services:
       - homepage.weight=40
       - homepage.icon=/dashboard-icons/svg/sonarr.svg
       - homepage.showstats=true
-      - homepage.href=http://${HOMEPAGE_URL}:8989/
+      - homepage.href=http://recon.${TS_DOMAIN}:8989/
       - homepage.description=Internet PVR for Usenet and Torrents.
     restart: unless-stopped
     healthcheck:
@@ -214,7 +214,7 @@ services:
       - homepage.weight=50
       - homepage.icon=/dashboard-icons/svg/radarr.svg
       - homepage.showstats=true
-      - homepage.href=http://${HOMEPAGE_URL}:7878/
+      - homepage.href=http://recon.${TS_DOMAIN}:7878/
       - homepage.description=See all your upcoming movies in one convenient location.
     restart: unless-stopped
     healthcheck:
@@ -251,7 +251,7 @@ services:
       - homepage.weight=60
       - homepage.icon=/dashboard-icons/svg/lidarr.svg
       - homepage.showstats=true
-      - homepage.href=http://${HOMEPAGE_URL}:8686/
+      - homepage.href=http://recon.${TS_DOMAIN}:8686/
       - homepage.description= Music collection manager for Usenet and BitTorrent users.
     restart: unless-stopped
     healthcheck:
@@ -287,7 +287,7 @@ services:
       - homepage.name=Mylar
       - homepage.weight=70
       - homepage.icon=/dashboard-icons/png/mylar.png
-      - homepage.href=http://${HOMEPAGE_URL}:8090/
+      - homepage.href=http://recon.${TS_DOMAIN}:8090/
       - homepage.description=Comic Book downloader
     restart: unless-stopped
     healthcheck:
@@ -325,7 +325,7 @@ services:
       - homepage.weight=80
       - homepage.icon=/dashboard-icons/png/lazylibrarian.png
       - homepage.showstats=true
-      - homepage.href=http://${HOMEPAGE_URL}:5299/
+      - homepage.href=http://recon.${TS_DOMAIN}:5299/
       - homepage.description=LazyLibrarian is a SickBeard, CouchPotato, Headphones-like application for ebooks, audiobooks and magazines
     restart: unless-stopped
     healthcheck:
@@ -359,10 +359,86 @@ services:
       - homepage.name=Pinchflat
       - homepage.weight=90
       - homepage.icon=/dashboard-icons/png/pinchflat.png
-      - homepage.href=http://${HOMEPAGE_URL}:8945/
+      - homepage.href=http://recon.${TS_DOMAIN}:8945/
       - homepage.description=Your next YouTube media manager
     restart: unless-stopped
     depends_on:
       ts:
         condition: service_healthy
     network_mode: "service:gluetun"
+  decluttarr:
+    # https://github.com/ManiMatter/decluttarr?tab=readme-ov-file#running-in-docker
+    image: ghcr.io/manimatter/decluttarr
+    container_name: recon-decluttarr
+    volumes:
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    environment:
+      TZ: America/Chicago
+      PUID: 1000
+      PGID: 1000
+      LOG_LEVEL: INFO
+      TEST_RUN: False
+      TIMER: 10
+      # IGNORED_DOWNLOAD_CLIENTS: >
+      #   - emulerr
+      # SSL_VERIFICATION: true
+      # PRIVATE_TRACKER_HANDLING: "obsolete_tag"
+      # PUBLIC_TRACKER_HANDLING: "remove"
+      # OBSOLETE_TAG: "Obsolete"
+      # PROTECTED_TAG: "Keep"
+
+      # # --- Optional: Job Defaults ---
+      # You can use these to set those parameters across all jobs. If you don't specify it here, the defaults set by system will be used
+      # If you set job-specific parameters (further down below), they will override these settings.
+      # max_strikes: 3
+      # MIN_DAYS_BETWEEN_SEARCHES: 7
+      # MAX_CONCURRENT_SEARCHES: 3
+
+      # # --- Jobs (short notation) ---
+      # If you want to go with the most basic settings, you can just turn them all on:
+      # https://github.com/ManiMatter/decluttarr?tab=readme-ov-file#jobs
+      REMOVE_BAD_FILES: True
+      REMOVE_DONE_SEEDING: False
+      REMOVE_FAILED_DOWNLOADS: True
+      REMOVE_FAILED_IMPORTS: True
+      REMOVE_METADATA_MISSING: True
+      REMOVE_MISSING_FILES: True
+      REMOVE_ORPHANS: False
+      REMOVE_SLOW: False
+      REMOVE_STALLED: True
+      REMOVE_UNMONITORED: False
+      SEARCH_BETTER: True
+      SEARCH_MISSING: True
+      DETECT_DELETIONS: True
+
+      # --- Instances ---
+      SONARR: >
+        - base_url: "http://recon.jamnapari-goblin.ts.net:8989"
+          api_key: "$SONARR_API_KEY"
+
+      RADARR: >
+        - base_url: "http://recon.jamnapari-goblin.ts.net:7878"
+          api_key: "$RADARR_API_KEY"
+
+      # READARR: >
+      #   - base_url: "http://readarr:8787"
+      #     api_key: "$READARR_API_KEY"
+
+      # LIDARR: >
+      #   - base_url: "http://lidarr:8686"
+      #     api_key: "$LIDARR_API_KEY"
+
+      # WHISPARR: >
+      #   - base_url: "http://whisparr:6969"
+      #     api_key: "$WHISPARR_API_KEY"
+
+      # --- Download Clients ---
+      QBITTORRENT: >
+        - base_url: "http://recon.jamnapari-goblin.ts.net:8085"
+    depends_on:
+      ts:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_healthy

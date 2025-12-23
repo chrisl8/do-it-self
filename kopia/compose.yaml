@@ -36,8 +36,8 @@ services:
       - homepage.group=Favorites
       - homepage.name=Kopia
       - homepage.weight=20
-      - homepage.icon=/dashboard-icons/svg/kopia.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/kopia.svg
+      - homepage.href=https://${SYSTEM_IP_ADDRESS}:51515
     healthcheck:
       # Enable health check for the instance
       test: ["CMD-SHELL", "pgrep -f /bin/kopia"]

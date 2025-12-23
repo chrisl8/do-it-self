@@ -32,10 +32,10 @@ services:
       - homepage.group=My Stuff
       - homepage.name=Nextcloud
       - homepage.weight=30
-      - homepage.icon=/dashboard-icons/svg/nextcloud.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/nextcloud.svg
+      - homepage.href=https://nextcloud.${TS_DOMAIN}
       - homepage.widget.type=nextcloud
-      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.url=https://nextcloud.${TS_DOMAIN}
       - homepage.widget.username=${USERNAME_FOR_HOMEPAGE}
       - homepage.widget.password=${PASSWORD_FOR_HOMEPAGE}
       - homepage.widget.fields=["freespace", "numfiles"]
@@ -103,7 +103,6 @@ services:
   ts-nextcloud:
     container_name: nextcloud-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=nextcloud
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -111,6 +110,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

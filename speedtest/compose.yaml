@@ -1,3 +1,4 @@
+# https://docs.linuxserver.io/images/docker-speedtest-tracker/
 services:
   speedtest:
     container_name: speedtest
@@ -10,8 +11,8 @@ services:
       - DISPLAY_TIMEZONE=America/Chicago
       - PUID=1000
       - PGID=1000
-      - APP_KEY=base64:telXO1fQNhw+TekIMlVtP8JVhLHIFB50f+QDWL2dedc=
-      - APP_URL=${HOME_PAGE_URL}
+      - APP_KEY=${APP_KEY}
+      - APP_URL=http://${HOST_NAME}.${TS_DOMAIN}:8765
       - DB_CONNECTION=sqlite
       - SPEEDTEST_SCHEDULE="35 3,15 * * *"
       - PUBLIC_DASHBOARD=true
@@ -20,10 +21,10 @@ services:
       - homepage.group=System Monitoring
       - homepage.name=Speedtest
       - homepage.weight=40
-      - homepage.icon=/dashboard-icons/png/speedtest-tracker.png # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/png/speedtest-tracker.png
+      - homepage.href=http://${HOST_NAME}.${TS_DOMAIN}:8765
       - homepage.widget.type=speedtest
-      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.url=http://${HOST_NAME}.${TS_DOMAIN}:8765
     healthcheck:
       test: curl -fSs APP_URL/api/healthcheck | jq -r .message || exit 1
       start_period: 120s

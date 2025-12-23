@@ -24,10 +24,10 @@ services:
       - homepage.group=System Monitoring
       - homepage.name=Beszel
       - homepage.weight=10
-      - homepage.icon=/icons/beszel.svg
-      - homepage.href=${HOME_PAGE_HREF}
+      - homepage.icon=/dashboard-icons/svg/beszel.svg
+      - homepage.href=http://${HOST_NAME}.${TS_DOMAIN}:8090/system/Neuromancer
       - homepage.widget.type=beszel
-      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.url=http://${HOST_NAME}.${TS_DOMAIN}:8090
       - homepage.widget.systemId=${SYSTEM_ID_FOR_HOMEPAGE}
       - homepage.widget.username=${USERNAME_FOR_HOMEPAGE}
       - homepage.widget.password=${PASSWORD_FOR_HOMEPAGE}

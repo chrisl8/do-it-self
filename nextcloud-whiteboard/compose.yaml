@@ -3,7 +3,7 @@ services:
     container_name: nextcloud-whiteboard
     image: ghcr.io/nextcloud-releases/whiteboard
     environment:
-      - NEXTCLOUD_URL=https://nextcloud.jamnapari-goblin.ts.net
+      - NEXTCLOUD_URL=https://nextcloud.${TS_DOMAIN}
       - JWT_SECRET_KEY=${WHITEBOARD_JWT_SECRET_KEY}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3002"]
@@ -17,7 +17,6 @@ services:
   ts:
     container_name: nextcloud-whiteboard-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=nextcloud-whiteboard
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -25,6 +24,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

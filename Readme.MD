@@ -1,16 +1,16 @@
 # SOURCE
 
-The primary repository for this code is at [https://codeberg.org/Chris10/do-it-self](https://codeberg.org/Chris10/do-it-self)
+I push this code to both [Codeberg](https://codeberg.org/Chris10/do-it-self) and [GitHub](https://github.com/chrisl8/do-it-self/).
 
-Other copies, on other git hosting services, exist for convenience and exposure only.
-
-Please file any Issues and Pull Requests at the [Codeberg](https://codeberg.org/Chris10/do-it-self) location, regardless of where you are finding this code.
+Feel free to file any Issues or Pull Requests at either location.
 
 # My Do It Self Setup
 
 This is a collection of docker-compose files for various services that I run on my home server.
 
 I don't expect you to use this exactly as it is, but I hope it will give you some ideas.
+
+**If you want help, that is, if you would like me to make this more of a "one-click do it for me" thing, start a Discussion or Issue and we can work together on it.** I will need someone to provide feedback on how it works before I go to the extra effort of making this 100% "easy" for others to use. As it is, it is more of an example than something to use directly.
 
 # Setup & Prerequisites
 
@@ -176,6 +176,8 @@ TL;DR:
    `tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx`
 
 ![OAuth Client Setup](cd6a0328d6ceeadd9d6297bd8e296168_MD5.jpeg)
+
+**TODO: This doesn't work anymore!**
 
 Now make a file called `~/credentials/tailscale.env` and add this to it:  
 `TS_AUTHKEY=tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx`

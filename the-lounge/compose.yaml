@@ -14,7 +14,7 @@ services:
       - homepage.name=The Lounge
       - homepage.weight=500
       - homepage.icon=/dashboard-icons/svg/thelounge.svg
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.href=https://thelounge.${TS_DOMAIN}
     networks:
       - the_lounge-net
     healthcheck:
@@ -27,7 +27,6 @@ services:
   ts:
     container_name: the_lounge-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=thelounge
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -35,6 +34,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

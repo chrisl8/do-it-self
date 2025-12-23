@@ -63,7 +63,7 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: dawarich_production
       MIN_MINUTES_SPENT_IN_CITY: 60
-      APPLICATION_HOSTS: ${APPLICATION_HOST},localhost,::1,127.0.0.1
+      APPLICATION_HOSTS: dawarich.${TS_DOMAIN},localhost,::1,127.0.0.1
       TIME_ZONE: America/Chicago
       APPLICATION_PROTOCOL: http
       PROMETHEUS_EXPORTER_ENABLED: false
@@ -78,8 +78,9 @@ services:
       REVERSE_GEOCODING_ENABLED: true
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
-      OIDC_ISSUER: ${OIDC_ISSUER}
-      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI}
+      OIDC_ISSUER: https://tsidp.${TS_DOMAIN}
+      OIDC_REDIRECT_URI: https://dawarich.${TS_DOMAIN}/users/auth/openid_connect/callback
+
       OIDC_AUTO_REGISTER: false # optional, default is false
       OIDC_PROVIDER_NAME: Tailscale # optional, default is OpenID Connect
       ALLOW_EMAIL_PASSWORD_REGISTRATION: true # optional, default is true
@@ -110,7 +111,7 @@ services:
       - homepage.name=Dawarich
       - homepage.weight=10
       - homepage.icon=/dashboard-icons/svg/dawarich.svg
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.href=https://dawarich.${TS_DOMAIN}
   dawarich_sidekiq:
     image: freikin/dawarich
     container_name: dawarich_sidekiq
@@ -132,7 +133,7 @@ services:
       DATABASE_USERNAME: postgres
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: dawarich_production
-      APPLICATION_HOSTS: ${APPLICATION_HOST},localhost,::1,127.0.0.1
+      APPLICATION_HOSTS: dawarich.${TS_DOMAIN},localhost,::1,127.0.0.1
       BACKGROUND_PROCESSING_CONCURRENCY: 10
       APPLICATION_PROTOCOL: http
       PROMETHEUS_EXPORTER_ENABLED: false
@@ -175,7 +176,6 @@ services:
   ts:
     container_name: dawarich-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=dawarich
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -183,6 +183,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

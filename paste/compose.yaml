@@ -6,11 +6,10 @@ services:
     image: ghcr.io/tailscale-dev/tclip
     # NOTE that this needs its OWN "auth key" and it is NOT the same as the tailscale OAuth key other containers use.
     # Instead you need a key from here: https://login.tailscale.com/admin/settings/keys
-    env_file:
-      - tailscale.env
-      - paste.env
     environment:
       - DATA_DIR=/data
+      - TS_DOMAIN=${TS_DOMAIN}
+      - TS_AUTH_KEY=${TS_AUTH_KEY}
     volumes:
       - /mnt/2000/container-mounts/paste/data:/data
       - ./healthcheck:/healthcheck
@@ -26,5 +25,5 @@ services:
       - homepage.group=Tools
       - homepage.name=Paste
       - homepage.weight=20
-      - homepage.icon=/dashboard-icons/svg/pastebin.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/pastebin.svg
+      - homepage.href=https://paste.${TS_DOMAIN}

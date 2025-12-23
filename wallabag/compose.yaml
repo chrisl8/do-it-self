@@ -6,7 +6,7 @@ services:
       - SYMFONY__ENV__SERVER_NAME="Wallabag"
       - SYMFONY__ENV__MAILER_DSN=${SYMFONY__ENV__MAILER_DSN}
       - SYMFONY__ENV__FROM_EMAIL=${SYMFONY__ENV__FROM_EMAIL}
-      - SYMFONY__ENV__DOMAIN_NAME=${SYMFONY__ENV__DOMAIN_NAME}
+      - SYMFONY__ENV__DOMAIN_NAME=https://wallabag.${TS_DOMAIN}
     volumes:
       - /mnt/2000/container-mounts/wallabag/images:/var/www/wallabag/web/assets/images
       - /mnt/2000/container-mounts/wallabag/data:/var/www/wallabag/data
@@ -32,12 +32,11 @@ services:
       - homepage.group=Reading
       - homepage.name=Wallabag
       - homepage.weight=20
-      - homepage.icon=/dashboard-icons/svg/wallabag.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/wallabag.svg
+      - homepage.href=https://wallabag.${TS_DOMAIN}
   ts:
     container_name: wallabag-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=wallabag
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -45,6 +44,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
