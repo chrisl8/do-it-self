@@ -7,10 +7,10 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
       - MONGO_ENDPOINT=mongodb://mongo:27017/your_spotify
-      - APP_URL=${APP_URL}
+      - APP_URL=https://listenedto.${TS_DOMAIN}
       - SPOTIFY_PUBLIC=${SPOTIFY_PUBLIC}
       - SPOTIFY_SECRET=${SPOTIFY_SECRET}
-      - CORS=${APP_URL}
+      - CORS=https://listenedto.${TS_DOMAIN}
     depends_on:
       mongo:
         condition: service_healthy
@@ -28,8 +28,8 @@ services:
       - homepage.group=Favorites
       - homepage.name=Your Spotifty
       - homepage.weight=20
-      - homepage.icon=/dashboard-icons/svg/your-spotify.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${APP_URL}
+      - homepage.icon=/dashboard-icons/svg/your-spotify.svg
+      - homepage.href=https://listenedto.${TS_DOMAIN}
   mongo:
     container_name: your_spotify-mongo
     user: 1000:1000
@@ -48,7 +48,6 @@ services:
   ts:
     container_name: your_spotify-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=listenedto
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -56,6 +55,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

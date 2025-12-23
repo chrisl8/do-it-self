@@ -11,7 +11,7 @@ services:
       - BROWSER_WEB_URL=http://karakeep-chrome:9222
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_URL=https://karakeep.${TS_DOMAIN}
       - DATA_DIR=/data
       - CRAWLER_STORE_SCREENSHOT=true
       - CRAWLER_FULL_PAGE_SCREENSHOT=true
@@ -26,10 +26,10 @@ services:
       - homepage.name=KaraKeep
       - homepage.weight=30
       - homepage.icon=/dashboard-icons/svg/karakeep-dark.svg
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.href=https://karakeep.${TS_DOMAIN}
       - homepage.widget.type=karakeep
       - homepage.widget.key=${HOME_PAGE_API_KEY}
-      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.url=https://karakeep.${TS_DOMAIN}
   karakeep-chrome:
     image: gcr.io/zenika-hub/alpine-chrome:123
     container_name: karakeep-chrome
@@ -73,7 +73,6 @@ services:
   ts:
     container_name: karakeep-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=karakeep
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -81,6 +80,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

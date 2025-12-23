@@ -15,7 +15,7 @@ services:
       - /mnt/2000/container-mounts/valheim/data:/opt/valheim
     stop_grace_period: 2m
     environment:
-      - TZ=${TZ}
+      - TZ=America/Chicago
       - SERVER_NAME=${SERVER_NAME}
       - WORLD_NAME=${WORLD_NAME}
       - SERVER_PASS=${SERVER_PASS}
@@ -36,7 +36,7 @@ services:
       - homepage.name=Valheim
       - homepage.weight=500
       - homepage.icon=/icons/valheim.png
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.href=http://${HOST_NAME}.${TS_DOMAIN}:9001/
     network_mode: service:ts
     depends_on:
       ts:
@@ -44,13 +44,13 @@ services:
   ts:
     container_name: valheim-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=valheim
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun

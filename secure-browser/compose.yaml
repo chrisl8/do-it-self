@@ -1,37 +1,44 @@
 services:
-  librewolf:
-    # https://docs.linuxserver.io/images/docker-librewolf/
-    image: lscr.io/linuxserver/librewolf
-    container_name: librewolf
+  browser:
+    # https://docs.linuxserver.io/images/docker-vivaldi/
+    image: lscr.io/linuxserver/vivaldi
+    container_name: browser
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC # No need to leak my timezone
       - SUBFOLDER=/ #optional
-      - TITLE=LibreWolf #optional
+      - TITLE=Browser #optional
     shm_size: "1gb" #optional
-    network_mode: service:gluetun-librewolf
+    network_mode: service:gluetun-browser
     labels:
       # For homepage
       - homepage.group=Desktop Apps
-      - homepage.name=LibreWolf
+      - homepage.name=Browser
       - homepage.weight=100
-      - homepage.icon=/dashboard-icons/svg/librewolf.svg
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/vivaldi.svg
+      - homepage.href=https://browser.${TS_DOMAIN}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [compute, video, graphics, utility]
     healthcheck:
-      test: 'curl --fail http://localhost:3000/manifest.json 2>/dev/null | grep -o "LibreWolf" || exit 1'
+      test: 'curl --fail http://localhost:3000/manifest.json 2>/dev/null | grep -o "Browser" || exit 1'
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      gluetun-librewolf:
+      gluetun-browser:
         condition: service_healthy
-  gluetun-librewolf:
+  gluetun-browser:
     # https://github.com/qdm12/gluetun
     image: qmcgaw/gluetun
-    container_name: gluetun-librewolf
+    container_name: gluetun-browser
     # line above must be uncommented to allow external containers to connect.
     # See https://github.com/qdm12/gluetun-wiki/blob/main/setup/connect-a-container-to-gluetun.md#external-container-to-gluetun
     cap_add:
@@ -43,19 +50,18 @@ services:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
       - VPN_TYPE=${VPN_TYPE}
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY} # Get this from the downloaded file NOT the webpage
-      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES} # Get this from the downloaded file too
       - SERVER_COUNTRIES=${SERVER_COUNTRIES}
   ts:
-    container_name: librewolf-ts
+    container_name: browser-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
-      - TS_HOSTNAME=remote-librewolf
+      - TS_HOSTNAME=browser
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
       - TS_SERVE_CONFIG=/config/tailscale-config.json
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

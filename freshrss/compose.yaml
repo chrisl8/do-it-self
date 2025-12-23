@@ -26,16 +26,15 @@ services:
       - homepage.group=Reading
       - homepage.name=FreshRSS
       - homepage.weight=10
-      - homepage.icon=/dashboard-icons/svg/freshrss.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/freshrss.svg
+      - homepage.href=https://freshrss.${TS_DOMAIN}
       - homepage.widget.type=freshrss
-      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.url=https://freshrss.${TS_DOMAIN}
       - homepage.widget.username=${FRESHRSS_USERNAME}
       - homepage.widget.password=${FRESHRSS_PASSWORD}
   ts:
     container_name: freshrss-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=freshrss
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -43,6 +42,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

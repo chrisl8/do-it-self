@@ -11,6 +11,7 @@ services:
       - PLAYWRIGHT_DRIVER_URL=ws://sockpuppetbrowser:3000
       #        Hides the `Referer` header so that monitored websites can't see the changedetection.io hostname.
       - HIDE_REFERER=true
+      - BASE_URL=https://changedetection.${TS_DOMAIN}/
     networks:
       - changedetection-net
     # https://github.com/dgtlmoon/changedetection.io/issues/1411#issuecomment-2274249829
@@ -31,10 +32,10 @@ services:
       - homepage.name=Change Detection
       - homepage.weight=30
       - homepage.icon=/dashboard-icons/svg/changedetection.svg
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.href=https://changedetection.${TS_DOMAIN}
       - homepage.widget.type=changedetectionio
       - homepage.widget.key=${API_KEY}
-      - homepage.widget.url=${HOME_PAGE_URL}
+      - homepage.widget.url=https://changedetection.${TS_DOMAIN}
     # If WEBDRIVER or PLAYWRIGHT are enabled, changedetection container depends on that
     # and must wait before starting (substitute "browser-chrome" with "playwright-chrome" if last one is used)
     depends_on:
@@ -64,7 +65,6 @@ services:
   ts:
     container_name: changedetection-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=changedetection
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -72,6 +72,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

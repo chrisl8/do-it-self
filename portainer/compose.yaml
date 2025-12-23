@@ -16,8 +16,8 @@ services:
       - homepage.group=System Monitoring
       - homepage.name=portainer
       - homepage.weight=40
-      - homepage.icon=/dashboard-icons/svg/portainer.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/portainer.svg
+      - homepage.href=https://portainer.${TS_DOMAIN}
     # This is the derpiest healtcheck I've ever set up, but it works and keeps the pattern of all of my containers having health checks
     # https://github.com/portainer/portainer/issues/1364#issuecomment-955588034
     healthcheck:
@@ -30,7 +30,6 @@ services:
   ts:
     container_name: portainer-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=portainer
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -38,6 +37,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

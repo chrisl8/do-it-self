@@ -33,12 +33,11 @@ services:
       - homepage.group=My Stuff
       - homepage.name=Quicken
       - homepage.weight=80
-      - homepage.icon=/dashboard-icons/svg/actual-budget.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/actual-budget.svg
+      - homepage.href=https://quicken.${TS_DOMAIN}
   ts:
     container_name: quicken-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=quicken
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -46,6 +45,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

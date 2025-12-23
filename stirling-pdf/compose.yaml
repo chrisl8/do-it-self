@@ -25,12 +25,11 @@ services:
       - homepage.group=Tools
       - homepage.name=Stirling PDF
       - homepage.weight=30
-      - homepage.icon=/dashboard-icons/svg/stirling-pdf.svg # https://github.com/homarr-labs/dashboard-icons/
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.icon=/dashboard-icons/svg/stirling-pdf.svg
+      - homepage.href=https://stirling-pdf.${TS_DOMAIN}
   ts:
     container_name: stirling-pdf-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=stirling-pdf
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -38,6 +37,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

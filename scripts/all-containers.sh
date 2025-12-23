@@ -129,6 +129,11 @@ done
 RESTART_LIST_TEXT="all containers"
 RESTART_LIST_TEXT_UPPER="All containers"
 
+# Fix any neccessary file permissions
+if [[ -e "${HOME}/credentials/1password-credentials.json" ]]; then
+  chmod o+r "${HOME}/credentials/1password-credentials.json"
+fi
+
 # If a container list file is provided, read it and filter the container list
 if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
   if [[ ! -f "${CONTAINER_LIST_FILE}" ]]; then
@@ -186,21 +191,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
   CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
 
-    # Check for a reference to a tailscale.env file in the local folder by looking for
-    # env_file: tailscale.env in the compose.yaml file
-    if grep -q "env_file: tailscale.env" "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml"; then
-      # Check that a tailscale.env file exists in the local folder
-      if [[ ! -f "${SCRIPT_DIR}/${CONTAINER_DIR}/tailscale.env" ]]; then
-        printf "${RED}     Error: tailscale.env file not found in ${CONTAINER_DIR}\n${NC}"
-        # Check for such a file in the user's home folder under the credentials folder
-        if [[ -f "${HOME}/credentials/tailscale.env" ]]; then
-          printf "${YELLOW}     Found tailscale.env file in ${HOME}/credentials/\n     Adding a symbolic link to it here...${NC}\n"
-          ln -s "${HOME}/credentials/tailscale.env" "${SCRIPT_DIR}/${CONTAINER_DIR}/tailscale.env"
-        fi
-      fi
-    fi
-
-
     if [[ ${MOUNT} != "" ]];then
       if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
         continue
@@ -217,10 +207,10 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
       fi
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
-      docker compose down
+      docker --log-level ERROR compose down
     fi
     if [[ ${START_ACTION} = true ]];then
-      if [[ $(docker compose ps | wc -l) -eq 1 ]];then
+      if [[ $(docker --log-level ERROR compose ps | wc -l) -eq 1 ]];then
         printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
 
         if [[ ${UPDATE_GIT_REPOS} = true ]];then
@@ -252,8 +242,8 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         fi
         if [[ ${GET_UPDATES} = true ]];then
           printf "${YELLOW}  Pulling updates and rebuilding...${NC}\n"
-          docker compose pull
-          docker compose build
+          docker --log-level ERROR compose pull
+          docker --log-level ERROR compose build
         fi
 
         # IF the following are true, we will run this via the 1Password CLI
@@ -262,15 +252,15 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         # 2. The 1password container is already running (it should start first)
         # 3. There is a .env file link in the container folder
         # 4. The .env file contains at least one entry that starts with "op://"
-        if [[ -x "$(command -v op)" ]] && [[ "$(docker ps --filter "name=1password-connect-api" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/1password-connect.env" ]] && [[ -f "${SCRIPT_DIR}/${CONTAINER_DIR}/.env" ]] && grep -q "op://" "${SCRIPT_DIR}/${CONTAINER_DIR}/.env"; then
-          printf "${YELLOW}  Resolving .env entries via 1Password CLI...${NC}\n"
+        if [[ -x "$(command -v op)" ]] && [[ "$(docker ps --filter "name=1password-connect-api" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/1password-connect.env" ]] && [[ -f "${SCRIPT_DIR}/${CONTAINER_DIR}/1password_credential_paths.env" ]] && grep -q "op://" "${SCRIPT_DIR}/${CONTAINER_DIR}/1password_credential_paths.env"; then
+          printf "${YELLOW}  Resolving environment variables via 1Password CLI...${NC}\n"
           if [[ -d "${HOME}/.config/op" ]];then
             chmod go-rx "${HOME}/.config/op"
           fi
           export OP_CONNECT_HOST="http://127.0.0.1:9980/"
           OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
           export OP_CONNECT_TOKEN
-          /usr/bin/op run --env-file .env -- docker compose up -d --wait
+          /usr/bin/op run --env-file 1password_credential_paths.env -- docker compose up -d --wait
         else
           docker compose up -d --wait
         fi
@@ -284,7 +274,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
 
         if [[ ${NO_WAIT} = false ]];then
           printf "${YELLOW} ...Waiting for all containers to report healthy...${NC}\n"
-          while /usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
+          while /usr/bin/docker --log-level ERROR ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
             sleep 0.1;
           done;
           printf "${YELLOW} ...Continuing to next task in ${SLEEP_TIME} seconds...${NC}\n"
@@ -310,7 +300,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
 done
 
 printf "${YELLOW}Waiting for all containers to report healthy on final pass...${NC}\n\n"
-while /usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
+while /usr/bin/docker --log-level ERROR ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
   sleep 0.1;
 done;
 

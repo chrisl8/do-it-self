@@ -25,7 +25,7 @@ services:
       - homepage.name=retroarch
       - homepage.weight=120
       - homepage.icon=/icons/retroarch.ico
-      - homepage.href=${HOME_PAGE_URL}
+      - homepage.href=https://retroarch.${TS_DOMAIN}
     healthcheck:
       test: 'curl --fail http://localhost:3000/manifest.json 2>/dev/null | grep -o "RetroArch" || exit 1'
       start_period: 120s
@@ -36,7 +36,6 @@ services:
   ts:
     container_name: retroarch-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=retroarch
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -44,6 +43,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config

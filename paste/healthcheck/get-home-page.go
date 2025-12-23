@@ -1,28 +1,30 @@
 package main
 
 import (
-    "bufio"
-    "fmt"
-    "net/http"
-    "os"
+	"bufio"
+	"fmt"
+	"net/http"
+	"os"
 )
 
 func main() {
 
-    resp, err := http.Get(os.Getenv("HOME_PAGE_URL"))
-    if err != nil {
-        panic(err)
-    }
-    defer resp.Body.Close()
+	tsDomain := os.Getenv("TS_DOMAIN")
 
-    fmt.Println("Response status:", resp.Status)
+	resp, err := http.Get("https://paste." + tsDomain)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
 
-    scanner := bufio.NewScanner(resp.Body)
-    for i := 0; scanner.Scan() && i < 5; i++ {
-        fmt.Println(scanner.Text())
-    }
+	fmt.Println("Response status:", resp.Status)
 
-    if err := scanner.Err(); err != nil {
-        panic(err)
-    }
+	scanner := bufio.NewScanner(resp.Body)
+	for i := 0; scanner.Scan() && i < 5; i++ {
+		fmt.Println(scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
 }

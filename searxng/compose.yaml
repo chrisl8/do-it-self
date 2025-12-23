@@ -35,7 +35,7 @@ services:
     volumes:
       - /mnt/2000/container-mounts/searxng/etc:/etc/searxng:rw
     environment:
-      - SEARXNG_BASE_URL=${HOME_PAGE_URL}
+      - SEARXNG_BASE_URL=https://searxng.${TS_DOMAIN}
       - UWSGI_WORKERS=${SEARXNG_UWSGI_WORKERS:-4}
       - UWSGI_THREADS=${SEARXNG_UWSGI_THREADS:-4}
     cap_drop:
@@ -62,7 +62,6 @@ services:
   ts:
     container_name: searxng-ts
     image: tailscale/tailscale
-    env_file: tailscale.env
     environment:
       - TS_HOSTNAME=searxng
       - TS_EXTRA_ARGS=--advertise-tags=tag:container
@@ -70,6 +69,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
