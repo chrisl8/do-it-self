@@ -52,11 +52,14 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      # https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers
-      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
-      - VPN_TYPE=${VPN_TYPE}
-      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY} # Get this from the downloaded file NOT the webpage
-      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      # https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/custom.md
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      - WIREGUARD_ENDPOINT_IP=${WIREGUARD_ENDPOINT_IP}
+      - WIREGUARD_ENDPOINT_PORT=${WIREGUARD_ENDPOINT_PORT}
+      - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
   ts:
     container_name: browser-ts
     image: tailscale/tailscale
