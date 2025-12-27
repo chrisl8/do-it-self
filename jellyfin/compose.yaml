@@ -10,7 +10,7 @@ services:
       - /mnt/2000/container-mounts/jellyfin/music:/media/music
       - /mnt/2000/container-mounts/jellyfin/videos:/media/videos
       - /mnt/2000/container-mounts/jellyfin/movies:/media/movies
-      - /mnt/22TB/container-mounts/secure-webtop/downloads:/media/downloads
+      - /mnt/22TB/container-mounts/jellyfin:/media/downloads
       - /mnt/2000/container-mounts/jellyfin/audiobooks:/media/audiobooks
       - /mnt/22TB/container-mounts/recon/data/media:/media/recon
     runtime: nvidia
