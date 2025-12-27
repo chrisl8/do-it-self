@@ -413,8 +413,8 @@ services:
       # https://github.com/ManiMatter/decluttarr?tab=readme-ov-file#jobs
       REMOVE_BAD_FILES: True
       REMOVE_DONE_SEEDING: False
-      REMOVE_FAILED_DOWNLOADS: True
-      REMOVE_FAILED_IMPORTS: True
+      REMOVE_FAILED_DOWNLOADS: False
+      REMOVE_FAILED_IMPORTS: False
       REMOVE_METADATA_MISSING: True
       REMOVE_MISSING_FILES: True
       REMOVE_ORPHANS: False
