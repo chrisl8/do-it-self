@@ -38,6 +38,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: unless-stopped
     depends_on:
       gluetun-browser:
         condition: service_healthy
@@ -60,6 +61,7 @@ services:
       - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY}
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+    restart: unless-stopped
   ts:
     container_name: browser-ts
     image: tailscale/tailscale
@@ -86,3 +88,4 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: unless-stopped
