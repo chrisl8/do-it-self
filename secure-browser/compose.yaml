@@ -1,7 +1,7 @@
 services:
   browser:
     # https://docs.linuxserver.io/images/docker-vivaldi/
-    image: lscr.io/linuxserver/vivaldi
+    image: lscr.io/linuxserver/ungoogled-chromium
     container_name: browser
     environment:
       - PUID=1000
@@ -16,7 +16,7 @@ services:
       - homepage.group=Desktop Apps
       - homepage.name=Browser
       - homepage.weight=100
-      - homepage.icon=/dashboard-icons/svg/vivaldi.svg
+      - homepage.icon=/dashboard-icons/svg/chromium.svg
       - homepage.href=https://browser.${TS_DOMAIN}
     deploy:
       resources:
