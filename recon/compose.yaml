@@ -467,3 +467,39 @@ services:
         condition: service_healthy
       qbittorrent:
         condition: service_healthy
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd
+    container_name: recon-sabnzbd
+    environment:
+      - TZ=America/Chicago
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /mnt/2000/container-mounts/recon/sabnzbd/config:/config
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    labels:
+      - homepage.group=Recon
+      - homepage.name=SABnzbd
+      - homepage.weight=22
+      - homepage.icon=/dashboard-icons/svg/sabnzbd.svg
+      - homepage.showstats=true
+      - homepage.href=http://recon.${TS_DOMAIN}:8086/
+      - homepage.description=The free and easy binary newsreader
+    restart: unless-stopped
+    depends_on:
+      ts:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    network_mode: "service:gluetun"
