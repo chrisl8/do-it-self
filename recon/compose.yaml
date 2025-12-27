@@ -453,6 +453,7 @@ services:
       # --- Download Clients ---
       QBITTORRENT: >
         - base_url: "http://recon.jamnapari-goblin.ts.net:8085"
+    restart: unless-stopped
     depends_on:
       ts:
         condition: service_healthy
