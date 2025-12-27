@@ -12,6 +12,7 @@ forgejo/app.ini
 obsidian-babel-livesync/docker.ini
 scripts/healthcheck.conf
 scripts/excluded_devices.conf
+recon/config-links
 
 # Web Server and Proxy Configuration
 caddy/conf
