@@ -145,7 +145,6 @@ services:
       - TORRENTING_PORT=6881
     volumes:
       - /mnt/2000/container-mounts/recon/qbittorrent/config:/config
-      - /mnt/22TB/container-mounts/recon/data/downloads/torrent:/downloads
       - /mnt/22TB/container-mounts/recon/data/media:/media/arr
     labels:
       - homepage.group=Recon
@@ -267,8 +266,6 @@ services:
     container_name: recon-lidarr
     volumes:
       - /mnt/2000/container-mounts/recon/lidarr/config:/config
-      - /mnt/22TB/container-mounts/recon/data/media/music:/music
-      - /mnt/22TB/container-mounts/recon/data/downloads/music:/downloads
       - /mnt/22TB/container-mounts/recon/data/media:/media/arr
     environment:
       - TZ=America/Chicago
@@ -310,8 +307,6 @@ services:
     container_name: recon-mylar3
     volumes:
       - /mnt/2000/container-mounts/recon/mylar3/config:/config
-      - /mnt/22TB/container-mounts/recon/data/media/comics:/comics
-      - /mnt/22TB/container-mounts/recon/data/downloads/comics:/downloads
       - /mnt/22TB/container-mounts/recon/data/media:/media/arr
     environment:
       - TZ=America/Chicago
@@ -358,8 +353,6 @@ services:
       - DOCKER_MODS=linuxserver/mods:universal-calibre|linuxserver/mods:lazylibrarian-ffmpeg #optional
     volumes:
       - /mnt/2000/container-mounts/recon/lazylibrarian/config:/config
-      - /mnt/22TB/container-mounts/recon/data/downloads/ebooks:/downloads
-      - /mnt/22TB/container-mounts/recon/data/media/ebooks:/books
       - /mnt/22TB/container-mounts/recon/data/media:/media/arr
     labels:
       - homepage.group=Recon
