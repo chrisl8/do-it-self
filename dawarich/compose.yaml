@@ -11,6 +11,7 @@ services:
       - dawarich
     volumes:
       - /mnt/2000/container-mounts/dawarich/redis_data:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       start_period: 120s
@@ -31,6 +32,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: dawarich_production
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       start_period: 120s
@@ -89,6 +91,7 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
+    restart: unless-stopped
     healthcheck:
       test:
         [
@@ -152,6 +155,7 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "bundle exec sidekiqmon processes | grep Processes"]
       start_period: 120s
@@ -192,6 +196,7 @@ services:
       - net_admin
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
@@ -217,6 +222,7 @@ services:
       - /mnt/250/container-mounts/photon/photon_data:/photon/photon_data
     networks:
       - dawarich
+    restart: unless-stopped
     healthcheck:
       test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"" || exit 1'
       start_period: 120s
