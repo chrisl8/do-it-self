@@ -81,7 +81,13 @@ services:
       - TZ=Europe/London
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -111,7 +117,13 @@ services:
       - homepage.description=The Ultimate Indexer Manager.
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -150,7 +162,13 @@ services:
       - homepage.widget.mappings[0].field=port
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -182,7 +200,13 @@ services:
       - homepage.description=Internet PVR for Usenet and Torrents.
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -218,7 +242,13 @@ services:
       - homepage.description=See all your upcoming movies in one convenient location.
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -255,7 +285,13 @@ services:
       - homepage.description= Music collection manager for Usenet and BitTorrent users.
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -291,7 +327,13 @@ services:
       - homepage.description=Comic Book downloader
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
@@ -329,7 +371,13 @@ services:
       - homepage.description=LazyLibrarian is a SickBeard, CouchPotato, Headphones-like application for ebooks, audiobooks and magazines
     restart: unless-stopped
     healthcheck:
-      test: curl -s ip.me | grep -v "104.54" || exit 1
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
       start_period: 120s
       start_interval: 5s
       interval: 5m
