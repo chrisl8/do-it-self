@@ -391,29 +391,6 @@ services:
       qbittorrent:
         condition: service_healthy
     network_mode: "service:gluetun"
-  pinchflat:
-    image: ghcr.io/kieraneglin/pinchflat
-    container_name: recon-pinchflat
-    volumes:
-      - /mnt/2000/container-mounts/recon/pinchflat/config:/config
-      - /mnt/22TB/container-mounts/recon/data/downloads/youtube:/downloads
-    environment:
-      - TZ=America/Chicago
-      - UMASK=022
-      - PUID=1000
-      - PGID=1000
-    labels:
-      - homepage.group=Recon
-      - homepage.name=Pinchflat
-      - homepage.weight=90
-      - homepage.icon=/dashboard-icons/png/pinchflat.png
-      - homepage.href=http://recon.${TS_DOMAIN}:8945/
-      - homepage.description=Your next YouTube media manager
-    restart: unless-stopped
-    depends_on:
-      ts:
-        condition: service_healthy
-    network_mode: "service:gluetun"
   decluttarr:
     # https://github.com/ManiMatter/decluttarr?tab=readme-ov-file#running-in-docker
     image: ghcr.io/manimatter/decluttarr
