@@ -1,9 +1,8 @@
-# This is based on AdminerEvo at https://github.com/anomaloushuman/AdminerEvo
-# Supposedly Adminer is being maintained again at https://github.com/vrana/adminer but I haven't looked into it yet
+# This is based on Adminer that is being maintained again at https://github.com/vrana/adminer
 
 # There are a few "official" adminer Docker images, but this has been more reliable for me over time.
 
-FROM php:8.3
+FROM php:8.5
 
 RUN apt-get update && apt-get install --no-install-recommends -y libpq-dev git
 
@@ -24,8 +23,8 @@ RUN docker-php-ext-install mysqli pdo pdo_mysql pgsql pdo_pgsql && docker-php-ex
 
 # Pull from release
 RUN set -x \
-    && ADMINEREVO_VERSION=$(curl -s https://api.github.com/repos/adminerevo/adminerevo/releases/latest | grep tag_name | cut -d '"' -f 4 | cut -d 'v' -f 2) \
-    && curl -fsSL "https://github.com/adminerevo/adminerevo/releases/download/v$ADMINEREVO_VERSION/adminer-$ADMINEREVO_VERSION.php" -o /var/www/html/index.php
+    && ADMINEREVO_VERSION=$(curl -s https://api.github.com/repos/vrana/adminer/releases/latest | grep tag_name | cut -d '"' -f 4 | cut -d 'v' -f 2) \
+    && curl -fsSL "https://github.com/vrana/adminer/releases/download/v$ADMINEREVO_VERSION/adminer-$ADMINEREVO_VERSION.php" -o /var/www/html/index.php
 
 WORKDIR /
 ENV PHP_CLI_SERVER_WORKERS=4
