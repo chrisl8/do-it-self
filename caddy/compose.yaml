@@ -113,8 +113,9 @@ services:
       timeout: 30s
       retries: 5
   ghost-for-jeriblog:
+    # The admin page is always at /ghost
     container_name: caddy-ghost-for-jeriblog
-    image: ghost:5
+    image: ghost:6
     environment:
       # see https://ghost.org/docs/config/#configuration-options
       database__client: mysql
