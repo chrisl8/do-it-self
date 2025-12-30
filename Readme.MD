@@ -179,8 +179,10 @@ TL;DR:
 
 **TODO: This doesn't work anymore!**
 
+** Now also add the text `?ephemeral=false` to the end of the key so that your container connections do not expire! **
+
 Now make a file called `~/credentials/tailscale.env` and add this to it:  
-`TS_AUTHKEY=tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx`
+`TS_AUTHKEY=tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx?ephemeral=false`
 
 Now the `all-containers.sh` script will make a link to that file in the container file automatically if it exists.
 
