@@ -1,0 +1,58 @@
+# https://github.com/jhonderson/actual-http-api
+services:
+  actual_api:
+    container_name: actual_api
+    image: jhonderson/actual-http-api
+    volumes:
+      - /mnt/2000/container-mounts/actual-api/data:/data
+    environment:
+      - ACTUAL_SERVER_URL=https://actual.${TS_DOMAIN}
+      - ACTUAL_SERVER_PASSWORD=${ACTUAL_SERVER_PASSWORD}
+      - API_KEY=${API_KEY}
+    restart: unless-stopped
+    networks:
+      - actual-api-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO - http://localhost:5007/api-docs/ | grep -q '<title>Swagger UI</title>'",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+  ts:
+    container_name: actual-api-ts
+    image: tailscale/tailscale
+    environment:
+      - TS_HOSTNAME=actual-api
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - actual-api-net
+    depends_on:
+      actual_api:
+        condition: service_healthy
+networks:
+  actual-api-net:
