@@ -54,6 +54,9 @@ fi
 
 ERROR_COUNT=0
 
+# Restart unhealthy containers automatically
+/home/chrisl8/containers/scripts/all-containers.sh --restart-unhealthy --quiet --no-wait
+
 # Check for unhealthy containers
 DOCKER_ISSUES=$(/usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)")
 

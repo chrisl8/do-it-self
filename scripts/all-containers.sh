@@ -7,17 +7,22 @@ BRIGHT_MAGENTA='\033[1;95m'
 RED='\033[0;31m'
 NC='\033[0m' # NoColor
 
+RESTART_UNHEALTHY=false
 START_ACTION=false
 STOP_ACTION=false
 SLEEP_TIME=10
 MOUNT=""
 CATEGORY=""
 CONTAINER_LIST_FILE=""
+SINGLE_CONTAINER=""
 
 NO_WAIT=false
 UPDATE_GIT_REPOS=false
 GET_UPDATES=false
 NO_FAIL=false
+NO_HEALTH_CHECK=false
+
+QUIET=false
 
 while test $# -gt 0
 do
@@ -25,6 +30,8 @@ do
                 --start) START_ACTION=true
                 ;;
                 --stop) STOP_ACTION=true
+                ;;
+                --restart-unhealthy) RESTART_UNHEALTHY=true
                 ;;
                 --sleep)
                   shift
@@ -42,6 +49,10 @@ do
                   shift
                   CONTAINER_LIST_FILE="$1"
                   ;;
+                --container)
+                  shift
+                  SINGLE_CONTAINER="$1"
+                  ;;
                 --no-wait)
                   NO_WAIT=true
                   ;;
@@ -54,11 +65,17 @@ do
                 --no-fail)
                   NO_FAIL=true
                   ;;
+                --quiet)
+                  QUIET=true
+                  ;;
+                --no-health-check)
+                  NO_HEALTH_CHECK=true
+                  ;;
         esac
         shift
 done
 
-if [[ ${START_ACTION} = false && ${STOP_ACTION} = false ]];then
+if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} = false ]];then
   echo ""
   echo "If you want to skip a folder, and just not run that container, you can create a _DISABLED_ file in the folder."
   echo ""
@@ -88,8 +105,8 @@ if [[ ${START_ACTION} = false && ${STOP_ACTION} = false ]];then
   echo "You can also get updates for all containers by running:"
   echo "all-containers.sh --get-updates"
   echo ""
-  echo "Finally, there is a --fast flag that will skip waiting for all containers to report healthy."
-  echo "all-containers.sh --fast"
+  echo "Finally, there is a --no-wait flag that will skip waiting for all containers to report healthy."
+  echo "all-containers.sh --no-wait"
   exit
 fi
 
@@ -114,7 +131,7 @@ CONTAINER_LIST=()
 for DIR in *;do
   if [[ -d "${SCRIPT_DIR}/${DIR}" ]] && [[ -e "${SCRIPT_DIR}/${DIR}/compose.yaml" ]];then
     # Skip folders that contain a _DISABLED_ file
-    if [[ -e "${SCRIPT_DIR}/${DIR}/_DISABLED_" ]];then
+    if [[ ${RESTART_UNHEALTHY} = false ]] &&[[ -e "${SCRIPT_DIR}/${DIR}/_DISABLED_" ]];then
       continue
     fi
     STRIPPED_DIR=${DIR%*/}
@@ -129,7 +146,7 @@ done
 RESTART_LIST_TEXT="all containers"
 RESTART_LIST_TEXT_UPPER="All containers"
 
-# Fix any neccessary file permissions
+# Fix any necessary file permissions
 if [[ -e "${HOME}/credentials/1password-credentials.json" ]]; then
   chmod o+r "${HOME}/credentials/1password-credentials.json"
 fi
@@ -164,6 +181,24 @@ if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
   CONTAINER_LIST=("${FILTERED_LIST[@]}")
   RESTART_LIST_TEXT="the containers listed in ${CONTAINER_LIST_FILE}"
   RESTART_LIST_TEXT_UPPER="The containers listed in ${CONTAINER_LIST_FILE}"
+elif [[ -n "${SINGLE_CONTAINER}" ]]; then
+  # Ensure that the single container exists as a folder in the containers directory
+  if [[ ! -d "${SCRIPT_DIR}/${SINGLE_CONTAINER}" ]] || [[ ! -e "${SCRIPT_DIR}/${SINGLE_CONTAINER}/compose.yaml" ]]; then
+    printf "${RED}Error: Container directory ${SINGLE_CONTAINER} does not exist or does not contain a compose.yaml file${NC}\n"
+    exit 1
+  fi
+
+  # Filter CONTAINER_LIST to only include the single specified container
+  FILTERED_LIST=()
+  for ENTRY in "${CONTAINER_LIST[@]}"; do
+    CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
+    if [[ "${CONTAINER_DIR}" == "${SINGLE_CONTAINER}" ]]; then
+      FILTERED_LIST+=("${ENTRY}")
+    fi
+  done
+  CONTAINER_LIST=("${FILTERED_LIST[@]}")
+  RESTART_LIST_TEXT="the container ${SINGLE_CONTAINER}"
+  RESTART_LIST_TEXT_UPPER="The container ${SINGLE_CONTAINER}"
 fi
 
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
@@ -184,7 +219,13 @@ elif [[ ${STOP_ACTION} = true ]];then
   else
     printf "${YELLOW}Stopping ${RESTART_LIST_TEXT}...${NC}\n"
   fi
+  # The list needs to be reversed when performing stop actions only
   readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -rz | xargs -0n1)
+elif [[ ${RESTART_UNHEALTHY} = true ]];then
+  if [[ ${QUIET} = false ]];then
+    printf "${YELLOW}Restarting unhealthy containers in ${RESTART_LIST_TEXT}...${NC}\n"
+  fi
+  readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -z | xargs -0n1)
 fi
 
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
@@ -201,9 +242,21 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
       fi
     fi
     cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
+    if [[ ${RESTART_UNHEALTHY} = true ]];then
+      # Check if any containers are unhealthy
+      UNHEALTHY_COUNT=$(docker --log-level ERROR compose ps | grep -c "(unhealthy)")
+      if [[ ${UNHEALTHY_COUNT} -eq 0 ]];then
+        # No unhealthy containers, skip to next
+        continue
+      else
+        printf "${YELLOW} - ${CONTAINER_DIR} has ${UNHEALTHY_COUNT} unhealthy container(s), restarting...${NC}\n"
+        # Call THIS script with correct parameters to stop and start this container only
+        "${SCRIPT_DIR}/scripts/all-containers.sh" --stop --start --container "${CONTAINER_DIR}" --no-wait --no-health-check
+      fi
+    fi
     if [[ ${STOP_ACTION} = true ]];then
       # Run a pre-down health check to update the time out to reduce the noise of early failures
-      if [[ ${START_ACTION} = true && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
+      if [[ ${START_ACTION} = true && ${NO_HEALTH_CHECK} = false && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
         "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
       fi
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
@@ -299,23 +352,26 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
   fi
 done
 
-printf "${YELLOW}Waiting for all containers to report healthy on final pass...${NC}\n\n"
-while /usr/bin/docker --log-level ERROR ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
-  sleep 0.1;
-done;
+if [[ ${NO_WAIT} = false ]];then
+  printf "${YELLOW}Waiting for all containers to report healthy on final pass...${NC}\n\n"
+  while /usr/bin/docker --log-level ERROR ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
+    sleep 0.1;
+  done;
 
-if [[ ${START_ACTION} = true ]];then
-  printf "${YELLOW}Performing post-start chores${NC}\n"
-  # Prune images now to clear any left over after upgrades.
-  # This ensures all images we don't use are pruned, but none that we do use
-  docker image prune -af
+  if [[ ${START_ACTION} = true ]];then
+    printf "${YELLOW}Performing post-start chores${NC}\n"
+    # Prune images now to clear any left over after upgrades.
+    # This ensures all images we don't use are pruned, but none that we do use
+    docker image prune -af
 
-  # Remove unnamed and unused volumes that get left behind
-  docker volume prune -af
+    # Remove unnamed and unused volumes that get left behind
+    docker volume prune -af
 
-  # Remove unused networks that get left behind
-  docker network prune -f
+    # Remove unused networks that get left behind
+    docker network prune -f
+  fi
 fi
+
 
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
   printf "${YELLOW}${RESTART_LIST_TEXT_UPPER} have been restarted.${NC}\n"
@@ -326,6 +382,6 @@ elif [[ ${START_ACTION} = true ]];then
 fi
 
 # Run my check script to go ahead and let everyone know we are back up.
-if [[ ${START_ACTION} = true && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
+if [[ ${START_ACTION} = true && ${NO_HEALTH_CHECK} = false && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
   "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
 fi
