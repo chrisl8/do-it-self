@@ -244,7 +244,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
     if [[ ${RESTART_UNHEALTHY} = true ]];then
       # Check if any containers are unhealthy
-      UNHEALTHY_COUNT=$(docker --log-level ERROR compose ps | grep -c "(unhealthy)")
+      UNHEALTHY_COUNT=$(docker --log-level ERROR compose ps -a --format '{{.Status}}' | grep -c -v "(healthy)" || true)
       if [[ ${UNHEALTHY_COUNT} -eq 0 ]];then
         # No unhealthy containers, skip to next
         continue
@@ -257,7 +257,9 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     if [[ ${STOP_ACTION} = true ]];then
       # Run a pre-down health check to update the time out to reduce the noise of early failures
       if [[ ${START_ACTION} = true && ${NO_HEALTH_CHECK} = false && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
+        set +e
         "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
+        set -e
       fi
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
       docker --log-level ERROR compose down
@@ -327,7 +329,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
 
         if [[ ${NO_WAIT} = false ]];then
           printf "${YELLOW} ...Waiting for all containers to report healthy...${NC}\n"
-          while /usr/bin/docker --log-level ERROR ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
+          while /usr/bin/docker --log-level ERROR ps -a --format '{{.Status}}' | grep -v "(healthy)" > /dev/null; do
             sleep 0.1;
           done;
           printf "${YELLOW} ...Continuing to next task in ${SLEEP_TIME} seconds...${NC}\n"
@@ -354,7 +356,7 @@ done
 
 if [[ ${NO_WAIT} = false ]];then
   printf "${YELLOW}Waiting for all containers to report healthy on final pass...${NC}\n\n"
-  while /usr/bin/docker --log-level ERROR ps -a | tail -n +2 | grep -v "(healthy)" > /dev/null; do
+  while /usr/bin/docker --log-level ERROR ps -a --format '{{.Status}}' | grep -v "(healthy)" > /dev/null; do
     sleep 0.1;
   done;
 
