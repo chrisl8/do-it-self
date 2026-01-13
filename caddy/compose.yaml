@@ -58,6 +58,32 @@ services:
       interval: 5m
       timeout: 30s
       retries: 5
+  meshtastic:
+    container_name: caddy-meshtastic
+    user: 1000:1000
+    build:
+      context: ./meshtastic
+      dockerfile: Dockerfile
+    environment:
+      - MESHTASTIC_DB_HOST=host.docker.internal
+      - MESHTASTIC_DB_USER=${MESHTASTIC_DB_USER}
+      - MESHTASTIC_DB_PASSWORD=${MESHTASTIC_DB_PASSWORD}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO - http://127.0.0.1:3033/ | grep -q '<title>Meshtastic Bot</title>'",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 30s
+      retries: 5
+    # Source - https://stackoverflow.com/a/43541732
+    # Posted by Janne Annala, modified by community. See post 'Timeline' for change history
+    # Retrieved 2026-01-13, License - CC BY-SA 4.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   space-game:
     container_name: caddy-space-game
     user: 1000:1000
