@@ -1,17 +1,17 @@
 #!/bin/bash
 
+ALL_CONTAINERS_IS_RUNNING=false
+if pgrep -f all-containers.sh > /dev/null; then
+  ALL_CONTAINERS_IS_RUNNING=true
+fi
+
 # If all-containers.sh is running, then just exit,
 # unless this script was called BY all-containers.sh itself using the --run-health-check option
 # In that case we want to do the health check as normal
-if [ "$1" != "--run-health-check" ]; then
-  # Check if all-containers.sh is running
-  # We use pgrep -f to match the full command line, in case the script is not in the PATH
-  # We redirect output to /dev/null as we don't care about the output, just the exit code
-  # We use > /dev/null instead of &> /dev/null to avoid issues on systems where /dev/stderr may not exist
-  # We use exit code 0 to indicate that the script is running, and exit code 1 to indicate that it is not
+if [[ ${ALL_CONTAINERS_IS_RUNNING} = true ]];then
   # This way we don't spam healthcheck.io with pings when the system is doing container updates,
   # meanwhile if the updates take too long healthcheck.io will still alert us after it fails to get a ping
-  if pgrep -f all-containers.sh > /dev/null; then
+  if [ "$1" != "--run-health-check" ]; then
     exit 0
   fi
 fi
@@ -55,7 +55,10 @@ fi
 ERROR_COUNT=0
 
 # Restart unhealthy containers automatically
-/home/chrisl8/containers/scripts/all-containers.sh --restart-unhealthy --quiet --no-wait
+# but don't run it recursively!
+if [[ ${ALL_CONTAINERS_IS_RUNNING} = false ]];then
+  /home/chrisl8/containers/scripts/all-containers.sh --restart-unhealthy --quiet --no-wait
+fi
 
 # Check for unhealthy containers
 DOCKER_ISSUES=$(/usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)")
