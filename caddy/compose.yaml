@@ -65,9 +65,11 @@ services:
       context: ./meshtastic
       dockerfile: Dockerfile
     environment:
+      - NODE_ENV=production
       - MESHTASTIC_DB_HOST=host.docker.internal
       - MESHTASTIC_DB_USER=${MESHTASTIC_DB_USER}
       - MESHTASTIC_DB_PASSWORD=${MESHTASTIC_DB_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     healthcheck:
       test:
         [
