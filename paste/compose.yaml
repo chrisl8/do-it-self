@@ -9,7 +9,7 @@ services:
     environment:
       - DATA_DIR=/data
       - TS_DOMAIN=${TS_DOMAIN}
-      - TS_AUTH_KEY=${TS_AUTH_KEY}
+      - TS_AUTH_KEY=${TS_AUTHKEY}
     volumes:
       - /mnt/2000/container-mounts/paste/data:/data
       - ./healthcheck:/healthcheck
