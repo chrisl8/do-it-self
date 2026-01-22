@@ -298,6 +298,45 @@ services:
       qbittorrent:
         condition: service_healthy
     network_mode: "service:gluetun"
+  bazarr:
+    image: lscr.io/linuxserver/bazarr
+    container_name: recon-bazarr
+    volumes:
+      - /mnt/2000/container-mounts/recon/bazarr/config:/config
+      - /mnt/22TB/container-mounts/recon/data/media:/media/arr
+    environment:
+      - TZ=America/Chicago
+      - UMASK=022
+      - PUID=1000
+      - PGID=1000
+    labels:
+      - homepage.group=Recon
+      - homepage.name=Bazarr
+      - homepage.weight=60
+      - homepage.icon=/dashboard-icons/svg/bazarr.svg
+      - homepage.showstats=true
+      - homepage.href=http://recon.${TS_DOMAIN}:6767/
+      - homepage.description=Companion application to Sonarr and Radarr that manages and downloads subtitles based on your requirements.
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    depends_on:
+      ts:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+    network_mode: "service:gluetun"
   mylar3:
     image: lscr.io/linuxserver/mylar3
     container_name: recon-mylar3
