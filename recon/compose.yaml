@@ -77,20 +77,14 @@ services:
       - TZ=Europe/London
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:8191 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
     network_mode: "service:gluetun"
   prowlarr:
@@ -113,20 +107,14 @@ services:
       - homepage.description=The Ultimate Indexer Manager.
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:9696 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
     network_mode: "service:gluetun"
   qbittorrent:
@@ -152,25 +140,19 @@ services:
       # https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
       - homepage.widget.type=customapi
       - homepage.widget.refreshInterval=120000
-      - homepage.widget.url=http://recon.${TS_DOMAIN}:8000/v1/portforward
-      - homepage.widget.mappings[0].label=VPN Port
-      - homepage.widget.mappings[0].field=port
+      - homepage.widget.url=http://recon.${TS_DOMAIN}:8000/v1/publicip/ip
+      - homepage.widget.mappings[0].label=Public IP
+      - homepage.widget.mappings[0].field=public_ip
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
-      start_period: 120s
+      test: "curl --fail http://localhost:8085 || exit 1"
+      start_period: 30s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
     network_mode: "service:gluetun"
   sonarr:
@@ -195,20 +177,14 @@ services:
       - homepage.description=Internet PVR for Usenet and Torrents.
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:8989 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
@@ -237,20 +213,14 @@ services:
       - homepage.description=See all your upcoming movies in one convenient location.
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:7878 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
@@ -278,20 +248,14 @@ services:
       - homepage.description= Music collection manager for Usenet and BitTorrent users.
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
-      start_period: 120s
+      test: "curl --fail http://localhost:8686 || exit 1"
+      start_period: 30s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
@@ -319,20 +283,14 @@ services:
       - homepage.description=Companion application to Sonarr and Radarr that manages and downloads subtitles based on your requirements.
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:6767 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
@@ -357,20 +315,14 @@ services:
       - homepage.description=Comic Book downloader
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:8090 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
@@ -399,20 +351,14 @@ services:
       - homepage.description=LazyLibrarian is a SickBeard, CouchPotato, Headphones-like application for ebooks, audiobooks and magazines
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:5299 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
@@ -463,38 +409,37 @@ services:
       SEARCH_BETTER: True
       SEARCH_MISSING: True
       DETECT_DELETIONS: True
-
       # --- Instances ---
       SONARR: >
-        - base_url: "http://recon.jamnapari-goblin.ts.net:8989"
+        - base_url: "http://recon.$TS_DOMAIN:8989"
           api_key: "$SONARR_API_KEY"
-
       RADARR: >
-        - base_url: "http://recon.jamnapari-goblin.ts.net:7878"
+        - base_url: "http://recon.$TS_DOMAIN:7878"
           api_key: "$RADARR_API_KEY"
-
       # READARR: >
       #   - base_url: "http://readarr:8787"
       #     api_key: "$READARR_API_KEY"
-
       # LIDARR: >
       #   - base_url: "http://lidarr:8686"
       #     api_key: "$LIDARR_API_KEY"
-
       # WHISPARR: >
       #   - base_url: "http://whisparr:6969"
       #     api_key: "$WHISPARR_API_KEY"
-
       # --- Download Clients ---
       QBITTORRENT: >
-        - base_url: "http://recon.jamnapari-goblin.ts.net:8085"
+        - base_url: "http://recon.$TS_DOMAIN:8085"
+      SABNZBD: >
+        - base_url: "http://recon.$TS_DOMAIN:8086"
+          api_key: "$SABNZBD_API_KEY"
     restart: unless-stopped
     depends_on:
-      ts:
+      gluetun:
         condition: service_healthy
       sonarr:
         condition: service_healthy
       qbittorrent:
+        condition: service_healthy
+      sabnzbd:
         condition: service_healthy
   sabnzbd:
     image: lscr.io/linuxserver/sabnzbd
@@ -515,20 +460,14 @@ services:
       - homepage.href=http://recon.${TS_DOMAIN}:8086/
       - homepage.description=The free and easy binary newsreader
     restart: unless-stopped
-    depends_on:
-      ts:
-        condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "curl -s https://ipinfo.io/ | grep -E -q 'Kansas|AT&T' && exit 1 || exit 0",
-        ]
+      test: "curl --fail http://localhost:8086 || exit 1"
       start_period: 120s
       start_interval: 5s
       interval: 5m
       timeout: 5s
       retries: 3
+    depends_on:
+      gluetun:
+        condition: service_healthy
     network_mode: "service:gluetun"
