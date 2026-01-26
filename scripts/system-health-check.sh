@@ -57,8 +57,11 @@ ERROR_COUNT=0
 # Restart unhealthy containers automatically
 # but don't run it recursively!
 if [[ ${ALL_CONTAINERS_IS_RUNNING} = false ]];then
-  /home/chrisl8/containers/scripts/all-containers.sh --restart-unhealthy --quiet --no-wait
+  "${HOME}/containers/scripts/all-containers.sh" --restart-unhealthy --quiet --no-wait
 fi
+
+# Ensure web-admin is running (idempotent - does nothing if already running)
+"${HOME}/containers/scripts/start-web-admin.sh" start
 
 # Check for unhealthy containers
 DOCKER_ISSUES=$(/usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)")
