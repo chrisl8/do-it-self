@@ -49,7 +49,7 @@ app.use((req, res, next) => {
   });
 });
 
-const port = process.env.PORT || 80;
+const port = process.env.PORT || 8080;
 
 async function webserver() {
   const server = app.listen(port);
