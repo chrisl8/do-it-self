@@ -2,6 +2,7 @@ import Docker from 'dockerode';
 import esMain from 'es-main';
 import scanContainerFolders from './containerFolderScanner.js';
 import { getContainerIconFilename, getStackIcon } from './dockerContainerIcons.js';
+import { getPendingUpdates } from './pendingUpdates.js';
 
 const docker = new Docker();
 
@@ -55,12 +56,15 @@ async function getFormattedDockerContainers() {
 
     const stacks = await scanContainerFolders();
 
+    const pendingUpdates = getPendingUpdates();
+
     const stacksWithIcons = {};
     for (const [name, info] of Object.entries(stacks)) {
       const stackIcons = containerIconMap[name] || [];
       stacksWithIcons[name] = {
         ...info,
         icon: getStackIcon(name, stackIcons),
+        hasPendingUpdates: pendingUpdates.has(name),
       };
     }
 

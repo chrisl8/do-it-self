@@ -1,50 +1,44 @@
-import express from 'express';
-import { WebSocketServer } from 'ws';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { spawn } from 'child_process';
-import os from 'os';
-import 'dotenv/config';
-import getFormattedDockerContainers from './dockerStatus.js';
-import { statusEmitter, getStatus } from './statusEmitter.js';
+import express from "express";
+import { WebSocketServer } from "ws";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { spawn } from "child_process";
+import os from "os";
+import "dotenv/config";
+import getFormattedDockerContainers from "./dockerStatus.js";
+import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
 
 const app = express();
 
-const CONTAINERS_DIR = join(os.homedir(), 'containers');
-const ICONS_BASE_DIR = join(CONTAINERS_DIR, 'homepage/dashboard-icons');
+const CONTAINERS_DIR = join(os.homedir(), "containers");
+const ICONS_BASE_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
 
-app.use(express.static(join(dirName, '../public')));
+app.use(express.static(join(dirName, "../public")));
 
+app.use("/dashboard-icons/svg", express.static(join(ICONS_BASE_DIR, "svg")));
+app.use("/dashboard-icons/png", express.static(join(ICONS_BASE_DIR, "png")));
+app.use("/dashboard-icons/webp", express.static(join(ICONS_BASE_DIR, "webp")));
 app.use(
-  '/dashboard-icons/svg',
-  express.static(join(ICONS_BASE_DIR, 'svg')),
-);
-app.use(
-  '/dashboard-icons/png',
-  express.static(join(ICONS_BASE_DIR, 'png')),
-);
-app.use(
-  '/dashboard-icons/webp',
-  express.static(join(ICONS_BASE_DIR, 'webp')),
-);
-app.use(
-  '/dashboard-icons/fallback',
-  express.static(join(CONTAINERS_DIR, 'homepage/icons')),
+  "/dashboard-icons/fallback",
+  express.static(join(CONTAINERS_DIR, "homepage/icons")),
 );
 
 // Catch-all route for SPA - serve index.html for all non-file routes
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/') || req.path.startsWith('/dashboard-icons/')) {
+  if (
+    req.path.startsWith("/api/") ||
+    req.path.startsWith("/dashboard-icons/")
+  ) {
     return next();
   }
-  const indexPath = join(dirName, '../public/index.html');
+  const indexPath = join(dirName, "../public/index.html");
   res.sendFile(indexPath, (err) => {
     if (err) {
-      console.error('Error sending index.html:', err);
-      res.status(500).send('Error loading page');
+      console.error("Error sending index.html:", err);
+      res.status(500).send("Error loading page");
     }
   });
 });
@@ -55,161 +49,191 @@ async function webserver() {
   const server = app.listen(port);
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on('upgrade', (request, socket, head) => {
+  server.on("upgrade", (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
+      wss.emit("connection", ws, request);
     });
   });
 
-  wss.on('connection', async (ws) => {
-    console.log('WebSocket client connected');
+  wss.on("connection", async (ws) => {
+    console.log("WebSocket client connected");
 
     const emitStatusToFrontEnd = () => {
       const status = getStatus();
-      status.type = 'status';
+      const sequenceId =
+        Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+      status.type = "status";
+      status.sequenceId = sequenceId;
       ws.send(JSON.stringify(status));
     };
 
     emitStatusToFrontEnd();
 
-    statusEmitter.on('update', () => {
+    statusEmitter.on("update", () => {
       emitStatusToFrontEnd();
     });
 
-    ws.on('message', async (data) => {
+    ws.on("message", async (data) => {
       const message = JSON.parse(data);
-      if (message.type === 'getDockerContainers') {
+      if (message.type === "getDockerContainers") {
         try {
           const containers = await getFormattedDockerContainers();
           ws.send(
-            JSON.stringify({ type: 'dockerContainers', payload: containers }),
+            JSON.stringify({ type: "dockerContainers", payload: containers }),
           );
         } catch (e) {
-          console.error('Error getting docker containers:', e);
+          console.error("Error getting docker containers:", e);
           ws.send(
             JSON.stringify({
-              type: 'dockerContainersError',
+              type: "dockerContainersError",
               error:
                 e?.message ||
-                'Unable to obtain docker containers via Docker Engine API.',
+                "Unable to obtain docker containers via Docker Engine API.",
             }),
           );
         }
-      } else if (message.type === 'restartDockerStack') {
+      } else if (message.type === "restartDockerStack") {
         const stackName = message.payload?.stackName;
         if (!stackName) {
           ws.send(
             JSON.stringify({
-              type: 'dockerStackRestartResult',
+              type: "dockerStackRestartResult",
               success: false,
               stackName,
-              error: 'No stack name provided',
+              error: "No stack name provided",
             }),
           );
           return;
         }
 
+        console.log(`Restart requested for ${stackName}...`);
+
         const scriptPath = join(
           os.homedir(),
-          'containers/scripts/all-containers.sh',
+          "containers/scripts/all-containers.sh",
         );
         const child = spawn(scriptPath, [
-          '--stop',
-          '--start',
-          '--no-wait',
-          '--container',
+          "--stop",
+          "--start",
+          "--no-wait",
+          "--container",
           stackName,
         ]);
 
         ws.send(
           JSON.stringify({
-            type: 'dockerStackRestartStarted',
+            type: "dockerStackRestartStarted",
             stackName,
           }),
         );
 
-        let output = '';
-        child.stdout.on('data', (data) => {
+        let output = "";
+        child.stdout.on("data", (data) => {
           output += data.toString();
         });
-        child.stderr.on('data', (data) => {
+        child.stderr.on("data", (data) => {
           output += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on("close", (code) => {
           ws.send(
             JSON.stringify({
-              type: 'dockerStackRestartResult',
+              type: "dockerStackRestartResult",
               success: code === 0,
               stackName,
               output,
               error: code !== 0 ? `Script exited with code ${code}` : null,
             }),
           );
+          console.log(
+            `Restart completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
+          );
+          getFormattedDockerContainers()
+            .then((containers) => {
+              updateStatus("docker.running", containers.running);
+              updateStatus("docker.stacks", containers.stacks);
+              statusEmitter.emit("update");
+            })
+            .catch((err) => {
+              console.error("Error refreshing containers after restart:", err);
+            });
         });
-      } else if (message.type === 'restartDockerStackWithUpgrade') {
+      } else if (message.type === "restartDockerStackWithUpgrade") {
         const stackName = message.payload?.stackName;
         if (!stackName) {
           ws.send(
             JSON.stringify({
-              type: 'dockerStackRestartResult',
+              type: "dockerStackRestartResult",
               success: false,
               stackName,
-              operation: 'upgrade',
-              error: 'No stack name provided',
+              operation: "upgrade",
+              error: "No stack name provided",
             }),
           );
           return;
         }
 
+        console.log(`Upgrade requested for ${stackName}...`);
         const scriptPath = join(
           os.homedir(),
-          'containers/scripts/all-containers.sh',
+          "containers/scripts/all-containers.sh",
         );
         const child = spawn(scriptPath, [
-          '--stop',
-          '--start',
-          '--no-wait',
-          '--container',
+          "--stop",
+          "--start",
+          "--no-wait",
+          "--container",
           stackName,
-          '--update-git-repos',
-          '--get-updates',
+          "--update-git-repos",
+          "--get-updates",
         ]);
 
         ws.send(
           JSON.stringify({
-            type: 'dockerStackRestartStarted',
+            type: "dockerStackRestartStarted",
             stackName,
-            operation: 'upgrade',
+            operation: "upgrade",
           }),
         );
 
-        let output = '';
-        child.stdout.on('data', (data) => {
+        let output = "";
+        child.stdout.on("data", (data) => {
           output += data.toString();
         });
-        child.stderr.on('data', (data) => {
+        child.stderr.on("data", (data) => {
           output += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on("close", (code) => {
           ws.send(
             JSON.stringify({
-              type: 'dockerStackRestartResult',
+              type: "dockerStackRestartResult",
               success: code === 0,
               stackName,
-              operation: 'upgrade',
+              operation: "upgrade",
               output,
               error: code !== 0 ? `Script exited with code ${code}` : null,
             }),
           );
+          console.log(
+            `Upgrade completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
+          );
+          getFormattedDockerContainers()
+            .then((containers) => {
+              updateStatus("docker.running", containers.running);
+              updateStatus("docker.stacks", containers.stacks);
+              statusEmitter.emit("update");
+            })
+            .catch((err) => {
+              console.error("Error refreshing containers after update:", err);
+            });
         });
       }
     });
 
-    ws.on('close', () => {
-      statusEmitter.removeListener('update', emitStatusToFrontEnd);
-      console.log('WebSocket client disconnected');
+    ws.on("close", () => {
+      statusEmitter.removeListener("update", emitStatusToFrontEnd);
+      console.log("WebSocket client disconnected");
     });
   });
 

@@ -35,19 +35,16 @@ function useDockerStatus() {
     const newSocket = new WebSocket(wsUrl);
 
     newSocket.onopen = () => {
-      console.log("WebSocket connection established");
       reconnectAttempts.current = 0;
       setConnectionState("connected");
     };
 
     newSocket.onclose = () => {
-      console.log("WebSocket connection closed");
       setConnectionState("disconnected");
       scheduleReconnect();
     };
 
     newSocket.onerror = (error) => {
-      console.error("WebSocket error:", error);
       setConnectionState("disconnected");
     };
 
