@@ -57,6 +57,7 @@ function useDockerStatus() {
             running: data.docker.running,
             stacks: data.docker.stacks,
             error: data.docker.error,
+            invalidPendingUpdates: data.docker.invalidPendingUpdates,
           });
           if (data.restartStatus) {
             setRestartStatus(data.restartStatus);
@@ -69,6 +70,7 @@ function useDockerStatus() {
             status: "Online",
             running: data.payload.running,
             stacks: data.payload.stacks,
+            invalidPendingUpdates: data.payload.invalidPendingUpdates,
           });
           setIsLoading(false);
         } else if (data.type === "dockerContainersError") {
