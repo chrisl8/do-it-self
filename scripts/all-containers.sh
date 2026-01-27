@@ -364,7 +364,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         fi
 
         # Further, IF there is a DIUN Upgrade list file (which may be the same file) do the same!
-        if [[ ${GET_UPDATES} = true && -n "${DIUN_UPDATE_FILE}" ]]; then
+        if [[ ${GET_UPDATES} = true && -n "${DIUN_UPDATE_FILE}"  && -e "${DIUN_UPDATE_FILE}" ]]; then
           sed -i "/^${CONTAINER_DIR}\$/d" "${DIUN_UPDATE_FILE}"
           # If the container list file is empty, delete it
           if [[ ! -s "$DIUN_UPDATE_FILE" ]]; then
