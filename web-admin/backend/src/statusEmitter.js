@@ -4,10 +4,12 @@ import { EventEmitter } from 'events';
 const statusEmitter = new EventEmitter();
 statusEmitter.setMaxListeners(20);
 
-const trackedStatus = {};
+const trackedStatus = {
+  restartStatus: {},
+};
 
 const debouncedEmit = _.debounce(() => {
-  statusEmitter.emit('update');
+  statusEmitter.emit("update");
 }, 300);
 
 const updateStatus = (path, value) => {

@@ -108,6 +108,11 @@ async function webserver() {
 
         console.log(`Restart requested for ${stackName}...`);
 
+        updateStatus(`restartStatus.${stackName}`, {
+          status: "in_progress",
+          operation: "restart",
+        });
+
         const scriptPath = join(
           os.homedir(),
           "containers/scripts/all-containers.sh",
@@ -148,6 +153,16 @@ async function webserver() {
           console.log(
             `Restart completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
           );
+          if (code === 0) {
+            updateStatus(`restartStatus.${stackName}`, undefined);
+          } else {
+            updateStatus(`restartStatus.${stackName}`, {
+              status: "failed",
+              operation: "restart",
+              output,
+              error: code !== 0 ? `Script exited with code ${code}` : null,
+            });
+          }
           getFormattedDockerContainers()
             .then((containers) => {
               updateStatus("docker.running", containers.running);
@@ -174,6 +189,12 @@ async function webserver() {
         }
 
         console.log(`Upgrade requested for ${stackName}...`);
+
+        updateStatus(`restartStatus.${stackName}`, {
+          status: "in_progress",
+          operation: "upgrade",
+        });
+
         const scriptPath = join(
           os.homedir(),
           "containers/scripts/all-containers.sh",
@@ -218,6 +239,16 @@ async function webserver() {
           console.log(
             `Upgrade completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
           );
+          if (code === 0) {
+            updateStatus(`restartStatus.${stackName}`, undefined);
+          } else {
+            updateStatus(`restartStatus.${stackName}`, {
+              status: "failed",
+              operation: "upgrade",
+              output,
+              error: code !== 0 ? `Script exited with code ${code}` : null,
+            });
+          }
           getFormattedDockerContainers()
             .then((containers) => {
               updateStatus("docker.running", containers.running);

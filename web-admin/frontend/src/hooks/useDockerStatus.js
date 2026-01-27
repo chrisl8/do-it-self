@@ -58,6 +58,9 @@ function useDockerStatus() {
             stacks: data.docker.stacks,
             error: data.docker.error,
           });
+          if (data.restartStatus) {
+            setRestartStatus(data.restartStatus);
+          }
           if (data.docker.running || data.docker.stacks) {
             setIsLoading(false);
           }
