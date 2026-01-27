@@ -18,6 +18,6 @@ const updateStatus = (path, value) => {
   }
 };
 
-const getStatus = () => trackedStatus;
+const getStatus = () => _.cloneDeep(trackedStatus);
 
 export { statusEmitter, updateStatus, getStatus };
