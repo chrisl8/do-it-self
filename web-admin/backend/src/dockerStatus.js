@@ -68,7 +68,17 @@ async function getFormattedDockerContainers() {
       };
     }
 
-    return { running, stacks: stacksWithIcons };
+    const invalidPendingUpdates = [...pendingUpdates].filter(
+      (name) => !stacks.hasOwnProperty(name),
+    );
+    if (invalidPendingUpdates.length > 0) {
+      console.warn(
+        "[dockerStatus] Invalid stack names in pending updates file:",
+        invalidPendingUpdates,
+      );
+    }
+
+    return { running, stacks: stacksWithIcons, invalidPendingUpdates };
   } catch (error) {
     console.error('Error fetching Docker containers:', error);
     throw error;

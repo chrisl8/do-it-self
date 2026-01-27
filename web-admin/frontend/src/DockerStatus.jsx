@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import Alert from "@mui/material/Alert";
+import AlertTitle from "@mui/material/AlertTitle";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -256,6 +258,20 @@ const DockerStatus = ({
           </button>
         )}
       </Box>
+
+      {dockerStatus.invalidPendingUpdates?.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <AlertTitle>Invalid Stack Names in Updates File</AlertTitle>
+          The following stack names in the updates file no longer exist:{" "}
+          <strong>{dockerStatus.invalidPendingUpdates.join(", ")}</strong>
+          <br />
+          <Typography variant="caption">
+            Update or remove these entries from pendingContainerUpdates.txt
+            <br />
+            and fix diunUpdate.sh to prevent this in the future
+          </Typography>
+        </Alert>
+      )}
 
       <h2 style={{ marginTop: 0 }}>Docker Stacks</h2>
 
