@@ -124,6 +124,22 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 # We moved the script down one level to the scripts directory, so we need to go up one level to get to the containers directory
 SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
 
+DIUN_UPDATE_FILE=""
+# Path to the diun compose file
+COMPOSE_FILE="$SCRIPT_DIR/diun/compose.yaml"
+# Check if the compose file exists
+if [ -f "$COMPOSE_FILE" ]; then
+
+  # Extract the script volume path from the compose file
+  # Look for the line that maps the script volume and extract the host path
+  SCRIPT_VOLUME_PATH=$(grep -E "^\s*-\s*/.*:/script" "$COMPOSE_FILE" | sed 's/^\s*-\s*\([^:]*\):\/script.*/\1/')
+
+  if [ -n "$SCRIPT_VOLUME_PATH" ]; then
+    # Construct the full file path
+    DIUN_UPDATE_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
+  fi
+fi
+
 cd "${SCRIPT_DIR}" || exit
 
 # Create and sort list
@@ -338,12 +354,22 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         fi
 
         # If the container came from a list of containers to process, we need to remove it from the file so we don't try to process it again.
-        if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
+        if [[ ${GET_UPDATES} = true && -n "${CONTAINER_LIST_FILE}" ]]; then
           sed -i "/^${CONTAINER_DIR}\$/d" "${CONTAINER_LIST_FILE}"
           # If the container list file is empty, delete it
           if [[ ! -s "$CONTAINER_LIST_FILE" ]]; then
               echo "$CONTAINER_LIST_FILE file is empty, deleting..."
               rm -rf "$CONTAINER_LIST_FILE"
+          fi
+        fi
+
+        # Further, IF there is a DIUN Upgrade list file (which may be the same file) do the same!
+        if [[ ${GET_UPDATES} = true && -n "${DIUN_UPDATE_FILE}" ]]; then
+          sed -i "/^${CONTAINER_DIR}\$/d" "${DIUN_UPDATE_FILE}"
+          # If the container list file is empty, delete it
+          if [[ ! -s "$DIUN_UPDATE_FILE" ]]; then
+              echo "$DIUN_UPDATE_FILE file is empty, deleting..."
+              rm -rf "$DIUN_UPDATE_FILE"
           fi
         fi
       fi
