@@ -1,0 +1,4 @@
+mounts:
+  /mnt/2000/container-mounts/nextcloud/html:
+    owner: "www-data:www-data"
+    recursive: true

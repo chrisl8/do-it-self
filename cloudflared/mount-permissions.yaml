@@ -1,0 +1,4 @@
+mounts:
+  /mnt/2000/container-mounts/cloudflared:
+    mode: "775"
+    recursive: true
