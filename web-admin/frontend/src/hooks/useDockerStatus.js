@@ -143,6 +143,11 @@ function useDockerStatus() {
   }, []);
 
   const clearRestartStatus = useCallback((stackName) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "clearRestartStatus", payload: { stackName } }),
+      );
+    }
     setRestartStatus((prev) => {
       const newStatus = { ...prev };
       delete newStatus[stackName];
