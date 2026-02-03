@@ -26,7 +26,6 @@ app.use(
   express.static(join(CONTAINERS_DIR, "homepage/icons")),
 );
 
-// Catch-all route for SPA - serve index.html for all non-file routes
 app.use((req, res, next) => {
   if (
     req.path.startsWith("/api/") ||
@@ -259,6 +258,11 @@ async function webserver() {
               console.error("Error refreshing containers after update:", err);
             });
         });
+      } else if (message.type === "clearRestartStatus") {
+        const stackName = message.payload?.stackName;
+        if (stackName) {
+          updateStatus(`restartStatus.${stackName}`, undefined);
+        }
       }
     });
 
