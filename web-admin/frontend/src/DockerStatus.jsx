@@ -258,16 +258,13 @@ const DockerStatus = ({
         </Box>
         {isLoading && <Spinner />}
         {!isLoading && (
-          <button
+          <Button
+            variant="outlined"
+            startIcon={<RestartAltIcon />}
             onClick={handleRefresh}
-            style={{
-              height: "fit-content",
-              padding: "8px 16px",
-              cursor: "pointer",
-            }}
           >
             Refresh Data
-          </button>
+          </Button>
         )}
       </Box>
 
