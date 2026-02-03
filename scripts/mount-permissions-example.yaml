@@ -1,0 +1,38 @@
+# Example mount-permissions.yaml
+# Place this file alongside compose.yaml in each container directory
+# to have permissions applied automatically before starting containers.
+#
+# Format:
+# mounts:
+#   /path/to/mount:
+#     mode: "755"          # Optional: numeric mode (e.g., "755", "644", "700")
+#     owner: "user:group"  # Optional: owner in user:group format
+#     recursive: true      # Optional: apply recursively (default: false)
+#
+# All fields are optional. If a field is omitted, that permission won't be set.
+
+mounts:
+  /mnt/2000/container-mounts/nextcloud/html:
+    mode: "755"
+    owner: "www-data:www-data"
+    recursive: true
+
+  /mnt/2000/container-mounts/wallabag/data:
+    mode: "755"
+    owner: "wallabag:wallabag"
+    recursive: true
+
+  /mnt/2000/container-mounts/caddy/site/my-digital-garden/dist:
+    mode: "755"
+    owner: "caddy:caddy"
+    recursive: true
+
+  # Example with chmod only (no chown)
+  /mnt/2000/container-mounts/some-service/config:
+    mode: "600"
+    recursive: false
+
+  # Example with chown only (no chmod)
+  /mnt/2000/container-mounts/another-service/data:
+    owner: "serviceuser:servicegroup"
+    recursive: true

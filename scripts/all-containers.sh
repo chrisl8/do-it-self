@@ -128,6 +128,10 @@ if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} 
   echo ""
   echo "Or list mount points for a single container:"
   echo "all-containers.sh --list-mounts --container <container-name>"
+  echo ""
+  echo "Mount permissions can be configured per-container using mount-permissions.yaml"
+  echo "Files must be placed alongside compose.yaml in each container directory."
+  echo "See example format in scripts/mount-permissions-example.yaml"
   exit
 fi
 
@@ -211,6 +215,181 @@ list_local_mounts() {
 
     resolve_to_absolute "$source" "$base_dir"
   done
+}
+
+apply_mount_permissions() {
+  local config_file="$1"
+  
+  if [[ ! -f "$config_file" ]]; then
+    return
+  fi
+  
+  printf "${YELLOW}Applying mount permissions...${NC}\n"
+  
+  # Check if yq is available for YAML parsing
+  if command -v yq &> /dev/null; then
+    # Use yq for proper YAML parsing
+    local mount_paths
+    mount_paths=$(yq e '.mounts | keys' "$config_file" 2>/dev/null)
+    
+    while IFS= read -r mount_path; do
+      if [[ -z "$mount_path" || "$mount_path" == "---" ]]; then
+        continue
+      fi
+      
+      # Trim whitespace
+      mount_path=$(echo "$mount_path" | xargs)
+      
+      # Skip if empty after trimming
+      [[ -z "$mount_path" ]] && continue
+      
+      # Get mode, owner, and recursive for this mount
+      local mode owner recursive
+      mode=$(yq e ".mounts[\"$mount_path\"].mode // \"\"" "$config_file" | xargs)
+      owner=$(yq e ".mounts[\"$mount_path\"].owner // \"\"" "$config_file" | xargs)
+      recursive=$(yq e ".mounts[\"$mount_path\"].recursive // \"false\"" "$config_file" | xargs)
+      
+      # Apply permissions
+      apply_single_mount_permission "$mount_path" "$mode" "$owner" "$recursive"
+    done <<< "$mount_paths"
+  else
+    # Fallback: parse YAML with grep/sed
+    # Expected format:
+    # mounts:
+    #   /path/to/mount:
+    #     mode: "755"
+    #     owner: "user:group"
+    #     recursive: true
+    
+    # Extract mount paths
+    local mount_paths
+    mount_paths=$(grep -E "^\s+/" "$config_file" | sed 's/:$//' | xargs)
+    
+    for mount_path in $mount_paths; do
+      local mode owner recursive
+      
+      # Extract mode
+      mode=$(grep -A1 "$mount_path:" "$config_file" | grep "mode:" | sed 's/.*mode:\s*"\?\([^"]*\)"\?.*/\1/' | xargs)
+      
+      # Extract owner
+      owner=$(grep -A2 "$mount_path:" "$config_file" | grep "owner:" | sed 's/.*owner:\s*"\?\([^"]*\)"\?.*/\1/' | xargs)
+      
+      # Extract recursive
+      recursive=$(grep -A3 "$mount_path:" "$config_file" | grep "recursive:" | sed 's/.*recursive:\s*\([a-z]*\)/\1/' | xargs)
+      
+      apply_single_mount_permission "$mount_path" "$mode" "$owner" "$recursive"
+    done
+  fi
+}
+
+apply_single_mount_permission() {
+  local mount_path="$1"
+  local mode="$2"
+  local owner="$3"
+  local recursive="$4"
+  
+  # Check if mount path exists
+  if [[ ! -e "$mount_path" ]]; then
+    printf "${RED}ERROR: Mount path $mount_path does not exist.${NC}\n"
+    printf "${RED}Please create this directory before starting the container.${NC}\n"
+    printf "${RED}Aborting.${NC}\n"
+    exit 1
+  fi
+  
+  # Build chmod command
+  local chmod_args=""
+  if [[ -n "$mode" ]]; then
+    chmod_args="$mode"
+  fi
+  
+  # Build chown command
+  local chown_args=""
+  if [[ -n "$owner" ]]; then
+    chown_args="$owner"
+  fi
+  
+  # Apply chmod if specified
+  if [[ -n "$chmod_args" ]]; then
+    local chmod_cmd="chmod"
+    if [[ "$recursive" == "true" ]]; then
+      chmod_cmd="chmod -R"
+    fi
+    
+    printf "  ${YELLOW}chmod $chmod_args $mount_path${NC}"
+    if [[ "$recursive" == "true" ]]; then
+      printf " (recursive)"
+    fi
+    printf "\n"
+    
+    if ! $chmod_cmd "$chmod_args" "$mount_path" 2>/dev/null; then
+      printf "${RED}ERROR: Failed to set mode $chmod_args on $mount_path${NC}\n"
+      printf "${RED}Aborting.${NC}\n"
+      exit 1
+    fi
+  fi
+  
+  # Apply chown if specified
+  if [[ -n "$chown_args" ]]; then
+    local chown_cmd="chown"
+    if [[ "$recursive" == "true" ]]; then
+      chown_cmd="chown -R"
+    fi
+    
+    printf "  ${YELLOW}chown $chown_args $mount_path${NC}"
+    if [[ "$recursive" == "true" ]]; then
+      printf " (recursive)"
+    fi
+    printf "\n"
+    
+    if ! $chown_cmd "$chown_args" "$mount_path" 2>/dev/null; then
+      printf "${RED}ERROR: Failed to set owner $chown_args on $mount_path${NC}\n"
+      printf "${RED}Aborting.${NC}\n"
+      exit 1
+    fi
+  fi
+  
+  # Verify permissions
+  verify_mount_permission "$mount_path" "$mode" "$owner"
+}
+
+verify_mount_permission() {
+  local mount_path="$1"
+  local expected_mode="$2"
+  local expected_owner="$3"
+  
+  if [[ -z "$expected_mode" && -z "$expected_owner" ]]; then
+    return
+  fi
+  
+  # Get actual permissions
+  local actual_owner
+  actual_owner=$(stat -c "%U:%G" "$mount_path" 2>/dev/null)
+  
+  local actual_mode
+  actual_mode=$(stat -c "%a" "$mount_path" 2>/dev/null)
+  
+  local mode_ok=true
+  local owner_ok=true
+  
+  if [[ -n "$expected_mode" && "$actual_mode" != "$expected_mode" ]]; then
+    mode_ok=false
+  fi
+  
+  if [[ -n "$expected_owner" && "$actual_owner" != "$expected_owner" ]]; then
+    owner_ok=false
+  fi
+  
+  if [[ "$mode_ok" == false || "$owner_ok" == false ]]; then
+    printf "  ${RED}WARNING: Permission mismatch on $mount_path${NC}\n"
+    [[ -n "$expected_mode" ]] && printf "    ${RED}Expected mode: $expected_mode, got: $actual_mode${NC}\n"
+    [[ -n "$expected_owner" ]] && printf "    ${RED}Expected owner: $expected_owner, got: $actual_owner${NC}\n"
+    printf "    ${RED}Please check and correct permissions manually.${NC}\n"
+  else
+    printf "  ${GREEN}Verified: $mount_path${NC}"
+    [[ -n "$expected_mode" ]] && printf " (mode $actual_mode)"
+    [[ -n "$expected_owner" ]] && printf " (owner $actual_owner)"
+    printf "\n"
+  fi
 }
 
 cd "${SCRIPT_DIR}" || exit
@@ -422,6 +601,11 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           printf "${YELLOW}  Pulling updates and rebuilding...${NC}\n"
           docker --log-level ERROR compose pull
           docker --log-level ERROR compose build
+        fi
+
+        # Apply mount permissions before starting containers
+        if [[ -f "mount-permissions.yaml" ]]; then
+          apply_mount_permissions "mount-permissions.yaml"
         fi
 
         # IF the following are true, we will run this via the 1Password CLI
