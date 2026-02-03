@@ -211,28 +211,40 @@ const DockerStatus = ({
 
   return (
     <Box sx={{ p: 3 }}>
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+        `}
+      </style>
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <h1 style={{ marginBottom: 0 }}>Docker Status</h1>
           {connectionState === "connected" && !isLoading && (
             <Chip
-              label="Live"
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      backgroundColor: "#4caf50",
+                      animation: "pulse 2s infinite",
+                    }}
+                  />
+                  <span>Live</span>
+                </Box>
+              }
               color="success"
               size="small"
               sx={{
-                "&::before": {
-                  content: '""',
-                  display: "inline-block",
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: "#4caf50",
-                  marginRight: "6px",
-                  animation: "pulse 2s infinite",
-                },
-                "@keyframes pulse": {
-                  "0%, 100%": { opacity: 1 },
-                  "50%": { opacity: 0.5 },
+                "& .MuiChip-label": {
+                  padding: 0,
+                  paddingLeft: 1.5,
+                  paddingRight: 1.5,
                 },
               }}
             />
