@@ -43,3 +43,5 @@ filez/copyparty.conf
 stirling-pdf/configs
 1password/1password-credentials.json
 caddy/meshtastic
+
+cloudflared/config

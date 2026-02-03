@@ -4,7 +4,7 @@ services:
     user: 1000:1000
     image: caddy
     ports:
-      - "443:443"
+      - 80:80
     volumes:
       - /mnt/2000/container-mounts/caddy/conf:/etc/caddy
       - /mnt/2000/container-mounts/caddy/site:/srv
