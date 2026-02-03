@@ -26,6 +26,8 @@ QUIET=false
 
 TEST_FAIL=false
 
+LIST_MOUNTS=false
+
 while test $# -gt 0
 do
         case "$1" in
@@ -76,6 +78,9 @@ do
                 --test-fail)
                   TEST_FAIL=true
                   ;;
+                --list-mounts)
+                  LIST_MOUNTS=true
+                  ;;
         esac
         shift
 done
@@ -85,7 +90,7 @@ if [[ ${TEST_FAIL} = true ]];then
   exit 1
 fi
 
-if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} = false ]];then
+if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} = false && ${LIST_MOUNTS} = false ]];then
   echo ""
   echo "If you want to skip a folder, and just not run that container, you can create a _DISABLED_ file in the folder."
   echo ""
@@ -117,6 +122,12 @@ if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} 
   echo ""
   echo "Finally, there is a --no-wait flag that will skip waiting for all containers to report healthy."
   echo "all-containers.sh --no-wait"
+  echo ""
+  echo "You can also list all local mount points used by containers:"
+  echo "all-containers.sh --list-mounts"
+  echo ""
+  echo "Or list mount points for a single container:"
+  echo "all-containers.sh --list-mounts --container <container-name>"
   exit
 fi
 
@@ -149,6 +160,58 @@ if [ -f "$COMPOSE_FILE" ]; then
     DIUN_UPDATE_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
   fi
 fi
+
+resolve_to_absolute() {
+  local path="$1"
+  local base_dir="$2"
+
+  if [[ -z "$path" ]]; then
+    echo ""
+    return
+  fi
+
+  if [[ "$path" == /* ]]; then
+    echo "$path"
+    return
+  fi
+
+  python3 -c "import os; print(os.path.abspath(os.path.join('$base_dir', '$path')))"
+}
+
+list_local_mounts() {
+  local compose_file="$1"
+  local base_dir="${2:-$(dirname "$compose_file")}"
+
+  if [[ ! -f "$compose_file" ]]; then
+    return
+  fi
+
+  local config_output
+  config_output=$(docker --log-level ERROR compose -f "$compose_file" config 2>/dev/null) || return
+
+  # Extract source: lines from volumes section - handle multi-line format
+  # Format is:
+  # volumes:
+  #   - type: bind
+  #     source: /path/to/source
+  #     target: /path/to/target
+
+  echo "$config_output" | grep -E "^\s+source:" | while read -r source_line; do
+    local source
+    source=$(echo "$source_line" | sed -n 's/.*source:\s*\(.*\)/\1/p' | xargs)
+
+    if [[ -z "$source" ]]; then
+      continue
+    fi
+
+    # Skip named volumes (don't start with /, ./, or ../)
+    if [[ ! "$source" =~ ^(\.|\.\.|/) ]]; then
+      continue
+    fi
+
+    resolve_to_absolute "$source" "$base_dir"
+  done
+}
 
 cd "${SCRIPT_DIR}" || exit
 
@@ -254,6 +317,29 @@ elif [[ ${RESTART_UNHEALTHY} = true ]];then
   readarray -t SORTED_CONTAINER_LIST < <(printf '%s\0' "${CONTAINER_LIST[@]}" | sort -z | xargs -0n1)
 fi
 
+if [[ ${LIST_MOUNTS} = true && ${START_ACTION} = false ]]; then
+  printf "${YELLOW}Local mount points:${NC}\n\n"
+
+  for ENTRY in "${CONTAINER_LIST[@]}"; do
+    CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
+    if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]]; then
+      cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
+
+      printf "${BRIGHT_MAGENTA}${CONTAINER_DIR}:${NC}\n"
+      mounts=$(list_local_mounts "compose.yaml" ".")
+      if [[ -n "$mounts" ]]; then
+        printf "%s\n" "$mounts"
+      else
+        printf "  (no local mounts)\n"
+      fi
+      printf "\n"
+    fi
+  done
+
+  printf "${YELLOW}Mount listing complete.${NC}\n"
+  exit 0
+fi
+
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
   CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
@@ -293,6 +379,17 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     if [[ ${START_ACTION} = true ]];then
       if [[ $(docker --log-level ERROR compose ps | wc -l) -eq 1 ]];then
         printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
+
+        if [[ ${LIST_MOUNTS} = true ]]; then
+          printf "${YELLOW}Mount points for ${CONTAINER_DIR}:${NC}\n"
+          mounts=$(list_local_mounts "compose.yaml" ".")
+          if [[ -n "$mounts" ]]; then
+            printf "%s\n" "$mounts"
+          else
+            printf "  (no local mounts)\n"
+          fi
+          printf "\n"
+        fi
 
         if [[ ${UPDATE_GIT_REPOS} = true ]];then
         # Update any git repositories in the directory
