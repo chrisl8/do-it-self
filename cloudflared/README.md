@@ -1,5 +1,7 @@
 # Cloudflare Tunnel Setup
 
+_WARNING: This file is AI generated and has issues, use it as a jumping off point, but it isn't all correct anymore as some of the information is outdated!_
+
 ## Overview
 
 This stack runs cloudflared as a Docker container to tunnel traffic from Cloudflare to your local Caddy server on port 80.
