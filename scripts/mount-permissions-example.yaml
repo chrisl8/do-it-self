@@ -10,6 +10,13 @@
 #     recursive: true      # Optional: apply recursively (default: false)
 #
 # All fields are optional. If a field is omitted, that permission won't be set.
+#
+# IMPORTANT: sudo access for /usr/bin/chown must be configured.
+# Add to /etc/sudoers or /etc/sudoers.d/:
+#   username ALL=(ALL) NOPASSWD: /usr/bin/chown
+# Or restrict to specific users/groups:
+#   username ALL=(ALL) NOPASSWD: /usr/bin/chown www-data:www-data
+#   username ALL=(ALL) NOPASSWD: /usr/bin/chown wallabag:wallabag
 
 mounts:
   /mnt/2000/container-mounts/nextcloud/html:

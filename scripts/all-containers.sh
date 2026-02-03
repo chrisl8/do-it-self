@@ -224,6 +224,17 @@ apply_mount_permissions() {
     return
   fi
   
+  # Test sudo access once at the start - required for chown operations
+  # Test specifically for /usr/bin/chown since sudoers may allow only specific commands
+  if ! sudo -n /usr/bin/chown nobody /dev/null 2>/dev/null; then
+    printf "${RED}ERROR: sudo access required for chown operations.${NC}\n"
+    printf "${RED}Please configure passwordless sudo for /usr/bin/chown.${NC}\n"
+    printf "${RED}Add to /etc/sudoers:${NC}\n"
+    printf "${RED}  $(whoami) ALL=(ALL) NOPASSWD: /usr/bin/chown${NC}\n"
+    printf "${RED}Aborting.${NC}\n"
+    exit 1
+  fi
+  
   printf "${YELLOW}Applying mount permissions...${NC}\n"
   
   # Check if yq is available for YAML parsing
@@ -330,9 +341,9 @@ apply_single_mount_permission() {
   
   # Apply chown if specified
   if [[ -n "$chown_args" ]]; then
-    local chown_cmd="chown"
+    local chown_cmd="sudo /usr/bin/chown"
     if [[ "$recursive" == "true" ]]; then
-      chown_cmd="chown -R"
+      chown_cmd="sudo /usr/bin/chown -R"
     fi
     
     printf "  ${YELLOW}chown $chown_args $mount_path${NC}"
