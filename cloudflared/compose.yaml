@@ -1,0 +1,26 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared
+    container_name: cloudflared
+    command: tunnel --config /home/nonroot/.cloudflared/config.yml --metrics 127.0.0.1:20241 run
+    volumes:
+      - /mnt/2000/container-mounts/cloudflared/config:/home/nonroot/.cloudflared
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    network_mode: host
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "cloudflared",
+          "tunnel",
+          "--metrics",
+          "127.0.0.1:20241",
+          "ready",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
