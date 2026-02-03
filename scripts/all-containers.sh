@@ -24,6 +24,8 @@ NO_HEALTH_CHECK=false
 
 QUIET=false
 
+TEST_FAIL=false
+
 while test $# -gt 0
 do
         case "$1" in
@@ -71,9 +73,17 @@ do
                 --no-health-check)
                   NO_HEALTH_CHECK=true
                   ;;
+                --test-fail)
+                  TEST_FAIL=true
+                  ;;
         esac
         shift
 done
+
+if [[ ${TEST_FAIL} = true ]];then
+  echo "FAILING due to TEST FAIL REQUEST!"
+  exit 1
+fi
 
 if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} = false ]];then
   echo ""
