@@ -275,6 +275,18 @@ const DockerStatus = ({
 
       <h2 style={{ marginTop: 0 }}>Docker Stacks</h2>
 
+      {dockerStatus.invalidPendingUpdates?.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <AlertTitle>Invalid Stack Names in Updates File</AlertTitle>
+          The following stack names in the updates file no longer exist:{" "}
+          <strong>{dockerStatus.invalidPendingUpdates.join(", ")}</strong>
+          <br />
+          <Typography variant="caption">
+            Update or remove these entries from pendingContainerUpdates.txt
+          </Typography>
+        </Alert>
+      )}
+
       <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
         <Chip
           label="All"
@@ -288,24 +300,39 @@ const DockerStatus = ({
           color={filter === "running" ? "success" : "default"}
           variant={filter === "running" ? "filled" : "outlined"}
         />
-        <Chip
-          label="Should Be Running"
-          onClick={() => setFilter("should_be_running")}
-          color={filter === "should_be_running" ? "error" : "default"}
-          variant={filter === "should_be_running" ? "filled" : "outlined"}
-        />
+        {dockerStatus.stacks &&
+          Object.values(dockerStatus.stacks).some(
+            (stack) =>
+              getStackState(
+                stack.name,
+                dockerStatus.running,
+                dockerStatus.stacks,
+              ) === "should_be_running",
+          ) && (
+            <Chip
+              label="Should Be Running"
+              onClick={() => setFilter("should_be_running")}
+              color={filter === "should_be_running" ? "error" : "default"}
+              variant={filter === "should_be_running" ? "filled" : "outlined"}
+            />
+          )}
         <Chip
           label="Disabled"
           onClick={() => setFilter("disabled")}
           variant={filter === "disabled" ? "filled" : "outlined"}
         />
-        <Chip
-          label="Pending Updates"
-          onClick={() => setFilter("pending_updates")}
-          color={filter === "pending_updates" ? "warning" : "default"}
-          variant={filter === "pending_updates" ? "filled" : "outlined"}
-          icon={<WarningIcon />}
-        />
+        {dockerStatus.stacks &&
+          Object.values(dockerStatus.stacks).some(
+            (stack) => stack.hasPendingUpdates,
+          ) && (
+            <Chip
+              label="Pending Updates"
+              onClick={() => setFilter("pending_updates")}
+              color={filter === "pending_updates" ? "warning" : "default"}
+              variant={filter === "pending_updates" ? "filled" : "outlined"}
+              icon={<WarningIcon />}
+            />
+          )}
       </Box>
 
       {!hasData && !isLoading && (
