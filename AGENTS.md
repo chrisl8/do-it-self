@@ -133,7 +133,7 @@ docker compose pull       # Update images
 
 ```bash
 # Run all container updates
-./scripts/update-from-diun-list.sh
+./scripts/update-containers-from-diun-list.sh
 
 # System health check
 ./scripts/system-health-check.sh
