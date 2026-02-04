@@ -31,6 +31,6 @@ if [[ -e "$PENDING_UPDATES_FILE" ]]; then
   echo "Pending container updates found"
   cat "$PENDING_UPDATES_FILE"
   echo ""
-  echo "/home/$CURRENT_USER/containers/scripts/update-from-diun-list.sh"
+  echo "/home/$CURRENT_USER/containers/scripts/update-containers-from-diun-list.sh"
   exit 1
 fi

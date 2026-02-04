@@ -998,7 +998,7 @@ Note how it stops, starts, waits only 1 second between each, and both updates an
 ### DIUN
 
 If you added the diun container, it will update a list of containers with pending update and email that to you weekly if you set that up in your crontab.  
-The email will include the name of the script to run, which is `~/containers/scripts/update-from-diun-list.sh`
+The email will include the name of the script to run, which is `~/containers/scripts/update-containers-from-diun-list.sh`
 
 ## System Updates
 
