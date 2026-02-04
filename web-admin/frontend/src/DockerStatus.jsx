@@ -20,6 +20,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import UpgradeIcon from "@mui/icons-material/Upgrade";
 import WarningIcon from "@mui/icons-material/Warning";
 import Tooltip from "@mui/material/Tooltip";
+import Snackbar from "@mui/material/Snackbar";
 
 const getRunningContainersStatus = (containers) => {
   if (!containers || Object.keys(containers).length === 0) return null;
@@ -67,19 +68,29 @@ const getStackState = (stackName, runningStacks, filesystemStacks) => {
   return "unknown";
 };
 
-const getStackStateDisplay = (state, containers) => {
+const getStackStateDisplay = (state, containers, restartStatus) => {
+  const isRestarting =
+    restartStatus?.status === "requested" ||
+    restartStatus?.status === "in_progress";
   switch (state) {
     case "running": {
       const runningStatus = getRunningContainersStatus(containers);
       return {
-        color: runningStatus || "success",
-        label: getRunningStatusLabel(runningStatus),
+        color: isRestarting ? "info" : runningStatus || "success",
+        label: isRestarting
+          ? "Running (Restarting)"
+          : getRunningStatusLabel(runningStatus),
       };
     }
     case "disabled":
       return { color: "default", label: "Disabled" };
     case "should_be_running":
-      return { color: "error", label: "Should Be Running" };
+      return {
+        color: isRestarting ? "info" : "error",
+        label: isRestarting
+          ? "Should Be Running (Restarting)"
+          : "Should Be Running",
+      };
     default:
       return { color: "warning", label: "Unknown" };
   }
@@ -175,9 +186,19 @@ const DockerStatus = ({
     stackName: null,
     output: "",
   });
+  const [snackbar, setSnackbar] = useState({ open: false, message: "" });
 
   const handleRefresh = () => {
     getDockerStatus();
+  };
+
+  const handleRestart = (stackName, operation = "restart") => {
+    if (operation === "upgrade") {
+      restartDockerStackWithUpgrade(stackName);
+    } else {
+      restartDockerStack(stackName);
+    }
+    setSnackbar({ open: true, message: `Restart initiated for ${stackName}` });
   };
 
   const toggleStack = (stackName) => {
@@ -204,8 +225,49 @@ const DockerStatus = ({
       dockerStatus.running,
       dockerStatus.stacks,
     );
+    const isRestarting =
+      restartStatus?.[stack.name]?.status === "requested" ||
+      restartStatus?.[stack.name]?.status === "in_progress";
+    if (filter === "running") {
+      return state === "running" || isRestarting;
+    }
+    if (filter === "should_be_running") {
+      return state === "should_be_running" || isRestarting;
+    }
     return state === filter;
   });
+
+  const allCount = unifiedStacks.length;
+  const runningCount = unifiedStacks.filter((stack) => {
+    const state = getStackState(
+      stack.name,
+      dockerStatus.running,
+      dockerStatus.stacks,
+    );
+    const isRestarting =
+      restartStatus?.[stack.name]?.status === "requested" ||
+      restartStatus?.[stack.name]?.status === "in_progress";
+    return state === "running" || isRestarting;
+  }).length;
+  const shouldBeRunningCount = unifiedStacks.filter((stack) => {
+    const state = getStackState(
+      stack.name,
+      dockerStatus.running,
+      dockerStatus.stacks,
+    );
+    const isRestarting =
+      restartStatus?.[stack.name]?.status === "requested" ||
+      restartStatus?.[stack.name]?.status === "in_progress";
+    return state === "should_be_running" || isRestarting;
+  }).length;
+  const disabledCount = unifiedStacks.filter(
+    (stack) =>
+      getStackState(stack.name, dockerStatus.running, dockerStatus.stacks) ===
+      "disabled",
+  ).length;
+  const pendingUpdatesCount = unifiedStacks.filter(
+    (stack) => stack.hasPendingUpdates,
+  ).length;
 
   const hasData = dockerStatus.running || dockerStatus.stacks;
 
@@ -298,50 +360,39 @@ const DockerStatus = ({
 
       <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
         <Chip
-          label="All"
+          label={`All (${allCount})`}
           onClick={() => setFilter("all")}
           color={filter === "all" ? "primary" : "default"}
           variant={filter === "all" ? "filled" : "outlined"}
         />
         <Chip
-          label="Running"
+          label={`Running (${runningCount})`}
           onClick={() => setFilter("running")}
           color={filter === "running" ? "success" : "default"}
           variant={filter === "running" ? "filled" : "outlined"}
         />
-        {dockerStatus.stacks &&
-          Object.values(dockerStatus.stacks).some(
-            (stack) =>
-              getStackState(
-                stack.name,
-                dockerStatus.running,
-                dockerStatus.stacks,
-              ) === "should_be_running",
-          ) && (
-            <Chip
-              label="Should Be Running"
-              onClick={() => setFilter("should_be_running")}
-              color={filter === "should_be_running" ? "error" : "default"}
-              variant={filter === "should_be_running" ? "filled" : "outlined"}
-            />
-          )}
+        {shouldBeRunningCount > 0 && (
+          <Chip
+            label={`Should Be Running (${shouldBeRunningCount})`}
+            onClick={() => setFilter("should_be_running")}
+            color={filter === "should_be_running" ? "error" : "default"}
+            variant={filter === "should_be_running" ? "filled" : "outlined"}
+          />
+        )}
         <Chip
-          label="Disabled"
+          label={`Disabled (${disabledCount})`}
           onClick={() => setFilter("disabled")}
           variant={filter === "disabled" ? "filled" : "outlined"}
         />
-        {dockerStatus.stacks &&
-          Object.values(dockerStatus.stacks).some(
-            (stack) => stack.hasPendingUpdates,
-          ) && (
-            <Chip
-              label="Pending Updates"
-              onClick={() => setFilter("pending_updates")}
-              color={filter === "pending_updates" ? "warning" : "default"}
-              variant={filter === "pending_updates" ? "filled" : "outlined"}
-              icon={<WarningIcon />}
-            />
-          )}
+        {pendingUpdatesCount > 0 && (
+          <Chip
+            label={`Pending Updates (${pendingUpdatesCount})`}
+            onClick={() => setFilter("pending_updates")}
+            color={filter === "pending_updates" ? "warning" : "default"}
+            variant={filter === "pending_updates" ? "filled" : "outlined"}
+            icon={<WarningIcon />}
+          />
+        )}
       </Box>
 
       {!hasData && !isLoading && (
@@ -362,6 +413,7 @@ const DockerStatus = ({
           const stateDisplay = getStackStateDisplay(
             stackState,
             stack.containers,
+            restartStatus?.[stack.name],
           );
           const containerCount = Object.keys(stack.containers).length;
           const isStackExpanded = expandedStacks[stack.name] ?? false;
@@ -441,7 +493,7 @@ const DockerStatus = ({
                           sx={{ cursor: "pointer" }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            restartDockerStackWithUpgrade(stack.name);
+                            handleRestart(stack.name, "upgrade");
                           }}
                         />
                       </Tooltip>
@@ -510,7 +562,7 @@ const DockerStatus = ({
                             size="small"
                             onClick={(e) => {
                               e.stopPropagation();
-                              restartDockerStack(stack.name);
+                              handleRestart(stack.name);
                             }}
                             title="Restart stack"
                           >
@@ -520,7 +572,7 @@ const DockerStatus = ({
                             size="small"
                             onClick={(e) => {
                               e.stopPropagation();
-                              restartDockerStackWithUpgrade(stack.name);
+                              handleRestart(stack.name, "upgrade");
                             }}
                             title="Restart and Update stack"
                           >
@@ -742,6 +794,13 @@ const DockerStatus = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+      />
     </Box>
   );
 };
