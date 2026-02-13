@@ -272,7 +272,7 @@ const DockerStatus = ({
   const hasData = dockerStatus.running || dockerStatus.stacks;
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
       <style>
         {`
           @keyframes pulse {
@@ -281,9 +281,23 @@ const DockerStatus = ({
           }
         `}
       </style>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          alignItems: { xs: "flex-start", sm: "center" },
+          gap: { xs: 1, sm: 2 },
+          mb: 2,
+        }}
+      >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <h1 style={{ marginBottom: 0 }}>Docker Status</h1>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontSize: { xs: "1.5rem", sm: "2.125rem" }, mb: 0 }}
+          >
+            Docker Status
+          </Typography>
           {connectionState === "connected" && !isLoading && (
             <Chip
               label={
@@ -430,11 +444,12 @@ const DockerStatus = ({
               <Box
                 sx={{
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: { xs: "flex-start", sm: "space-between" },
-                  px: 2,
+                  flexDirection: { xs: "column", sm: "row" },
+                  alignItems: { xs: "stretch", sm: "center" },
+                  justifyContent: { sm: "space-between" },
+                  px: { xs: 1.5, sm: 2 },
                   py: 1,
-                  gap: 1,
+                  gap: { xs: 0.5, sm: 1 },
                   cursor: containerCount > 0 ? "pointer" : "default",
                   "&:hover":
                     containerCount > 0
@@ -445,17 +460,29 @@ const DockerStatus = ({
                 }}
                 onClick={() => containerCount > 0 && toggleStack(stack.name)}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                {/* Row 1: Icon + name */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    minWidth: 0,
+                  }}
+                >
                   {stack.icon && (
                     <Box
                       component="img"
                       src={getIconUrl(stack.icon)}
                       alt=""
-                      sx={{ width: 32, height: 32 }}
+                      sx={{
+                        width: { xs: 24, sm: 32 },
+                        height: { xs: 24, sm: 32 },
+                        flexShrink: 0,
+                      }}
                     />
                   )}
                   {containerCount > 0 && (
-                    <IconButton size="small" sx={{ p: 0 }}>
+                    <IconButton size="small" sx={{ p: 0, flexShrink: 0 }}>
                       {isStackExpanded ? (
                         <ExpandLessIcon />
                       ) : (
@@ -463,7 +490,16 @@ const DockerStatus = ({
                       )}
                     </IconButton>
                   )}
-                  <Typography variant="h6" component="span">
+                  <Typography
+                    variant="h6"
+                    component="span"
+                    sx={{
+                      fontSize: { xs: "1rem", sm: "1.25rem" },
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {stack.name}
                   </Typography>
                   {containerCount > 0 && (
@@ -471,11 +507,32 @@ const DockerStatus = ({
                       variant="body2"
                       color="text.secondary"
                       component="span"
+                      sx={{
+                        display: { xs: "none", sm: "inline" },
+                        flexShrink: 0,
+                      }}
                     >
                       ({containerCount} container
                       {containerCount !== 1 ? "s" : ""})
                     </Typography>
                   )}
+                </Box>
+                {/* Row 2 on mobile / right side on desktop: status + actions */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    pl: { xs: stack.icon ? 4 : 0, sm: 0 },
+                    flexShrink: 0,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Chip
+                    label={stateDisplay.label}
+                    color={stateDisplay.color}
+                    size="small"
+                  />
                   {stack.hasPendingUpdates &&
                     !(() => {
                       const status = restartStatus?.[stack.name];
@@ -560,6 +617,7 @@ const DockerStatus = ({
                         <>
                           <IconButton
                             size="small"
+                            sx={{ p: { xs: 1, sm: 0.5 } }}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRestart(stack.name);
@@ -570,6 +628,7 @@ const DockerStatus = ({
                           </IconButton>
                           <IconButton
                             size="small"
+                            sx={{ p: { xs: 1, sm: 0.5 } }}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRestart(stack.name, "upgrade");
@@ -583,18 +642,11 @@ const DockerStatus = ({
                     })()}
                   </Box>
                 </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Chip
-                    label={stateDisplay.label}
-                    color={stateDisplay.color}
-                    size="small"
-                  />
-                </Box>
               </Box>
 
               {containerCount > 0 && (
                 <Collapse in={isStackExpanded}>
-                  <CardContent sx={{ pt: 0 }}>
+                  <CardContent sx={{ pt: 0, px: { xs: 1, sm: 2 } }}>
                     <Box
                       sx={{ display: "flex", flexDirection: "column", gap: 1 }}
                     >
@@ -613,14 +665,15 @@ const DockerStatus = ({
                             <Box
                               sx={{
                                 display: "flex",
-                                alignItems: "center",
-                                justifyContent: {
-                                  xs: "flex-start",
-                                  sm: "space-between",
+                                flexDirection: { xs: "column", sm: "row" },
+                                alignItems: {
+                                  xs: "stretch",
+                                  sm: "center",
                                 },
-                                px: 2,
+                                justifyContent: { sm: "space-between" },
+                                px: { xs: 1.5, sm: 2 },
                                 py: 1,
-                                gap: 1,
+                                gap: { xs: 0.5, sm: 1 },
                                 cursor: "pointer",
                                 "&:hover": {
                                   backgroundColor: "action.hover",
@@ -633,6 +686,7 @@ const DockerStatus = ({
                                   display: "flex",
                                   alignItems: "center",
                                   gap: 1,
+                                  minWidth: 0,
                                 }}
                               >
                                 {container.icon && (
@@ -640,10 +694,17 @@ const DockerStatus = ({
                                     component="img"
                                     src={getIconUrl(container.icon)}
                                     alt=""
-                                    sx={{ width: 20, height: 20 }}
+                                    sx={{
+                                      width: 20,
+                                      height: 20,
+                                      flexShrink: 0,
+                                    }}
                                   />
                                 )}
-                                <IconButton size="small" sx={{ p: 0 }}>
+                                <IconButton
+                                  size="small"
+                                  sx={{ p: 0, flexShrink: 0 }}
+                                >
                                   {isContainerExpanded ? (
                                     <ExpandLessIcon fontSize="small" />
                                   ) : (
@@ -653,7 +714,13 @@ const DockerStatus = ({
                                 <Typography
                                   variant="body1"
                                   component="span"
-                                  sx={{ fontWeight: 500 }}
+                                  sx={{
+                                    fontWeight: 500,
+                                    fontSize: { xs: "0.875rem", sm: "1rem" },
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
                                 >
                                   {containerName}
                                 </Typography>
@@ -662,13 +729,23 @@ const DockerStatus = ({
                                 sx={{
                                   display: "flex",
                                   alignItems: "center",
-                                  gap: 2,
+                                  gap: { xs: 1, sm: 2 },
+                                  pl: {
+                                    xs: container.icon ? 3.5 : 0,
+                                    sm: 0,
+                                  },
+                                  flexShrink: 0,
                                 }}
                               >
                                 <Typography
                                   variant="body2"
                                   color="text.secondary"
-                                  sx={{ minWidth: 100 }}
+                                  sx={{
+                                    fontSize: {
+                                      xs: "0.75rem",
+                                      sm: "0.875rem",
+                                    },
+                                  }}
                                 >
                                   {container.status}
                                 </Typography>
@@ -678,7 +755,6 @@ const DockerStatus = ({
                                     container.state,
                                   )}
                                   size="small"
-                                  sx={{ minWidth: 70 }}
                                 />
                               </Box>
                             </Box>
@@ -686,7 +762,7 @@ const DockerStatus = ({
                             <Collapse in={isContainerExpanded}>
                               <Box
                                 sx={{
-                                  px: 2,
+                                  px: { xs: 1.5, sm: 2 },
                                   py: 1.5,
                                   borderTop: 1,
                                   borderColor: "divider",
@@ -697,7 +773,7 @@ const DockerStatus = ({
                                   sx={{
                                     display: "grid",
                                     gridTemplateColumns: "auto 1fr",
-                                    gap: 1,
+                                    gap: { xs: 0.5, sm: 1 },
                                     alignItems: "start",
                                   }}
                                 >
@@ -708,7 +784,10 @@ const DockerStatus = ({
                                   >
                                     Image:
                                   </Typography>
-                                  <Typography variant="body2">
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ wordBreak: "break-all" }}
+                                  >
                                     {container.image}
                                   </Typography>
 
