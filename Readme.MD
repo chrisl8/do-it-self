@@ -159,41 +159,41 @@ For now, I want my personal script `all-containers.sh` to always manage the cont
 
 ### Credentials
 
-The simple and non-expiring way is to use an OAuth Client, as mentioned here:  
-https://tailscale.com/kb/1282/docker#ts_authkey  
+The simple and non-expiring way is to use an OAuth Client, as mentioned here:
+https://tailscale.com/kb/1282/docker#ts_authkey
 and further explained here:
 https://tailscale.com/kb/1215/oauth-clients#registering-new-nodes-using-oauth-credentials
 
 TL;DR:
 
-1. You need a "container" tag, so go to https://login.tailscale.com/admin/acls/visual/tags
-2. Create a Tag called "container"
-3. Go to https://login.tailscale.com/admin/settings/oauth and Generate OAuth client...
-4. Give it a descriptive name
-5. Check the Keys -> Auth Keys -> Write option
-6. Add the "container" tag that you just made.
-7. Create the OAuth Client Key and copy the client key that it gives you that will look something like this:  
+1. You need a "container" tag in your ACL policy. Go to https://login.tailscale.com/admin/acls/visual/tags and create a Tag called "container".
+2. Go to the Trust credentials page in your admin console and click **Credential**, then **OAuth**.
+3. Select **Auth Keys: Write** (Auth Keys: Read will auto-select).
+4. Click **Generate credential** and copy the client secret that looks like:
    `tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx`
 
-![OAuth Client Setup](cd6a0328d6ceeadd9d6297bd8e296168_MD5.jpeg)
+The "container" tag does not need to be selected during credential creation — it is applied at runtime by each container's compose file via `TS_EXTRA_ARGS=--advertise-tags=tag:container`.
 
-**TODO: This doesn't work anymore!**
+Add `?ephemeral=false` to the end of the key so that your container connections do not expire.
 
-** Now also add the text `?ephemeral=false` to the end of the key so that your container connections do not expire! **
+#### Getting `TS_AUTHKEY` into your containers
 
-Now make a file called `~/credentials/tailscale.env` and add this to it:  
+The compose files reference `${TS_AUTHKEY}` which must be available as an environment variable when `docker compose up` runs.
+
+**If using 1Password:** Each service already has a `1password_credential_paths.env` file with `TS_AUTHKEY="op://Docker/tailscale/TS_AUTHKEY"`. The `all-containers.sh` script resolves these automatically via the `op` CLI. Store your key in 1Password and you're done.
+
+**Without 1Password:** Create a `.env` file in each service directory containing:
 `TS_AUTHKEY=tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx?ephemeral=false`
 
-Now the `all-containers.sh` script will make a link to that file in the container file automatically if it exists.
-
-You can also do this by hand like so:
+Docker Compose automatically reads `.env` from the project directory. To avoid duplicating the key, you can keep one copy and symlink it:
 
 ```
+echo 'TS_AUTHKEY=tskey-client-xxx?ephemeral=false' > ~/credentials/tailscale.env
 cd ~/containers/nextcloud
-ln -s ~/credentials/tailscale.env .
+ln -s ~/credentials/tailscale.env .env
 ```
 
-This will allow the container to use this key to create and update its tailscale connection when it starts.
+If a service also needs other credentials, add them to the same `.env` file (or the `~/credentials/` source file).
 
 ## Mounted Volumes
 
