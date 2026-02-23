@@ -1,0 +1,71 @@
+services:
+  formbricks_postgres:
+    container_name: formbricks_postgres
+    restart: unless-stopped
+    image: pgvector/pgvector:pg17
+    volumes:
+      - /mnt/2000/container-mounts/formbricks/data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - caddy-net
+  formbricks_redis:
+    container_name: formbricks_redis
+    restart: unless-stopped
+    image: valkey/valkey
+    command: valkey-server --appendonly yes
+    volumes:
+      - /mnt/2000/container-mounts/formbricks/redis:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - caddy-net
+  formbricks:
+    container_name: formbricks
+    restart: unless-stopped
+    image: ghcr.io/formbricks/formbricks
+    depends_on:
+      formbricks_postgres:
+        condition: service_healthy
+      formbricks_redis:
+        condition: service_healthy
+    volumes:
+      - /mnt/2000/container-mounts/formbricks/saml-connection:/home/nextjs/apps/web/saml-connection
+    networks:
+      - caddy-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO - http://127.0.0.1:3000/ | grep -q '<title>Formbricks</title>'",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 30s
+      retries: 5
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@formbricks_postgres:5432/formbricks?schema=public
+      - REDIS_URL=redis://formbricks_redis:6379
+      - EMAIL_VERIFICATION_DISABLED=1
+      - PASSWORD_RESET_DISABLED=1
+      - WEBAPP_URL=${WEBAPP_URL}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - CRON_SECRET=${CRON_SECRET}
+networks:
+  caddy-net:
+    external: true
