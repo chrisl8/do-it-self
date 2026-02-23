@@ -19,6 +19,8 @@ SINGLE_CONTAINER=""
 NO_WAIT=false
 UPDATE_GIT_REPOS=false
 GET_UPDATES=false
+# --no-fail is now a no-op (start is always resilient), kept for backward compatibility
+# shellcheck disable=SC2034
 NO_FAIL=false
 NO_HEALTH_CHECK=false
 
@@ -27,6 +29,8 @@ QUIET=false
 TEST_FAIL=false
 
 LIST_MOUNTS=false
+
+FAILED_CONTAINERS=()
 
 while test $# -gt 0
 do
@@ -67,6 +71,7 @@ do
                   GET_UPDATES=true
                   ;;
                 --no-fail)
+                  # shellcheck disable=SC2034
                   NO_FAIL=true
                   ;;
                 --quiet)
@@ -612,9 +617,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
           fi
         fi
-        if [[ ${NO_FAIL} = true ]];then
-          set +e
-        fi
         if [[ ${GET_UPDATES} = true ]];then
           printf "${YELLOW}  Pulling updates and rebuilding...${NC}\n"
           docker --log-level ERROR compose pull
@@ -632,6 +634,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         # 2. The 1password container is already running (it should start first)
         # 3. There is a .env file link in the container folder
         # 4. The .env file contains at least one entry that starts with "op://"
+        set +e
         if [[ -x "$(command -v op)" ]] && [[ "$(docker ps --filter "name=1password-connect-api" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/1password-connect.env" ]] && [[ -f "${SCRIPT_DIR}/${CONTAINER_DIR}/1password_credential_paths.env" ]] && grep -q "op://" "${SCRIPT_DIR}/${CONTAINER_DIR}/1password_credential_paths.env"; then
           printf "${YELLOW}  Resolving environment variables via 1Password CLI...${NC}\n"
           if [[ -d "${HOME}/.config/op" ]];then
@@ -644,7 +647,13 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         else
           docker compose up -d --wait
         fi
+        COMPOSE_EXIT_CODE=$?
         set -e
+        if [[ ${COMPOSE_EXIT_CODE} -ne 0 ]]; then
+          printf "${RED} - ${CONTAINER_DIR} FAILED to start (exit code ${COMPOSE_EXIT_CODE})${NC}\n"
+          FAILED_CONTAINERS+=("${CONTAINER_DIR}")
+          continue
+        fi
         if [[ ${CONTAINER_DIR} = "homepage" ]];then
           # This is my personal hack to get icons the way I want them in homepage.
           docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/* /app/public"
@@ -722,4 +731,13 @@ fi
 # Run my check script to go ahead and let everyone know we are back up.
 if [[ ${START_ACTION} = true && ${NO_HEALTH_CHECK} = false && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
   "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
+fi
+
+# Report any containers that failed to start
+if [[ ${#FAILED_CONTAINERS[@]} -gt 0 ]]; then
+  printf "${RED}The following containers failed to start:${NC}\n"
+  for FAILED in "${FAILED_CONTAINERS[@]}"; do
+    printf "${RED} - ${FAILED}${NC}\n"
+  done
+  exit 1
 fi
