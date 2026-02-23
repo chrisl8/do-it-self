@@ -1,0 +1,25 @@
+services:
+  witchazzan:
+    container_name: witchazzan
+    user: 1000:1000
+    build:
+      context: ./Witchazzan
+      dockerfile: Dockerfile
+    volumes:
+      - /mnt/2000/container-mounts/caddy/witchazzan/persistentData:/app/persistentData
+    networks:
+      - caddy-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO - http://127.0.0.1:8080/ | grep -q '<title>Witchazzan</title>'",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 30s
+      retries: 5
+networks:
+  caddy-net:
+    external: true

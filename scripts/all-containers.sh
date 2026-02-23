@@ -405,6 +405,13 @@ verify_mount_permission() {
 
 cd "${SCRIPT_DIR}" || exit
 
+# Ensure the shared caddy-net Docker network exists for caddy + web services
+if [[ ${START_ACTION} = true ]]; then
+  if ! docker network inspect caddy-net &>/dev/null; then
+    docker network create --label keep caddy-net
+  fi
+fi
+
 # Create and sort list
 CONTAINER_LIST=()
 for DIR in *;do
@@ -698,7 +705,8 @@ if [[ ${NO_WAIT} = false ]];then
     docker volume prune -af
 
     # Remove unused networks that get left behind
-    docker network prune -f
+    # The "label!=keep" filter preserves shared external networks like caddy-net
+    docker network prune -f --filter "label!=keep"
   fi
 fi
 
