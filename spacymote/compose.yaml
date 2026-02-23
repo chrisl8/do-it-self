@@ -1,0 +1,23 @@
+services:
+  spacymote:
+    container_name: spacymote
+    user: 1000:1000
+    build:
+      context: ./spacymote
+      dockerfile: Dockerfile
+    networks:
+      - caddy-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO - http://127.0.0.1:3000/ | grep -q '<title>SpacyMote</title>'",
+        ]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 30s
+      retries: 5
+networks:
+  caddy-net:
+    external: true
