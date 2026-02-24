@@ -19,6 +19,8 @@ caddy/conf
 caddy/site
 
 # Application Data and Content Directories
+tsidp/tsidp/
+valheim/valheim-server-docker/
 dawarich/dawarich/
 minecraft/docker-minecraft-bedrock-server/
 nextcloud/html
