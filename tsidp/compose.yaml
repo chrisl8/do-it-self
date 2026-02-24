@@ -1,18 +1,20 @@
 # https://runtimeterror.dev/tsidp-effortless-sso-tailnet/
 # https://github.com/tailscale/tsidp
-
+# Built from source because the published Docker image's run.sh entrypoint
+# does not pass TS_ADVERTISE_TAGS to tsnet, breaking OAuth auth keys.
+# Building from source uses the Dockerfile's ENTRYPOINT ["/tsidp-server"],
+# which reads TS_ADVERTISE_TAGS directly from the environment.
 services:
   tsidp:
-    image: ghcr.io/tailscale/tsidp
-    # build:
-    #   context: ./tsidp
-    #   dockerfile: Dockerfile
+    build:
+      context: ./tsidp
+      dockerfile: Dockerfile
     container_name: tsidp
     user: 1000:1000
     environment:
       - TS_HOSTNAME=tsidp
       - TAILSCALE_USE_WIP_CODE=1
-      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_ADVERTISE_TAGS=tag:container
       - TS_STATE_DIR=/data
       - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
