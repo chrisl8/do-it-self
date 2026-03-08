@@ -1,0 +1,219 @@
+#!/bin/bash
+# Check Kopia snapshot freshness and alert via healthchecks.io if any source is stale
+# Intended to run via cron every 6 hours
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load configuration
+# shellcheck source=kopia-backup-check.conf
+. "${SCRIPT_DIR}/kopia-backup-check.conf"
+
+# Ensure log directory exists
+mkdir -p "$(dirname "${KOPIA_LOG_FILE}")"
+
+# Check for jq
+if ! command -v jq &>/dev/null; then
+    echo "ERROR: jq is required but not installed"
+    exit 1
+fi
+
+# Load credentials from 1Password via Connect API
+load_op_secret() {
+    local op_path="$1"
+    if [ "${OP_AVAILABLE}" = "true" ]; then
+        op read "${op_path}" 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+OP_AVAILABLE=false
+if command -v op &>/dev/null && \
+   [ -f "${HOME}/credentials/1password-connect.env" ] && \
+   docker ps --filter "name=1password-connect-api" --filter "status=running" -q | grep -q .; then
+    export OP_CONNECT_HOST="http://127.0.0.1:9980/"
+    OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
+    export OP_CONNECT_TOKEN
+    OP_AVAILABLE=true
+fi
+
+HEALTHCHECK_URL=""
+if [ "${OP_AVAILABLE}" = "true" ]; then
+    HEALTHCHECK_URL=$(load_op_secret "op://Docker/kopia-backup-check/HEALTHCHECK_URL") || true
+fi
+
+# Rotate log files — keep 5 previous runs
+if [ -f "${KOPIA_LOG_FILE}" ]; then
+    for i in 4 3 2 1; do
+        [ -f "${KOPIA_LOG_FILE}.$i" ] && mv "${KOPIA_LOG_FILE}.$i" "${KOPIA_LOG_FILE}.$((i+1))"
+    done
+    mv "${KOPIA_LOG_FILE}" "${KOPIA_LOG_FILE}.1"
+fi
+
+# Redirect all output to log file
+exec > >(tee -a "${KOPIA_LOG_FILE}") 2>&1
+
+echo "=========================================="
+echo "Kopia backup check starting at $(date)"
+echo "=========================================="
+
+# ── Lock file ─────────────────────────────────────────────────────
+
+exec 9>"${KOPIA_LOCK_FILE}"
+if ! flock -n 9; then
+    echo "ERROR: Another kopia-backup-check.sh is already running"
+    exit 1
+fi
+
+# ── Healthcheck start ping ───────────────────────────────────────
+
+if [ -n "${HEALTHCHECK_URL}" ]; then
+    curl -m 10 --retry 5 -s "${HEALTHCHECK_URL}/start" > /dev/null || true
+fi
+
+# Track overall status
+CHECK_STATUS="success"
+CHECK_ERROR=""
+
+# ── Check container ──────────────────────────────────────────────
+
+echo ""
+echo "── Checking container: ${KOPIA_CONTAINER} ──"
+
+if ! docker ps --filter "name=^${KOPIA_CONTAINER}$" --filter "status=running" -q | grep -q .; then
+    echo "ERROR: Container ${KOPIA_CONTAINER} is not running"
+    CHECK_STATUS="error"
+    CHECK_ERROR="Container ${KOPIA_CONTAINER} is not running"
+fi
+
+# ── Get and parse snapshots ──────────────────────────────────────
+
+SOURCES_JSON="[]"
+STALE_SOURCES=""
+STALE_COUNT=0
+TOTAL_SOURCES=0
+
+if [ "${CHECK_STATUS}" = "success" ]; then
+    echo ""
+    echo "── Getting snapshots ──"
+
+    SNAPSHOT_JSON=$(docker exec "${KOPIA_CONTAINER}" kopia snapshot list --all --json 2>/dev/null) || {
+        echo "ERROR: Failed to get snapshot list from container"
+        CHECK_STATUS="error"
+        CHECK_ERROR="Failed to get snapshot list from container"
+    }
+
+    if [ "${CHECK_STATUS}" = "success" ]; then
+        NOW_EPOCH=$(date +%s)
+        STALE_THRESHOLD_SECS=$((KOPIA_STALE_HOURS * 3600))
+
+        # Use jq to group snapshots by source and find the latest endTime per source
+        # Output format: host|userName|path|endTime (one line per source)
+        LATEST_PER_SOURCE=$(echo "${SNAPSHOT_JSON}" | jq -r '
+            group_by(.source.host + "|" + .source.userName + "|" + .source.path)
+            | map(
+                sort_by(.endTime) | last
+                | {
+                    host: .source.host,
+                    userName: .source.userName,
+                    path: .source.path,
+                    endTime: .endTime
+                }
+            )
+            | .[]
+            | [.host, .userName, .path, .endTime] | @tsv
+        ') || {
+            echo "ERROR: Failed to parse snapshot JSON with jq"
+            CHECK_STATUS="error"
+            CHECK_ERROR="Failed to parse snapshot JSON"
+        }
+    fi
+
+    if [ "${CHECK_STATUS}" = "success" ]; then
+        # Build per-source status using process substitution so variables persist
+        while IFS=$'\t' read -r host userName path endTime; do
+            [ -z "${host}" ] && continue
+            TOTAL_SOURCES=$((TOTAL_SOURCES + 1))
+
+            # Parse endTime to epoch — handle ISO 8601 format from Kopia
+            SNAP_EPOCH=$(date -d "${endTime}" +%s 2>/dev/null) || SNAP_EPOCH=0
+            AGE_SECS=$((NOW_EPOCH - SNAP_EPOCH))
+            AGE_HOURS=$((AGE_SECS / 3600))
+
+            if [ "${AGE_SECS}" -gt "${STALE_THRESHOLD_SECS}" ]; then
+                STATUS="stale"
+                STALE_COUNT=$((STALE_COUNT + 1))
+                STALE_SOURCES="${STALE_SOURCES}  ${host}@${userName}:${path} (${AGE_HOURS}h old)\n"
+                echo "  STALE: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago"
+            else
+                STATUS="fresh"
+                echo "  OK:    ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago"
+            fi
+
+            # Accumulate source entries as JSON using jq
+            SOURCES_JSON=$(echo "${SOURCES_JSON}" | jq \
+                --arg host "${host}" \
+                --arg userName "${userName}" \
+                --arg path "${path}" \
+                --arg endTime "${endTime}" \
+                --arg status "${STATUS}" \
+                --argjson ageHours "${AGE_HOURS}" \
+                '. + [{host: $host, userName: $userName, path: $path, lastSnapshot: $endTime, status: $status, ageHours: $ageHours}]')
+        done < <(echo "${LATEST_PER_SOURCE}")
+
+        if [ "${STALE_COUNT}" -gt 0 ]; then
+            CHECK_STATUS="stale"
+            CHECK_ERROR="${STALE_COUNT} of ${TOTAL_SOURCES} source(s) exceed ${KOPIA_STALE_HOURS}h threshold"
+            echo ""
+            echo "WARNING: ${CHECK_ERROR}"
+        else
+            echo ""
+            echo "All ${TOTAL_SOURCES} source(s) are fresh (within ${KOPIA_STALE_HOURS}h)"
+        fi
+    fi
+fi
+
+# ── Write status JSON ────────────────────────────────────────────
+
+mkdir -p "${KOPIA_STATUS_DIR}"
+
+jq -n \
+    --arg status "${CHECK_STATUS}" \
+    --arg checked "$(date -Iseconds)" \
+    --argjson totalSources "${TOTAL_SOURCES}" \
+    --argjson staleSources "${STALE_COUNT}" \
+    --arg thresholdHours "${KOPIA_STALE_HOURS}" \
+    --arg error "${CHECK_ERROR}" \
+    --argjson sources "${SOURCES_JSON}" \
+    '{
+        status: $status,
+        last_check: $checked,
+        total_sources: $totalSources,
+        stale_sources: $staleSources,
+        threshold_hours: ($thresholdHours | tonumber),
+        error: $error,
+        sources: $sources
+    }' > "${KOPIA_STATUS_FILE}"
+
+echo ""
+echo "Status written to ${KOPIA_STATUS_FILE}"
+cat "${KOPIA_STATUS_FILE}"
+
+# ── Healthcheck ping ─────────────────────────────────────────────
+
+if [ -n "${HEALTHCHECK_URL}" ]; then
+    if [ "${CHECK_STATUS}" = "success" ]; then
+        curl -m 10 --retry 5 -s "${HEALTHCHECK_URL}" > /dev/null || true
+    else
+        curl -m 10 --retry 5 -s "${HEALTHCHECK_URL}/fail" --data-raw "${CHECK_ERROR}" > /dev/null || true
+    fi
+fi
+
+echo ""
+echo "=========================================="
+echo "Kopia backup check finished at $(date) — ${CHECK_STATUS}"
+echo "=========================================="
+
+if [ "${CHECK_STATUS}" = "error" ]; then
+    exit 1
+fi
