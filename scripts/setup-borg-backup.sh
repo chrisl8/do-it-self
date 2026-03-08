@@ -1,0 +1,253 @@
+#!/bin/bash
+# Idempotent BorgBackup setup script
+# Safe to re-run — checks before each action and skips if already done
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONTAINERS_DIR="${HOME}/containers"
+BORGBACKUP_DIR="${CONTAINERS_DIR}/borgbackup"
+
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m' # NoColor
+
+done_count=0
+skip_count=0
+
+done_msg() {
+    printf "${GREEN}[DONE]${NC} %s\n" "$1"
+    done_count=$((done_count + 1))
+}
+
+skip_msg() {
+    printf "${YELLOW}[SKIP]${NC} %s (already exists)\n" "$1"
+    skip_count=$((skip_count + 1))
+}
+
+echo "=========================================="
+echo "BorgBackup Setup"
+echo "=========================================="
+echo ""
+
+# ── Install borgbackup ───────────────────────────────────────────
+
+echo "── System packages ──"
+if command -v borg &>/dev/null; then
+    BORG_VERSION=$(borg --version)
+    skip_msg "borgbackup (${BORG_VERSION})"
+else
+    echo "Installing borgbackup..."
+    sudo apt update
+    sudo apt install -y borgbackup
+    done_msg "borgbackup installed ($(borg --version))"
+fi
+
+if command -v sqlite3 &>/dev/null; then
+    skip_msg "sqlite3 ($(sqlite3 --version | awk '{print $1}'))"
+else
+    echo "Installing sqlite3 (needed for safe SQLite database dumps)..."
+    sudo apt update
+    sudo apt install -y sqlite3
+    done_msg "sqlite3 installed ($(sqlite3 --version | awk '{print $1}'))"
+fi
+echo ""
+
+# ── Create directories ───────────────────────────────────────────
+
+echo "── Directories ──"
+
+create_dir() {
+    if [ -d "$1" ]; then
+        skip_msg "$1"
+    else
+        mkdir -p "$1"
+        done_msg "Created $1"
+    fi
+}
+
+create_dir "${BORGBACKUP_DIR}"
+create_dir "/mnt/2000/container-mounts/borgbackup/db-dumps"
+create_dir "${HOME}/logs"
+echo ""
+
+# ── 1Password integration ────────────────────────────────────────
+
+echo "── 1Password ──"
+
+OP_AVAILABLE=false
+if command -v op &>/dev/null && \
+   [ -f "${HOME}/credentials/1password-connect.env" ] && \
+   docker ps --filter "name=1password-connect-api" --filter "status=running" -q 2>/dev/null | grep -q .; then
+    export OP_CONNECT_HOST="http://127.0.0.1:9980/"
+    OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
+    export OP_CONNECT_TOKEN
+    OP_AVAILABLE=true
+    done_msg "1Password Connect API available"
+else
+    printf "${YELLOW}[WARN]${NC} 1Password Connect API not available\n"
+fi
+
+# Check if the borgbackup item exists in 1Password
+if [ "${OP_AVAILABLE}" = "true" ]; then
+    if op read "op://Docker/borgbackup/BORG_PASSPHRASE" &>/dev/null; then
+        skip_msg "1Password item Docker/borgbackup"
+    else
+        printf "${YELLOW}[ACTION]${NC} Create a 1Password item in the Docker vault named 'borgbackup' with these fields:\n"
+        printf "         - BORG_PASSPHRASE: a strong passphrase for the borg repo\n"
+        printf "         - BORG_HEALTHCHECK_URL: healthchecks.io ping URL (add later)\n"
+    fi
+fi
+
+echo ""
+
+# ── Initialize borg repository ───────────────────────────────────
+
+echo "── Borg repository ──"
+
+# Load BORG_PASSPHRASE from 1Password
+if [ "${OP_AVAILABLE}" = "true" ]; then
+    BORG_PASSPHRASE=$(op read "op://Docker/borgbackup/BORG_PASSPHRASE" 2>/dev/null) || true
+fi
+export BORG_PASSPHRASE
+
+BORG_REPO="/mnt/22TB/borg-repo"
+
+if [ -d "${BORG_REPO}" ]; then
+    skip_msg "Borg repo at ${BORG_REPO}"
+else
+    if [ -z "${BORG_PASSPHRASE}" ]; then
+        printf "${YELLOW}[WARN]${NC} Cannot initialize borg repo — BORG_PASSPHRASE not available\n"
+        printf "       Create the 1Password item Docker/borgbackup with a BORG_PASSPHRASE field,\n"
+        printf "       then re-run this script\n"
+    else
+        echo "Initializing borg repository at ${BORG_REPO}..."
+        borg init --encryption=repokey-blake2 "${BORG_REPO}"
+        done_msg "Initialized borg repo at ${BORG_REPO}"
+
+        # Export the key
+        KEY_FILE="${HOME}/credentials/borg-repo-key.txt"
+        borg key export "${BORG_REPO}" "${KEY_FILE}"
+        chmod 600 "${KEY_FILE}"
+        done_msg "Exported borg key to ${KEY_FILE} (store a copy in 1Password!)"
+    fi
+fi
+echo ""
+
+# ── Remote borg repository ───────────────────────────────────────
+
+echo "── Remote borg repository ──"
+
+if [ -z "${BORG_REMOTE_REPO}" ]; then
+    skip_msg "Remote backup (BORG_REMOTE_REPO not set in borg-backup.conf)"
+else
+    # Test SSH connectivity
+    REMOTE_HOST=$(echo "${BORG_REMOTE_REPO}" | sed -n 's|ssh://\([^/]*\)/.*|\1|p')
+    if [ -z "${REMOTE_HOST}" ]; then
+        printf "${YELLOW}[WARN]${NC} Cannot parse host from BORG_REMOTE_REPO: ${BORG_REMOTE_REPO}\n"
+    elif ! ssh -o ConnectTimeout=10 -o BatchMode=yes "${REMOTE_HOST}" "echo ok" &>/dev/null; then
+        printf "${YELLOW}[WARN]${NC} Cannot SSH to ${REMOTE_HOST} — check SSH key and config\n"
+    else
+        done_msg "SSH connectivity to ${REMOTE_HOST}"
+
+        # Load remote passphrase
+        BORG_REMOTE_PASSPHRASE=""
+        if [ "${OP_AVAILABLE}" = "true" ]; then
+            BORG_REMOTE_PASSPHRASE=$(op read "op://Docker/borgbackup/BORG_REMOTE_PASSPHRASE" 2>/dev/null) || true
+        fi
+
+        if [ -z "${BORG_REMOTE_PASSPHRASE}" ]; then
+            printf "${YELLOW}[WARN]${NC} Cannot initialize remote repo — BORG_REMOTE_PASSPHRASE not available\n"
+            printf "       Add a BORG_REMOTE_PASSPHRASE field to 1Password item Docker/borgbackup,\n"
+            printf "       then re-run this script\n"
+        elif BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg info "${BORG_REMOTE_REPO}" &>/dev/null; then
+            skip_msg "Remote borg repo at ${BORG_REMOTE_REPO}"
+        else
+            echo "Initializing remote borg repository at ${BORG_REMOTE_REPO}..."
+            BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg init --encryption=repokey-blake2 "${BORG_REMOTE_REPO}"
+            done_msg "Initialized remote borg repo at ${BORG_REMOTE_REPO}"
+
+            # Export the remote key
+            REMOTE_KEY_FILE="${HOME}/credentials/borg-remote-repo-key.txt"
+            BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg key export "${BORG_REMOTE_REPO}" "${REMOTE_KEY_FILE}"
+            chmod 600 "${REMOTE_KEY_FILE}"
+            done_msg "Exported remote borg key to ${REMOTE_KEY_FILE} (store a copy in 1Password!)"
+        fi
+    fi
+fi
+echo ""
+
+# ── Make scripts executable ──────────────────────────────────────
+
+echo "── Script permissions ──"
+for script in borg-backup.sh borg-db-dump.sh borg-restore-test.sh; do
+    SCRIPT_PATH="${SCRIPT_DIR}/${script}"
+    if [ -f "${SCRIPT_PATH}" ]; then
+        chmod +x "${SCRIPT_PATH}"
+        done_msg "Made ${script} executable"
+    else
+        printf "${YELLOW}[WARN]${NC} %s not found\n" "${SCRIPT_PATH}"
+    fi
+done
+echo ""
+
+# ── Install cron jobs ────────────────────────────────────────────
+
+echo "── Cron jobs ──"
+
+install_cron() {
+    local schedule="$1"
+    local command="$2"
+    local description="$3"
+    if crontab -l 2>/dev/null | grep -qF "${command}"; then
+        skip_msg "Cron: ${description}"
+    else
+        (crontab -l 2>/dev/null; echo "${schedule} ${command}") | crontab -
+        done_msg "Installed cron: ${description}"
+    fi
+}
+
+install_cron "0 3 * * *" "${SCRIPT_DIR}/borg-backup.sh" "Daily backup at 3:00 AM"
+install_cron "0 6 * * 0" "${SCRIPT_DIR}/borg-restore-test.sh" "Weekly restore test Sundays at 6:00 AM"
+echo ""
+
+# ── Create initial status file ───────────────────────────────────
+
+echo "── Status file ──"
+STATUS_FILE="${CONTAINERS_DIR}/homepage/images/borg-status.json"
+if [ -f "${STATUS_FILE}" ]; then
+    skip_msg "${STATUS_FILE}"
+else
+    cat > "${STATUS_FILE}" << 'STATUSEOF'
+{
+    "status": "not_run",
+    "last_backup": "never",
+    "archive": "",
+    "duration": "",
+    "repo_size": "",
+    "archive_count": "0",
+    "error": ""
+}
+STATUSEOF
+    done_msg "Created initial ${STATUS_FILE}"
+fi
+echo ""
+
+# ── Summary ──────────────────────────────────────────────────────
+
+echo "=========================================="
+echo "Setup complete: ${done_count} actions performed, ${skip_count} skipped"
+echo "=========================================="
+echo ""
+BORG_REPO="/mnt/22TB/borg-repo"
+echo "Next steps:"
+echo "  1. Create a 1Password item in the Docker vault named 'borgbackup' with:"
+echo "     - BORG_PASSPHRASE: a strong passphrase"
+echo "     - BORG_HEALTHCHECK_URL: healthchecks.io URL (add later)"
+echo "     - BORG_REMOTE_PASSPHRASE: a separate passphrase for the offsite repo"
+echo "  2. Re-run this script to initialize the borg repo"
+echo "     (if BORG_PASSPHRASE was not set yet)"
+echo "  3. For offsite backup, set BORG_REMOTE_REPO in borg-backup.conf and re-run"
+echo "  4. Run the first backup manually:"
+echo "     ${SCRIPT_DIR}/borg-backup.sh"
+echo "  5. Verify: borg list ${BORG_REPO}"
+echo ""

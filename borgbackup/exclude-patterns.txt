@@ -1,0 +1,103 @@
+# BorgBackup exclusion patterns
+# Used by borg-backup.sh during archive creation
+
+# Re-downloadable media (large, easily re-acquired)
+/mnt/22TB/container-mounts/recon/data/media/movies/
+/mnt/22TB/container-mounts/recon/data/media/series/
+/mnt/22TB/container-mounts/recon/data/media/qbittorrent/
+/mnt/22TB/container-mounts/recon/data/media/sabnzbd/
+/mnt/22TB/container-mounts/jellyfin/
+
+# Raw database data directories (already backed up via SQL/archive dumps in borgbackup/db-dumps/)
+# PostgreSQL
+/mnt/2000/container-mounts/immich/db/
+/mnt/2000/container-mounts/dawarich/db_data/
+/mnt/2000/container-mounts/paperless-ngx/database/
+/mnt/2000/container-mounts/formbricks/data/
+/mnt/250/container-mounts/onlyoffice/db_data/
+# MariaDB
+/mnt/2000/container-mounts/mariadb/db/
+/mnt/2000/container-mounts/nextcloud/db/
+/mnt/2000/container-mounts/paste/data/
+# MongoDB
+/mnt/2000/container-mounts/your-spotify/db/
+# CouchDB
+/mnt/2000/container-mounts/obsidian-babel-livesync/data/
+# The Lounge IRC logs (1.3G SQLite + text logs, not worth backing up)
+*/the-lounge/config/logs/
+
+# Regenerated caches
+/mnt/2000/container-mounts/jellyfin/cache/
+
+# Kopia caches (regenerated)
+/mnt/250/container-mounts/kopia-*/cache/
+
+# Tailscale state (regenerated on auth)
+*/tailscale-state/
+
+# Embedded git repos (re-cloneable)
+*/valheim-server-docker/
+*/docker-minecraft-bedrock-server/
+*/dawarich/dawarich/
+*/tsidp/headscale/
+
+# Build artifacts and dependencies
+*/node_modules/
+*/__pycache__/
+*/.tox/
+
+# Photon geocoding data (re-downloadable, ~15G)
+*/photon-data/
+
+# Docker build cache
+*/.docker/
+
+# Temporary and lock files
+*.tmp
+*.lock
+*.swp
+*~
+
+# Home directory caches and regeneratable data
+*/.cache/
+*/.local/share/Trash/
+*/.npm/_cacache/
+*/.bun/install/cache/
+*/.deno/
+*/.java/
+*/.dotnet/
+*/.cursor-server/
+*/.vscode-server/
+*/.oh-my-zsh/
+*/.vim/plugged/
+*/.tmux/plugins/
+*/snap/
+*/go/pkg/
+*/go/bin/
+*/.nv/
+*/.pki/
+*/.gnupg/S.*
+*/venvs/
+*/pprof/
+*/game-test/
+*/network-testing/
+*/n/
+
+# Ephemeral/test data
+*/voidship_ephemeral/
+
+# Downloads (transient)
+*/Downloads/
+
+# Default empty XDG dirs
+*/Desktop/
+*/Documents/
+*/Music/
+*/Pictures/
+*/Public/
+*/Templates/
+
+# OS artifacts
+.Trash-*
+.DS_Store
+Thumbs.db
