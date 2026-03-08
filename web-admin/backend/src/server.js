@@ -3,6 +3,7 @@ import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { spawn } from "child_process";
+import { readFile } from "fs/promises";
 import os from "os";
 import "dotenv/config";
 import getFormattedDockerContainers from "./dockerStatus.js";
@@ -12,6 +13,8 @@ const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
 
 const app = express();
+
+const activeStacks = new Set();
 
 const CONTAINERS_DIR = join(os.homedir(), "containers");
 const ICONS_BASE_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
@@ -25,6 +28,101 @@ app.use(
   "/dashboard-icons/fallback",
   express.static(join(CONTAINERS_DIR, "homepage/icons")),
 );
+
+app.get("/api/borg-status", async (req, res) => {
+  try {
+    const statusFile = join(os.homedir(), "containers/homepage/images/borg-status.json");
+    const data = await readFile(statusFile, "utf8");
+    res.json(JSON.parse(data));
+  } catch (err) {
+    console.error("Error reading borg status:", err);
+    res.status(500).json({ error: "Failed to read borg status" });
+  }
+});
+
+app.get("/api/kopia-status", async (req, res) => {
+  try {
+    const statusFile = join(
+      os.homedir(),
+      "containers/homepage/images/kopia-status.json",
+    );
+    const data = await readFile(statusFile, "utf8");
+    res.json(JSON.parse(data));
+  } catch (err) {
+    console.error("Error reading kopia status:", err);
+    res.status(500).json({ error: "Failed to read kopia status" });
+  }
+});
+
+app.get("/api/ups-status", async (req, res) => {
+  try {
+    const child = spawn("apcaccess");
+    let data = "";
+    let error = "";
+    child.stdout.on("data", (chunk) => {
+      data += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      error += chunk;
+    });
+    child.on("close", (code) => {
+      if (code !== 0 || !data.trim()) {
+        res.status(500).json({ error: error || "apcaccess failed" });
+        return;
+      }
+      const status = {};
+      for (const line of data.trim().split("\n")) {
+        if (line.includes(":")) {
+          let key = line.split(":")[0].trim();
+          let value = line.slice(line.indexOf(":") + 1).trim();
+          switch (key) {
+            case "LINEV":
+              key = "LINE_VOLTAGE";
+              value = Number(value.split(" ")[0]);
+              break;
+            case "LOADPCT":
+              key = "LOAD_PERCENT";
+              value = Number(value.split(" ")[0]);
+              break;
+            case "BCHARGE":
+              key = "BATTERY_CHARGE_PERCENT";
+              value = Number(value.split(" ")[0]);
+              break;
+            case "TIMELEFT":
+              key = "MINUTES_LEFT";
+              value = Number(value.split(" ")[0]);
+              break;
+            case "END APC":
+              key = "END_APC";
+              break;
+          }
+          status[key] = value;
+        }
+      }
+      res.json(status);
+    });
+    child.on("error", (err) => {
+      console.error("Error spawning apcaccess:", err);
+      res.status(500).json({ error: "apcaccess not available" });
+    });
+  } catch (err) {
+    console.error("Error getting UPS status:", err);
+    res.status(500).json({ error: "Failed to get UPS status" });
+  }
+});
+
+app.get("/api/borg-log", async (req, res) => {
+  try {
+    const logFile = join(os.homedir(), "logs/borg-backup.log");
+    const data = await readFile(logFile, "utf8");
+    const lines = data.split("\n");
+    const lastLines = lines.slice(-100);
+    res.json({ log: lastLines });
+  } catch (err) {
+    console.error("Error reading borg log:", err);
+    res.status(500).json({ error: "Failed to read borg log" });
+  }
+});
 
 app.use((req, res, next) => {
   if (
@@ -105,6 +203,20 @@ async function webserver() {
           return;
         }
 
+        if (activeStacks.has(stackName)) {
+          ws.send(
+            JSON.stringify({
+              type: "dockerStackRestartResult",
+              success: false,
+              stackName,
+              error: "Stack is already being restarted",
+            }),
+          );
+          return;
+        }
+
+        activeStacks.add(stackName);
+
         console.log(`Restart requested for ${stackName}...`);
 
         updateStatus(`restartStatus.${stackName}`, {
@@ -140,6 +252,7 @@ async function webserver() {
         });
 
         child.on("close", (code) => {
+          activeStacks.delete(stackName);
           ws.send(
             JSON.stringify({
               type: "dockerStackRestartResult",
@@ -187,6 +300,21 @@ async function webserver() {
           return;
         }
 
+        if (activeStacks.has(stackName)) {
+          ws.send(
+            JSON.stringify({
+              type: "dockerStackRestartResult",
+              success: false,
+              stackName,
+              operation: "upgrade",
+              error: "Stack is already being restarted",
+            }),
+          );
+          return;
+        }
+
+        activeStacks.add(stackName);
+
         console.log(`Upgrade requested for ${stackName}...`);
 
         updateStatus(`restartStatus.${stackName}`, {
@@ -225,6 +353,7 @@ async function webserver() {
         });
 
         child.on("close", (code) => {
+          activeStacks.delete(stackName);
           ws.send(
             JSON.stringify({
               type: "dockerStackRestartResult",
