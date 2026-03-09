@@ -36,14 +36,18 @@ load_op_secret() {
 if [ "${OP_AVAILABLE}" = "true" ]; then
     MARIADB_ROOT_PASSWORD=$(load_op_secret "op://Docker/mariadb/MARIADB_ROOT_PASSWORD") || true
     NEXTCLOUD_MYSQL_ROOT_PASSWORD=$(load_op_secret "op://Docker/nextcloud/MYSQL_ROOT_PASSWORD") || true
-    COUCHDB_USER=$(load_op_secret "op://Docker/obsidian-babel-livesync/COUCHDB_USER") || true
-    COUCHDB_PASSWORD=$(load_op_secret "op://Docker/obsidian-babel-livesync/COUCHDB_PASSWORD") || true
     echo "Credential status: MariaDB=$([ -n "${MARIADB_ROOT_PASSWORD}" ] && echo ok || echo MISSING)" \
-         "Nextcloud=$([ -n "${NEXTCLOUD_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo MISSING)" \
-         "CouchDB=$([ -n "${COUCHDB_USER}" ] && echo ok || echo MISSING)"
+         "Nextcloud=$([ -n "${NEXTCLOUD_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo MISSING)"
 else
     echo "WARNING: 1Password not available — database credentials will be missing"
 fi
+
+# Clean up Dawarich database
+echo "  Cleaning up Dawarich database..."
+docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_dead;'
+docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_home;'
+docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM FULL;'
+
 
 # Paste DB has a hardcoded password
 PASTE_MYSQL_ROOT_PASSWORD="${PASTE_MYSQL_ROOT_PASSWORD:-pastefy}"
@@ -134,50 +138,6 @@ if container_running "your_spotify-mongo"; then
     rm -f "${MONGO_STDERR}"
 else
     echo "  Skipping your_spotify-mongo (not running)"
-fi
-
-# ── CouchDB containers ───────────────────────────────────────────
-
-echo "Dumping CouchDB databases..."
-if container_running "obsidian-babel-livesync"; then
-    echo "  Dumping CouchDB: obsidian-babel-livesync"
-    if [ -z "${COUCHDB_USER}" ] || [ -z "${COUCHDB_PASSWORD}" ]; then
-        echo "    FAILED (credentials missing — 1Password credential not loaded)"
-        DUMP_ERRORS=$((DUMP_ERRORS + 1))
-    else
-        # Get list of databases (exclude system dbs)
-        ALL_DBS_RESPONSE=$(docker exec "obsidian-babel-livesync" curl -s "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@127.0.0.1:5984/_all_dbs" 2>/dev/null)
-        # Validate response is a JSON array and not an error object
-        if echo "${ALL_DBS_RESPONSE}" | grep -q '"error"'; then
-            echo "    ERROR: CouchDB auth failed: ${ALL_DBS_RESPONSE}"
-            DUMP_ERRORS=$((DUMP_ERRORS + 1))
-        elif ! echo "${ALL_DBS_RESPONSE}" | grep -q '^\['; then
-            echo "    ERROR: CouchDB returned unexpected response: ${ALL_DBS_RESPONSE}"
-            DUMP_ERRORS=$((DUMP_ERRORS + 1))
-        else
-            DBS=$(echo "${ALL_DBS_RESPONSE}" | tr -d '[]"' | tr ',' '\n' | grep -v '^_')
-            if [ -n "${DBS}" ]; then
-                COUCH_OK=true
-                for db in ${DBS}; do
-                    echo "    Dumping database: ${db}"
-                    if docker exec "obsidian-babel-livesync" curl -s "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@127.0.0.1:5984/${db}/_all_docs?include_docs=true" > "${BORG_DB_DUMP_DIR}/couchdb_${db}.json"; then
-                        echo "      OK"
-                    else
-                        echo "      FAILED"
-                        COUCH_OK=false
-                    fi
-                done
-                if [ "${COUCH_OK}" != "true" ]; then
-                    DUMP_ERRORS=$((DUMP_ERRORS + 1))
-                fi
-            else
-                echo "    No user databases found"
-                DUMP_ERRORS=$((DUMP_ERRORS + 1))
-            fi
-        fi
-    fi
-else
-    echo "  Skipping obsidian-babel-livesync (not running)"
 fi
 
 # ── SQLite databases ─────────────────────────────────────────────
