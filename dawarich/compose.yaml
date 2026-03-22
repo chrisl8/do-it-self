@@ -11,7 +11,7 @@ services:
       - dawarich
     volumes:
       - /mnt/2000/container-mounts/dawarich/redis_data:/data
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       start_period: 120s
@@ -32,7 +32,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: dawarich_production
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       start_period: 120s
@@ -75,13 +75,14 @@ services:
       RAILS_LOG_TO_STDOUT: "true"
       SELF_HOSTED: true
       STORE_GEODATA: true
-      PHOTON_API_HOST: dawarich_photon:2322
-      PHOTON_API_USE_HTTPS: false
+      PHOTON_API_HOST: photon.komoot.io
+      PHOTON_API_USE_HTTPS: true
       REVERSE_GEOCODING_ENABLED: true
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
       OIDC_ISSUER: https://tsidp.${TS_DOMAIN}
       OIDC_REDIRECT_URI: https://dawarich.${TS_DOMAIN}/users/auth/openid_connect/callback
+
 
       OIDC_AUTO_REGISTER: false # optional, default is false
       OIDC_PROVIDER_NAME: Tailscale # optional, default is OpenID Connect
@@ -91,7 +92,7 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test:
         [
@@ -146,16 +147,17 @@ services:
       RAILS_LOG_TO_STDOUT: "true"
       SELF_HOSTED: true
       STORE_GEODATA: true
-      PHOTON_API_HOST: dawarich_photon:2322
-      PHOTON_API_USE_HTTPS: false
+      PHOTON_API_HOST: photon.komoot.io
+      PHOTON_API_USE_HTTPS: true
       REVERSE_GEOCODING_ENABLED: true
+
       TIME_ZONE: America/Chicago
     logging:
       driver: "json-file"
       options:
         max-size: "100m"
         max-file: "5"
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "bundle exec sidekiqmon processes | grep Processes"]
       start_period: 120s
@@ -169,8 +171,6 @@ services:
       dawarich_redis:
         condition: service_healthy
       dawarich_app:
-        condition: service_healthy
-      dawarich_photon:
         condition: service_healthy
     deploy:
       resources:
@@ -196,7 +196,7 @@ services:
       - net_admin
       - sys_module
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
       start_period: 120s
@@ -209,24 +209,3 @@ services:
     depends_on:
       dawarich_app:
         condition: service_healthy
-  # I run photon here for simplicity and to avoid the overhead of passing data out and back in through a tailscale tunnel.
-  dawarich_photon:
-    container_name: dawarich_photon
-    build:
-      context: ./photon
-      dockerfile: Dockerfile
-      args:
-        # Watch https://github.com/komoot/photon for the latest version
-        PHOTON_VERSION: 0.7.4
-    volumes:
-      - /mnt/250/container-mounts/photon/photon_data:/photon/photon_data
-    networks:
-      - dawarich
-    restart: unless-stopped
-    healthcheck:
-      test: 'curl --fail http://localhost:2322/status 2>/dev/null | grep -o "\"status\":\"Ok\"" || exit 1'
-      start_period: 120s
-      start_interval: 5s
-      interval: 5m
-      timeout: 5s
-      retries: 3
