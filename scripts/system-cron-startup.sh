@@ -29,6 +29,10 @@ if [[ -e "/home/$CURRENT_USER/Metatron/start-pm2.sh" ]]; then
   "/home/$CURRENT_USER/Metatron/start-pm2.sh" >> "/home/$CURRENT_USER/logs/system-cron-startup.log"
 fi
 
+if [[ -e "/home/$CURRENT_USER/Kryten/scripts/start-pm2.sh" ]]; then
+  "/home/$CURRENT_USER/Kryten/scripts/start-pm2.sh" >> "/home/$CURRENT_USER/logs/system-cron-startup.log"
+fi
+
 echo "System startup complete." >> "/home/$CURRENT_USER/logs/system-cron-startup.log"
 
 cat "/home/$CURRENT_USER/logs/system-cron-startup.log" | mail -s "$HOSTNAME - All services started" "$CURRENT_USER"

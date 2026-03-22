@@ -57,6 +57,7 @@ fi
 
 export BORG_PASSPHRASE
 export BORG_REPO
+export BORG_RSH
 
 LOG_FILE="${HOME}/logs/borg-restore-test.log"
 mkdir -p "$(dirname "${LOG_FILE}")"
@@ -86,10 +87,23 @@ trap cleanup EXIT
 
 # ── Repository integrity check ───────────────────────────────────
 
-echo ""
-echo "── Repository integrity check ──"
+# First Sunday of month: full data verification (slow, verifies every byte)
+# Other Sundays: repository-only check (fast, verifies repo structure/consistency)
+DAY_OF_MONTH=$(date +%d)
+if [ "${DAY_OF_MONTH}" -le 7 ]; then
+    CHECK_MODE="full"
+    BORG_CHECK_ARGS="--verify-data --show-rc"
+else
+    CHECK_MODE="fast"
+    BORG_CHECK_ARGS="--repository-only --show-rc"
+fi
 
-if borg check --show-rc "${BORG_REPO}"; then
+echo ""
+echo "── Repository integrity check (${CHECK_MODE}) ──"
+
+# BORG_CHECK_ARGS contains multiple flags, must word-split
+# shellcheck disable=SC2086
+if borg check ${BORG_CHECK_ARGS} "${BORG_REPO}"; then
     echo "Repository integrity check passed"
 else
     echo "ERROR: Repository integrity check failed"
@@ -125,13 +139,24 @@ else
         TEST_STATUS="failed"
     fi
 
-    # Verify a database dump can be extracted
+    # Verify database dumps can be extracted
     echo "  Extracting db-dumps/ ..."
-    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" mnt/2000/container-mounts/borgbackup/db-dumps/ 2>/dev/null; then
-        DUMP_COUNT=$(find "${TEST_DIR}" -name "*.sql.gz" -o -name "*.archive.gz" -o -name "*.json" -o -name "*.json.gz" -o -name "*.db.gz" -o -name "*.sqlite.gz" -o -name "*.sqlite3.gz" | wc -l)
+    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" mnt/22TB/borg-db-dumps/ 2>/dev/null; then
+        DUMP_COUNT=$(find "${TEST_DIR}" -name "*.sql" -o -name "*.sql.gz" -o -name "*.archive" -o -name "*.archive.gz" -o -name "*.sqlite" -o -name "*.sqlite3" -o -name "*.db" -o -name "*.sqlite.gz" -o -name "*.sqlite3.gz" -o -name "*.db.gz" | wc -l)
         echo "  Extracted ${DUMP_COUNT} dump files successfully"
+        if [ "${DUMP_COUNT}" -eq 0 ]; then
+            echo "  WARNING: No dump files found in extraction"
+        fi
     else
         echo "  WARNING: Could not extract db-dumps (may not exist in archive yet)"
+    fi
+
+    # Verify a sample of service data can be extracted
+    echo "  Extracting vaultwarden data (sample service) ..."
+    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" mnt/2000/container-mounts/vaultwarden/data/rsa_key.pem 2>/dev/null; then
+        echo "  Service data extraction OK"
+    else
+        echo "  WARNING: Could not extract vaultwarden config"
     fi
 fi
 
@@ -143,7 +168,9 @@ if [ -n "${BORG_REMOTE_REPO}" ] && [ -n "${BORG_REMOTE_PASSPHRASE}" ]; then
     echo ""
     echo "── Remote repository integrity check ──"
 
-    if BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg check --show-rc "${BORG_REMOTE_REPO}"; then
+    # BORG_CHECK_ARGS contains multiple flags, must word-split
+    # shellcheck disable=SC2086
+    if BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg check ${BORG_CHECK_ARGS} "${BORG_REMOTE_REPO}"; then
         echo "Remote repository integrity check passed"
         REMOTE_INTEGRITY_STATUS="success"
     else
@@ -183,7 +210,7 @@ data['integrity_status'] = '${TEST_STATUS}'
 data['remote_integrity_status'] = '${REMOTE_INTEGRITY_STATUS}'
 with open('${TEMP_STATUS}', 'w') as f:
     json.dump(data, f, indent=4)
-" && mv "${TEMP_STATUS}" "${BORG_STATUS_FILE}"
+" && mv "${TEMP_STATUS}" "${BORG_STATUS_FILE}" && chown 1000:1000 "${BORG_STATUS_FILE}" && chmod 644 "${BORG_STATUS_FILE}"
     else
         rm -f "${TEMP_STATUS}"
     fi
