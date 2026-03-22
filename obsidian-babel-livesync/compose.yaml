@@ -17,6 +17,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   ts:
     container_name: obsidian-babel-livesync-ts
     image: tailscale/tailscale
@@ -48,5 +49,6 @@ services:
     depends_on:
       couchdb:
         condition: service_healthy
+    restart: on-failure
 networks:
   obsidian-babel-livesync-net:

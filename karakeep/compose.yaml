@@ -31,6 +31,7 @@ services:
       - homepage.widget.type=karakeep
       - homepage.widget.key=${HOME_PAGE_API_KEY}
       - homepage.widget.url=https://karakeep.${TS_DOMAIN}
+    restart: on-failure
   karakeep-chrome:
     image: gcr.io/zenika-hub/alpine-chrome:123
     container_name: karakeep-chrome
@@ -54,6 +55,7 @@ services:
     depends_on:
       karakeep-meilisearch:
         condition: service_healthy
+    restart: on-failure
   karakeep-meilisearch:
     image: getmeili/meilisearch:v1.13.3
     container_name: karakeep-meilisearch
@@ -71,6 +73,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   ts:
     container_name: karakeep-ts
     image: tailscale/tailscale
@@ -102,5 +105,6 @@ services:
     depends_on:
       karakeep:
         condition: service_healthy
+    restart: on-failure
 networks:
   karakeep-net:

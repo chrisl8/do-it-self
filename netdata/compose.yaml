@@ -39,6 +39,7 @@ services:
       - homepage.href=https://netdata.${TS_DOMAIN}
       - homepage.widget.type=netdata
       - homepage.widget.url=https://netdata.${TS_DOMAIN}
+    restart: on-failure
   ts:
     container_name: netdata-ts
     image: tailscale/tailscale
@@ -70,5 +71,6 @@ services:
     depends_on:
       netdata:
         condition: service_healthy
+    restart: on-failure
 networks:
   netdata-net:

@@ -26,6 +26,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   searxng:
     container_name: searxng
     user: 1000:1000
@@ -59,6 +60,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    restart: on-failure
   ts:
     container_name: searxng-ts
     image: tailscale/tailscale
@@ -90,5 +92,6 @@ services:
     depends_on:
       searxng:
         condition: service_healthy
+    restart: on-failure
 networks:
   searxng-net:

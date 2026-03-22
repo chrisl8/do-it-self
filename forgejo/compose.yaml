@@ -25,6 +25,7 @@ services:
       - homepage.weight=50
       - homepage.icon=/dashboard-icons/svg/forgejo.svg
       - homepage.href=https://forgejo.${TS_DOMAIN}
+    restart: on-failure
   ts:
     container_name: forgejo-ts
     image: tailscale/tailscale
@@ -56,5 +57,6 @@ services:
     depends_on:
       forgejo:
         condition: service_healthy
+    restart: on-failure
 networks:
   forgejo-net:

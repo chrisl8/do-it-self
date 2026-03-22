@@ -1,7 +1,7 @@
 services:
   formbricks_postgres:
     container_name: formbricks_postgres
-    restart: unless-stopped
+    restart: on-failure
     image: pgvector/pgvector:pg17
     volumes:
       - /mnt/2000/container-mounts/formbricks/data:/var/lib/postgresql/data
@@ -18,7 +18,7 @@ services:
       - caddy-net
   formbricks_redis:
     container_name: formbricks_redis
-    restart: unless-stopped
+    restart: on-failure
     image: valkey/valkey
     command: valkey-server --appendonly yes
     volumes:
@@ -34,7 +34,7 @@ services:
       - caddy-net
   formbricks:
     container_name: formbricks
-    restart: unless-stopped
+    restart: on-failure
     image: ghcr.io/formbricks/formbricks
     depends_on:
       formbricks_postgres:

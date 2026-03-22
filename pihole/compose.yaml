@@ -32,7 +32,7 @@ services:
     volumes:
       - /mnt/2000/container-mounts/pihole/etc:/etc/pihole
       - /mnt/2000/container-mounts/pihole/dnsmasq:/etc/dnsmasq.d
-    restart: always
+    restart: on-failure
   cloudflared:
     image: crazymax/cloudflared
     container_name: cloudflared
@@ -42,7 +42,7 @@ services:
     environment:
       - TZ=America/Chicago
       - TUNNEL_DNS_UPSTREAM=https://1.1.1.1/dns-query,https://1.0.0.1/dns-query
-    restart: always
+    restart: on-failure
 # networks:
 #   pihole:
 #     ipam:

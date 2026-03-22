@@ -40,6 +40,7 @@ services:
     depends_on:
       ts:
         condition: service_healthy
+    restart: on-failure
   ts:
     container_name: kopia-tr0n-ts
     image: tailscale/tailscale
@@ -64,3 +65,4 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure

@@ -18,6 +18,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   hbbr:
     container_name: rustdesk-relay_server
     user: 1000:1000
@@ -37,6 +38,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   ts:
     container_name: rustdesk-ts
     image: tailscale/tailscale
@@ -61,6 +63,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
 # Because using docker host mode
 # Just in case you forgot the ports:
 # 21114 TCP for web console, only available in Pro version

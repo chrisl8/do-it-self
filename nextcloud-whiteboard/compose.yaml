@@ -14,6 +14,7 @@ services:
       retries: 3
     networks:
       - nextcloud-whiteboard-net
+    restart: on-failure
   ts:
     container_name: nextcloud-whiteboard-ts
     image: tailscale/tailscale
@@ -45,5 +46,6 @@ services:
     depends_on:
       nextcloud-whiteboard:
         condition: service_healthy
+    restart: on-failure
 networks:
   nextcloud-whiteboard-net:

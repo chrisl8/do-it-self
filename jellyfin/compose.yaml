@@ -41,6 +41,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    restart: on-failure
   ts:
     container_name: jellyfin-ts
     image: tailscale/tailscale
@@ -59,7 +60,7 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    restart: unless-stopped
+    restart: on-failure
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]

@@ -17,6 +17,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   connect-sync:
     container_name: 1password-connect-sync
     image: 1password/connect-sync
@@ -34,5 +35,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
 # Test:
 # curl -H "Accept: application/json" -H "Authorization: Bearer $OP_API_TOKEN" http://localhost:9980/v1/vaults

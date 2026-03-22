@@ -9,7 +9,7 @@ services:
       - ACTUAL_SERVER_URL=https://actual.${TS_DOMAIN}
       - ACTUAL_SERVER_PASSWORD=${ACTUAL_SERVER_PASSWORD}
       - API_KEY=${API_KEY}
-    restart: unless-stopped
+    restart: on-failure
     networks:
       - actual-api-net
     healthcheck:
@@ -54,5 +54,6 @@ services:
     depends_on:
       actual_api:
         condition: service_healthy
+    restart: on-failure
 networks:
   actual-api-net:

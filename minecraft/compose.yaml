@@ -18,6 +18,7 @@ services:
     depends_on:
       ts:
         condition: service_healthy
+    restart: on-failure
   ts:
     container_name: minecraft-ts
     image: tailscale/tailscale
@@ -51,3 +52,4 @@ services:
       - "19132:19132/tcp"
       - "19133:19133/udp"
       - "19133:19133/tcp"
+    restart: on-failure

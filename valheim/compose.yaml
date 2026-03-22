@@ -41,6 +41,7 @@ services:
     depends_on:
       ts:
         condition: service_healthy
+    restart: on-failure
   ts:
     container_name: valheim-ts
     image: tailscale/tailscale
@@ -71,3 +72,4 @@ services:
       # which it does so that people connecting to this game via Tailscales' magic can connect to any and all ports of the server.
       - "2456-2458:2456-2458/udp"
       - "9001:9001/tcp"
+    restart: on-failure

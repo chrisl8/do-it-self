@@ -36,6 +36,7 @@ services:
       - /mnt/250/container-mounts/onlyoffice/fonts:/usr/share/fonts
     networks:
       - onlyoffice-net
+    restart: on-failure
   onlyoffice-rabbitmq:
     container_name: onlyoffice-rabbitmq
     image: rabbitmq:3
@@ -47,6 +48,7 @@ services:
       timeout: 10s
     networks:
       - onlyoffice-net
+    restart: on-failure
   onlyoffice-postgresql:
     container_name: onlyoffice-postgresql
     image: postgres:15
@@ -64,6 +66,7 @@ services:
       timeout: 10s
     networks:
       - onlyoffice-net
+    restart: on-failure
   ts:
     container_name: onlyoffice-ts
     image: tailscale/tailscale
@@ -95,5 +98,6 @@ services:
     depends_on:
       onlyoffice-documentserver:
         condition: service_healthy
+    restart: on-failure
 networks:
   onlyoffice-net:

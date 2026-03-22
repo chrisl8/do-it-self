@@ -32,6 +32,7 @@ services:
       - homepage.widget.url=https://freshrss.${TS_DOMAIN}
       - homepage.widget.username=${FRESHRSS_USERNAME}
       - homepage.widget.password=${FRESHRSS_PASSWORD}
+    restart: on-failure
   ts:
     container_name: freshrss-ts
     image: tailscale/tailscale
@@ -63,5 +64,6 @@ services:
     depends_on:
       freshrss:
         condition: service_healthy
+    restart: on-failure
 networks:
   freshrss-net:

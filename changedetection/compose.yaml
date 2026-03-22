@@ -40,6 +40,7 @@ services:
     # and must wait before starting (substitute "browser-chrome" with "playwright-chrome" if last one is used)
     depends_on:
       - changedetection_sockpuppetbrowser
+    restart: on-failure
   # Sockpuppetbrowser is basically chrome wrapped in an API for allowing fast fetching of web-pages.
   # RECOMMENDED FOR FETCHING PAGES WITH CHROME
   changedetection_sockpuppetbrowser:
@@ -62,6 +63,7 @@ services:
       retries: 3
     networks:
       - changedetection-net
+    restart: on-failure
   ts:
     container_name: changedetection-ts
     image: tailscale/tailscale
@@ -93,6 +95,7 @@ services:
     depends_on:
       changedetection:
         condition: service_healthy
+    restart: on-failure
 networks:
   changedetection-net:
 volumes:

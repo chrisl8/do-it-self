@@ -14,5 +14,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
 # There is no homepage config for this internally, instead I have bookmarks set up in homepage config that go directly to the various databases that I connect to with Adminer.
 # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.

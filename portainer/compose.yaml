@@ -27,6 +27,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   ts:
     container_name: portainer-ts
     image: tailscale/tailscale
@@ -58,5 +59,6 @@ services:
     depends_on:
       portainer:
         condition: service_healthy
+    restart: on-failure
 networks:
   portainer-net:
