@@ -3,7 +3,7 @@ import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { spawn } from "child_process";
-import { readFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import os from "os";
 import "dotenv/config";
 import getFormattedDockerContainers from "./dockerStatus.js";
@@ -16,9 +16,161 @@ const app = express();
 
 const activeStacks = new Set();
 
+// Update-all state
+let updateAllResumeResolver = null;
+let updateAllChildProcess = null;
+let updateAllAborted = false;
+
+function spawnTracked(command, args, timeoutMs) {
+  let output = "";
+  const child = spawn(command, args);
+  const timer = setTimeout(() => {
+    child.kill("SIGTERM");
+  }, timeoutMs);
+
+  child.stdout.on("data", (data) => {
+    output += data.toString();
+  });
+  child.stderr.on("data", (data) => {
+    output += data.toString();
+  });
+
+  const promise = new Promise((resolve) => {
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ exitCode: code ?? 1, output });
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({ exitCode: 1, output: output + "\n" + err.message });
+    });
+  });
+
+  return { child, promise };
+}
+
+async function processUpdateQueue() {
+  const scriptPath = join(os.homedir(), "containers/scripts/all-containers.sh");
+  const status = getStatus().updateAllStatus;
+
+  while (status.queue.length > 0) {
+    if (updateAllAborted) {
+      break;
+    }
+
+    const stackName = status.queue.shift();
+
+    // Skip if already being updated individually
+    if (activeStacks.has(stackName)) {
+      status.completed.push(stackName);
+      updateStatus("updateAllStatus", { ...status });
+      continue;
+    }
+
+    status.current = stackName;
+    updateStatus("updateAllStatus", { ...status });
+
+    activeStacks.add(stackName);
+    updateStatus(`restartStatus.${stackName}`, {
+      status: "in_progress",
+      operation: "upgrade",
+    });
+
+    console.log(`[Update All] Upgrading ${stackName} (${status.completed.length + 1} of ${status.total})...`);
+
+    const { child, promise } = spawnTracked(scriptPath, [
+      "--stop",
+      "--start",
+      "--no-wait",
+      "--container",
+      stackName,
+      "--update-git-repos",
+      "--get-updates",
+    ], 600000);
+
+    updateAllChildProcess = child;
+    const { exitCode, output } = await promise;
+    updateAllChildProcess = null;
+
+    activeStacks.delete(stackName);
+
+    // Refresh container data
+    try {
+      const containers = await getFormattedDockerContainers();
+      updateStatus("docker.running", containers.running);
+      updateStatus("docker.stacks", containers.stacks);
+    } catch (err) {
+      console.error("[Update All] Error refreshing containers:", err);
+    }
+
+    if (updateAllAborted) {
+      updateStatus(`restartStatus.${stackName}`, undefined);
+      break;
+    }
+
+    if (exitCode === 0) {
+      console.log(`[Update All] ${stackName} upgraded successfully`);
+      status.completed.push(stackName);
+      status.current = null;
+      updateStatus(`restartStatus.${stackName}`, undefined);
+      updateStatus("updateAllStatus", { ...status });
+    } else {
+      console.log(`[Update All] ${stackName} failed (exit code ${exitCode}), pausing`);
+      status.status = "paused";
+      status.current = null;
+      status.failed = { stackName, error: `Script exited with code ${exitCode}`, output };
+      updateStatus(`restartStatus.${stackName}`, {
+        status: "failed",
+        operation: "upgrade",
+        output,
+        error: `Script exited with code ${exitCode}`,
+      });
+      updateStatus("updateAllStatus", { ...status });
+
+      // Wait for user action
+      const action = await new Promise((resolve) => {
+        updateAllResumeResolver = resolve;
+      });
+      updateAllResumeResolver = null;
+
+      if (action === "retry") {
+        status.queue.unshift(stackName);
+        updateStatus(`restartStatus.${stackName}`, undefined);
+      } else if (action === "skip") {
+        // Leave restartStatus as failed, continue to next
+      } else if (action === "cancel") {
+        break;
+      }
+
+      status.status = "running";
+      status.failed = null;
+      updateStatus("updateAllStatus", { ...status });
+    }
+  }
+
+  // Done
+  if (updateAllAborted) {
+    status.status = "cancelled";
+  } else if (status.queue.length === 0) {
+    status.status = "completed";
+  } else {
+    status.status = "cancelled";
+  }
+  status.current = null;
+  status.failed = null;
+  updateStatus("updateAllStatus", { ...status });
+
+  console.log(`[Update All] Finished: ${status.status} (${status.completed.length} of ${status.total} updated)`);
+
+  updateAllAborted = false;
+}
+
 const CONTAINERS_DIR = join(os.homedir(), "containers");
 const ICONS_BASE_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
+const KOPIA_CONF_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf");
 
+app.use(express.json());
 app.use(express.static(join(dirName, "../public")));
 
 app.use("/dashboard-icons/svg", express.static(join(ICONS_BASE_DIR, "svg")));
@@ -52,6 +204,137 @@ app.get("/api/kopia-status", async (req, res) => {
     console.error("Error reading kopia status:", err);
     res.status(500).json({ error: "Failed to read kopia status" });
   }
+});
+
+app.get("/api/kopia-log", async (req, res) => {
+  try {
+    const logFile = join(os.homedir(), "logs/kopia-backup-check.log");
+    const data = await readFile(logFile, "utf8");
+    const lines = data.split("\n");
+    res.json({ log: lines });
+  } catch (err) {
+    console.error("Error reading kopia log:", err);
+    res.status(500).json({ error: "Failed to read kopia log" });
+  }
+});
+
+app.get("/api/kopia-threshold", async (req, res) => {
+  try {
+    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const match = data.match(/^KOPIA_STALE_HOURS=(\d+)/m);
+    if (!match) {
+      res.status(500).json({ error: "Could not find KOPIA_STALE_HOURS in config" });
+      return;
+    }
+    res.json({ threshold: parseInt(match[1], 10) });
+  } catch (err) {
+    console.error("Error reading kopia threshold:", err);
+    res.status(500).json({ error: "Failed to read kopia config" });
+  }
+});
+
+app.put("/api/kopia-threshold", async (req, res) => {
+  const { threshold } = req.body;
+  if (!Number.isInteger(threshold) || threshold < 1) {
+    res.status(400).json({ error: "Threshold must be a positive integer" });
+    return;
+  }
+  try {
+    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const updated = data.replace(
+      /^KOPIA_STALE_HOURS=\d+/m,
+      `KOPIA_STALE_HOURS=${threshold}`,
+    );
+    if (updated === data) {
+      res.status(500).json({ error: "Could not find KOPIA_STALE_HOURS in config" });
+      return;
+    }
+    await writeFile(KOPIA_CONF_FILE, updated, "utf8");
+    console.log(`Kopia stale threshold updated to ${threshold}h`);
+    res.json({ success: true, threshold });
+  } catch (err) {
+    console.error("Error updating kopia threshold:", err);
+    res.status(500).json({ error: "Failed to update kopia config" });
+  }
+});
+
+app.get("/api/kopia-ignore-hosts", async (req, res) => {
+  try {
+    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const match = data.match(/^KOPIA_IGNORE_HOSTS=\(([^)]*)\)/m);
+    if (!match) {
+      res.json({ hosts: [] });
+      return;
+    }
+    // Parse bash array: ("host1" "host2") — extract quoted strings
+    const hosts = (match[1].match(/"([^"]*)"/g) || []).map((s) => s.replace(/"/g, ""));
+    res.json({ hosts });
+  } catch (err) {
+    console.error("Error reading kopia ignore hosts:", err);
+    res.status(500).json({ error: "Failed to read kopia config" });
+  }
+});
+
+app.put("/api/kopia-ignore-hosts", async (req, res) => {
+  const { hosts } = req.body;
+  if (!Array.isArray(hosts) || hosts.some((h) => typeof h !== "string" || !h.trim())) {
+    res.status(400).json({ error: "Hosts must be an array of non-empty strings" });
+    return;
+  }
+  try {
+    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const bashArray = hosts.length > 0
+      ? `KOPIA_IGNORE_HOSTS=(${hosts.map((h) => `"${h.trim()}"`).join(" ")})`
+      : `KOPIA_IGNORE_HOSTS=()`;
+    const updated = data.replace(
+      /^KOPIA_IGNORE_HOSTS=\([^)]*\)/m,
+      bashArray,
+    );
+    if (updated === data && !data.match(/^KOPIA_IGNORE_HOSTS=/m)) {
+      res.status(500).json({ error: "Could not find KOPIA_IGNORE_HOSTS in config" });
+      return;
+    }
+    await writeFile(KOPIA_CONF_FILE, updated, "utf8");
+    console.log(`Kopia ignore hosts updated to: ${hosts.join(", ") || "(none)"}`);
+    res.json({ success: true, hosts });
+  } catch (err) {
+    console.error("Error updating kopia ignore hosts:", err);
+    res.status(500).json({ error: "Failed to update kopia config" });
+  }
+});
+
+let kopiaCheckRunning = false;
+
+app.post("/api/kopia-check", async (req, res) => {
+  if (kopiaCheckRunning) {
+    res.status(409).json({ error: "Kopia check is already running" });
+    return;
+  }
+  kopiaCheckRunning = true;
+  console.log("Kopia backup check requested via web admin");
+  const scriptPath = join(os.homedir(), "containers/scripts/kopia-backup-check.sh");
+  const child = spawn(scriptPath);
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  child.on("close", (code) => {
+    kopiaCheckRunning = false;
+    console.log(`Kopia backup check finished (exit code: ${code})`);
+    if (code === 0) {
+      res.json({ success: true, output });
+    } else {
+      res.status(500).json({ success: false, error: `Script exited with code ${code}`, output });
+    }
+  });
+  child.on("error", (err) => {
+    kopiaCheckRunning = false;
+    console.error("Error spawning kopia-backup-check.sh:", err);
+    res.status(500).json({ error: "Failed to run kopia check script" });
+  });
 });
 
 app.get("/api/ups-status", async (req, res) => {
@@ -392,6 +675,80 @@ async function webserver() {
         if (stackName) {
           updateStatus(`restartStatus.${stackName}`, undefined);
         }
+      } else if (message.type === "startUpdateAll") {
+        const currentStatus = getStatus().updateAllStatus;
+        if (currentStatus && (currentStatus.status === "running" || currentStatus.status === "paused")) {
+          ws.send(
+            JSON.stringify({
+              type: "updateAllError",
+              error: "An update-all operation is already in progress",
+            }),
+          );
+          return;
+        }
+
+        // Build queue from stacks with pending updates
+        try {
+          const containers = await getFormattedDockerContainers();
+          updateStatus("docker.running", containers.running);
+          updateStatus("docker.stacks", containers.stacks);
+
+          const queue = Object.entries(containers.stacks)
+            .filter(([, info]) => info.hasPendingUpdates)
+            .sort(([, a], [, b]) =>
+              (a.sortOrder || "z999").localeCompare(b.sortOrder || "z999", undefined, { numeric: true }),
+            )
+            .map(([name]) => name);
+
+          if (queue.length === 0) {
+            ws.send(
+              JSON.stringify({
+                type: "updateAllError",
+                error: "No stacks have pending updates",
+              }),
+            );
+            return;
+          }
+
+          console.log(`[Update All] Starting batch update of ${queue.length} stacks: ${queue.join(", ")}`);
+
+          updateAllAborted = false;
+          updateStatus("updateAllStatus", {
+            status: "running",
+            queue: [...queue],
+            current: null,
+            completed: [],
+            failed: null,
+            total: queue.length,
+          });
+
+          processUpdateQueue();
+        } catch (e) {
+          console.error("[Update All] Error starting batch update:", e);
+          ws.send(
+            JSON.stringify({
+              type: "updateAllError",
+              error: e?.message || "Failed to start batch update",
+            }),
+          );
+        }
+      } else if (message.type === "updateAllAction") {
+        const action = message.payload?.action;
+        if (updateAllResumeResolver && ["skip", "retry", "cancel"].includes(action)) {
+          console.log(`[Update All] User action: ${action}`);
+          updateAllResumeResolver(action);
+        }
+      } else if (message.type === "cancelUpdateAll") {
+        console.log("[Update All] Cancellation requested");
+        updateAllAborted = true;
+        if (updateAllChildProcess) {
+          updateAllChildProcess.kill("SIGTERM");
+        }
+        if (updateAllResumeResolver) {
+          updateAllResumeResolver("cancel");
+        }
+      } else if (message.type === "dismissUpdateAll") {
+        updateStatus("updateAllStatus", null);
       }
     });
 

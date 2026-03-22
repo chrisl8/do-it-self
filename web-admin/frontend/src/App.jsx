@@ -1,7 +1,42 @@
-import React from 'react';
-import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
-import DockerStatus from './DockerStatus';
-import useDockerStatus from './hooks/useDockerStatus';
+import React from "react";
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import Box from "@mui/material/Box";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import DockerStatus from "./DockerStatus";
+import BackupStatus from "./BackupStatus";
+import useDockerStatus from "./hooks/useDockerStatus";
+
+const routes = [
+  { path: "/docker-status", label: "Docker Status" },
+  { path: "/backup-status", label: "Backup Status" },
+];
+
+const Navigation = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentTab = routes.findIndex((r) => r.path === location.pathname);
+
+  return (
+    <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+      <Tabs
+        value={currentTab === -1 ? 0 : currentTab}
+        onChange={(e, val) => navigate(routes[val].path)}
+      >
+        {routes.map((r) => (
+          <Tab key={r.path} label={r.label} />
+        ))}
+      </Tabs>
+    </Box>
+  );
+};
 
 const App = () => {
   const {
@@ -11,12 +46,18 @@ const App = () => {
     restartDockerStackWithUpgrade,
     restartStatus,
     clearRestartStatus,
+    updateAllStatus,
+    startUpdateAll,
+    updateAllAction,
+    cancelUpdateAll,
+    dismissUpdateAll,
     connectionState,
     isLoading,
   } = useDockerStatus();
 
   return (
     <BrowserRouter>
+      <Navigation />
       <Routes>
         <Route path="/" element={<Navigate to="/docker-status" replace />} />
         <Route
@@ -29,11 +70,17 @@ const App = () => {
               restartDockerStackWithUpgrade={restartDockerStackWithUpgrade}
               restartStatus={restartStatus}
               clearRestartStatus={clearRestartStatus}
+              updateAllStatus={updateAllStatus}
+              startUpdateAll={startUpdateAll}
+              updateAllAction={updateAllAction}
+              cancelUpdateAll={cancelUpdateAll}
+              dismissUpdateAll={dismissUpdateAll}
               connectionState={connectionState}
               isLoading={isLoading}
             />
           }
         />
+        <Route path="/backup-status" element={<BackupStatus />} />
       </Routes>
     </BrowserRouter>
   );

@@ -19,6 +19,9 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import UpgradeIcon from "@mui/icons-material/Upgrade";
 import WarningIcon from "@mui/icons-material/Warning";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
 import Snackbar from "@mui/material/Snackbar";
 
@@ -175,6 +178,11 @@ const DockerStatus = ({
   restartDockerStackWithUpgrade,
   restartStatus,
   clearRestartStatus,
+  updateAllStatus,
+  startUpdateAll,
+  updateAllAction,
+  cancelUpdateAll,
+  dismissUpdateAll,
   connectionState,
   isLoading,
 }) => {
@@ -407,6 +415,20 @@ const DockerStatus = ({
             icon={<WarningIcon />}
           />
         )}
+        {pendingUpdatesCount > 0 &&
+          (!updateAllStatus ||
+            updateAllStatus.status === "completed" ||
+            updateAllStatus.status === "cancelled") && (
+            <Button
+              variant="contained"
+              color="warning"
+              startIcon={<UpgradeIcon />}
+              onClick={startUpdateAll}
+              size="small"
+            >
+              Update All ({pendingUpdatesCount})
+            </Button>
+          )}
       </Box>
 
       {!hasData && !isLoading && (
@@ -415,6 +437,145 @@ const DockerStatus = ({
             ? `Error: ${dockerStatus.error}`
             : "No Docker data available"}
         </Typography>
+      )}
+
+      {updateAllStatus && (
+        <Card
+          elevation={3}
+          sx={{
+            mb: 2,
+            border: 2,
+            borderColor:
+              updateAllStatus.status === "paused"
+                ? "error.main"
+                : updateAllStatus.status === "completed"
+                  ? "success.main"
+                  : updateAllStatus.status === "cancelled"
+                    ? "grey.500"
+                    : "info.main",
+          }}
+        >
+          <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                mb: updateAllStatus.status === "paused" ? 1.5 : 0,
+              }}
+            >
+              {updateAllStatus.status === "running" && (
+                <Spinner size={24} />
+              )}
+              {updateAllStatus.status === "completed" && (
+                <CheckCircleIcon color="success" />
+              )}
+              {updateAllStatus.status === "paused" && (
+                <WarningIcon color="error" />
+              )}
+              {updateAllStatus.status === "cancelled" && (
+                <CancelIcon color="action" />
+              )}
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  {updateAllStatus.status === "running" &&
+                    `Updating ${updateAllStatus.completed.length + 1} of ${updateAllStatus.total}: ${updateAllStatus.current || "..."}`}
+                  {updateAllStatus.status === "paused" &&
+                    `Update paused — ${updateAllStatus.failed?.stackName} failed`}
+                  {updateAllStatus.status === "completed" &&
+                    `Updated ${updateAllStatus.completed.length} of ${updateAllStatus.total} stacks`}
+                  {updateAllStatus.status === "cancelled" &&
+                    `Cancelled — ${updateAllStatus.completed.length} of ${updateAllStatus.total} stacks updated`}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={
+                    (updateAllStatus.completed.length / updateAllStatus.total) *
+                    100
+                  }
+                  sx={{ mt: 0.5 }}
+                />
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ flexShrink: 0 }}
+              >
+                {updateAllStatus.completed.length} / {updateAllStatus.total}
+              </Typography>
+              {updateAllStatus.status === "running" && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  onClick={cancelUpdateAll}
+                >
+                  Cancel
+                </Button>
+              )}
+              {(updateAllStatus.status === "completed" ||
+                updateAllStatus.status === "cancelled") && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={dismissUpdateAll}
+                >
+                  Dismiss
+                </Button>
+              )}
+            </Box>
+            {updateAllStatus.status === "paused" &&
+              updateAllStatus.failed && (
+                <Box>
+                  <Typography
+                    variant="body2"
+                    color="error"
+                    sx={{ mb: 1 }}
+                  >
+                    {updateAllStatus.failed.error}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => updateAllAction("skip")}
+                    >
+                      Skip & Continue
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => updateAllAction("retry")}
+                    >
+                      Retry
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      onClick={() => updateAllAction("cancel")}
+                    >
+                      Cancel Remaining
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() =>
+                        setOutputDialog({
+                          open: true,
+                          stackName: updateAllStatus.failed.stackName,
+                          output:
+                            updateAllStatus.failed.output || "No output",
+                        })
+                      }
+                    >
+                      View Output
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+          </CardContent>
+        </Card>
       )}
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -540,7 +701,9 @@ const DockerStatus = ({
                         status?.status === "requested" ||
                         status?.status === "in_progress"
                       );
-                    })() && (
+                    })() &&
+                    !updateAllStatus?.queue?.includes(stack.name) &&
+                    updateAllStatus?.current !== stack.name && (
                       <Tooltip title="Click to apply pending updates">
                         <Chip
                           icon={<WarningIcon />}
@@ -564,6 +727,17 @@ const DockerStatus = ({
                       const restartCompleted =
                         stackRestartStatus?.status === "completed" ||
                         stackRestartStatus?.status === "failed";
+                      const isQueuedForBatch =
+                        updateAllStatus?.queue?.includes(stack.name);
+                      const isBatchRunning =
+                        updateAllStatus?.status === "running" ||
+                        updateAllStatus?.status === "paused";
+
+                      if (isQueuedForBatch) {
+                        return (
+                          <Chip label="Queued" size="small" variant="outlined" />
+                        );
+                      }
 
                       if (isRestarting) {
                         return (
@@ -618,6 +792,7 @@ const DockerStatus = ({
                           <IconButton
                             size="small"
                             sx={{ p: { xs: 1, sm: 0.5 } }}
+                            disabled={isBatchRunning}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRestart(stack.name);
@@ -629,6 +804,7 @@ const DockerStatus = ({
                           <IconButton
                             size="small"
                             sx={{ p: { xs: 1, sm: 0.5 } }}
+                            disabled={isBatchRunning}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRestart(stack.name, "upgrade");

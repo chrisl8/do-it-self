@@ -9,6 +9,7 @@ function useDockerStatus() {
   const [connectionState, setConnectionState] = useState("connecting");
   const [isLoading, setIsLoading] = useState(true);
   const [restartStatus, setRestartStatus] = useState({});
+  const [updateAllStatus, setUpdateAllStatus] = useState(null);
   const socketRef = useRef(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef(null);
@@ -61,6 +62,9 @@ function useDockerStatus() {
           });
           if (data.restartStatus) {
             setRestartStatus(data.restartStatus);
+          }
+          if (data.updateAllStatus !== undefined) {
+            setUpdateAllStatus(data.updateAllStatus);
           }
           if (data.docker.running || data.docker.stacks) {
             setIsLoading(false);
@@ -155,6 +159,33 @@ function useDockerStatus() {
     });
   }, []);
 
+  const startUpdateAll = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "startUpdateAll" }));
+    }
+  }, []);
+
+  const updateAllAction = useCallback((action) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "updateAllAction", payload: { action } }),
+      );
+    }
+  }, []);
+
+  const cancelUpdateAll = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "cancelUpdateAll" }));
+    }
+  }, []);
+
+  const dismissUpdateAll = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "dismissUpdateAll" }));
+    }
+    setUpdateAllStatus(null);
+  }, []);
+
   useEffect(() => {
     connectWebSocket();
 
@@ -175,6 +206,11 @@ function useDockerStatus() {
     restartDockerStackWithUpgrade,
     restartStatus,
     clearRestartStatus,
+    updateAllStatus,
+    startUpdateAll,
+    updateAllAction,
+    cancelUpdateAll,
+    dismissUpdateAll,
     connectionState,
     isLoading,
   };
