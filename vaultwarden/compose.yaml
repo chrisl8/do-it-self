@@ -15,6 +15,7 @@ services:
       - homepage.weight=40
       - homepage.icon=/dashboard-icons/svg/vaultwarden.svg
       - homepage.href=https://vaultwarden.${TS_DOMAIN}
+    restart: on-failure
   ts:
     container_name: vaultwarden-ts
     image: tailscale/tailscale
@@ -46,5 +47,6 @@ services:
     depends_on:
       vaultwarden:
         condition: service_healthy
+    restart: on-failure
 networks:
   vaultwarden-net:

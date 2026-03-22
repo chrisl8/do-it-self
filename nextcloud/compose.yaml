@@ -39,6 +39,7 @@ services:
       - homepage.widget.username=${USERNAME_FOR_HOMEPAGE}
       - homepage.widget.password=${PASSWORD_FOR_HOMEPAGE}
       - homepage.widget.fields=["freespace", "numfiles"]
+    restart: on-failure
   db:
     container_name: nextcloud-db
     image: mariadb:10
@@ -59,6 +60,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   elasticsearch:
     # Notes:
     # The best documentation for this is their Install Script, but it is a bear to parse:
@@ -100,6 +102,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   ts-nextcloud:
     container_name: nextcloud-ts
     image: tailscale/tailscale
@@ -131,5 +134,6 @@ services:
     depends_on:
       nextcloud:
         condition: service_healthy
+    restart: on-failure
 networks:
   nextcloud-net:

@@ -29,6 +29,7 @@ services:
     # Retrieved 2026-01-13, License - CC BY-SA 4.0
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    restart: on-failure
 networks:
   caddy-net:
     external: true

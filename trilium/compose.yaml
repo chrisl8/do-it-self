@@ -25,6 +25,7 @@ services:
       - homepage.weight=40
       - homepage.icon=/dashboard-icons/svg/trilium.svg
       - homepage.href=https://trilium.${TS_DOMAIN}
+    restart: on-failure
   ts:
     container_name: trilium-ts
     image: tailscale/tailscale
@@ -56,5 +57,6 @@ services:
     depends_on:
       trilium:
         condition: service_healthy
+    restart: on-failure
 networks:
   trilium-net:

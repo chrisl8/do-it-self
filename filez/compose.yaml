@@ -30,6 +30,7 @@ services:
       - homepage.weight=40
       - homepage.icon=/dashboard-icons/svg/copyparty.svg
       - homepage.href=https://filez.${TS_DOMAIN}
+    restart: on-failure
   ts:
     container_name: filez-ts
     image: tailscale/tailscale
@@ -61,5 +62,6 @@ services:
     depends_on:
       filez:
         condition: service_healthy
+    restart: on-failure
 networks:
   filez-net:

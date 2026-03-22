@@ -18,6 +18,7 @@ services:
       - homepage.widget.url=https://uptime.${TS_DOMAIN}
       - homepage.widget.slug=everything
       # Uptime has a built-in healthcheck
+    restart: on-failure
   ts:
     container_name: uptime-ts
     image: tailscale/tailscale
@@ -49,5 +50,6 @@ services:
     depends_on:
       uptime:
         condition: service_healthy
+    restart: on-failure
 networks:
   uptime-net:

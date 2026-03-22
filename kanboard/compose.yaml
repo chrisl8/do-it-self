@@ -22,6 +22,7 @@ services:
       - homepage.weight=10
       - homepage.icon=/dashboard-icons/svg/kanboard.svg
       - homepage.href=https://kanboard.${TS_DOMAIN}
+    restart: on-failure
   ts:
     container_name: kanboard-ts
     image: tailscale/tailscale
@@ -53,5 +54,6 @@ services:
     depends_on:
       kanboard:
         condition: service_healthy
+    restart: on-failure
 networks:
   kanboard-net:

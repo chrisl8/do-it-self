@@ -29,5 +29,6 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
 # This doesn't even have a "front end", it just runs in the background and emails you when there are new images.
 # I think it has to be run as root in order to do this though.

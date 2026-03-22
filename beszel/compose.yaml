@@ -32,6 +32,7 @@ services:
       - homepage.widget.username=${USERNAME_FOR_HOMEPAGE}
       - homepage.widget.password=${PASSWORD_FOR_HOMEPAGE}
       - homepage.widget.version=2
+    restart: on-failure
   # There is no tailscale for this container, it is just exposed locally and can be connected to via the host's tailscale connection.
   # That could be changed, but I didn't see the point.
   beszel-agent:
@@ -63,3 +64,4 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure

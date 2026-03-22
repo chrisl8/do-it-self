@@ -14,7 +14,7 @@ Mirrored at [Codeberg](https://codeberg.org/Chris10/do-it-self) and [GitHub](htt
 
 ### Container Management
 
-- **No restart policy** — containers are never set to `restart: unless-stopped`. The `all-containers.sh` script manages all lifecycle operations. Docker auto-restart is intentionally avoided.
+- **`restart: on-failure`** — every service uses `restart: on-failure`. This restarts crashed containers automatically but does **not** auto-start on boot (unlike `unless-stopped` or `always`), avoiding collisions with the cron startup script.
 - **`_DISABLED_` file** — create this file in a service folder to skip it during start/stop operations.
 - **`.start-order` file** — contains an alphanumeric priority (e.g., `000`, `010`, `z010`). Lower values start first; containers without this file start after ordered ones. Stop order is reversed.
 - **`mount-permissions.yaml`** — optional per-service file specifying directory ownership/mode applied before container start.

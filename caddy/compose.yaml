@@ -24,6 +24,7 @@ services:
       interval: 5m
       timeout: 30s
       retries: 5
+    restart: on-failure
 networks:
   caddy-net:
     external: true

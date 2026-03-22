@@ -30,6 +30,7 @@ services:
       - homepage.weight=20
       - homepage.icon=/dashboard-icons/svg/your-spotify.svg
       - homepage.href=https://listenedto.${TS_DOMAIN}
+    restart: on-failure
   mongo:
     container_name: your_spotify-mongo
     user: 1000:1000
@@ -45,6 +46,7 @@ services:
       retries: 3
     networks:
       - your_spotify-net
+    restart: on-failure
   ts:
     container_name: your_spotify-ts
     image: tailscale/tailscale
@@ -76,5 +78,6 @@ services:
     depends_on:
       your_spotify:
         condition: service_healthy
+    restart: on-failure
 networks:
   your_spotify-net:

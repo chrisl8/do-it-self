@@ -22,6 +22,7 @@ services:
     environment:
       HOMEPAGE_ALLOWED_HOSTS: console.${TS_DOMAIN}
     # healthcheck: is built into this app, no need to add one.
+    restart: on-failure
   ts:
     container_name: homepage-ts
     image: tailscale/tailscale
@@ -53,5 +54,6 @@ services:
     depends_on:
       homepage:
         condition: service_healthy
+    restart: on-failure
 networks:
   homepage-net:

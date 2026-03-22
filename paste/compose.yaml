@@ -20,6 +20,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   paste:
     container_name: paste
     depends_on:
@@ -53,6 +54,7 @@ services:
       retries: 3
     networks:
       - paste-net
+    restart: on-failure
   ts:
     container_name: paste-ts
     image: tailscale/tailscale
@@ -84,5 +86,6 @@ services:
     depends_on:
       paste:
         condition: service_healthy
+    restart: on-failure
 networks:
   paste-net:
