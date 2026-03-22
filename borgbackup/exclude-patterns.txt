@@ -21,8 +21,10 @@
 /mnt/2000/container-mounts/paste/data/
 # MongoDB
 /mnt/2000/container-mounts/your-spotify/db/
-# CouchDB
+# CouchDB — Obsidian LiveSync is a sync replica; authoritative data lives on devices/Obsidian Sync
 /mnt/2000/container-mounts/obsidian-babel-livesync/data/
+# Uptime Kuma — backed up via SQLite dump for consistency; live file triggers rc 1 warning
+/mnt/2000/container-mounts/uptime/data/kuma.db
 # The Lounge IRC logs (1.3G SQLite + text logs, not worth backing up)
 */the-lounge/config/logs/
 

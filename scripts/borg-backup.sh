@@ -61,6 +61,12 @@ fi
 if [ "${OP_AVAILABLE}" = "true" ]; then
     BORG_PASSPHRASE=$(load_op_secret "op://Docker/borgbackup/BORG_PASSPHRASE") || true
     BORG_HEALTHCHECK_URL=$(load_op_secret "op://Docker/borgbackup/BORG_HEALTHCHECK_URL") || true
+    TS_DOMAIN=$(load_op_secret "op://Docker/tailscale/TS_DOMAIN") || true
+fi
+
+# Build web admin URL from hostname and TS_DOMAIN if available
+if [ -n "${TS_DOMAIN}" ]; then
+    BORG_WEB_ADMIN_URL="http://$(hostname).${TS_DOMAIN}:3333/backup-status"
 fi
 
 if [ -n "${BORG_REMOTE_REPO}" ]; then
@@ -90,6 +96,7 @@ exec > >(tee -a "${BORG_LOG_FILE}") 2>&1
 
 export BORG_PASSPHRASE
 export BORG_REPO
+export BORG_RSH
 export OP_AVAILABLE
 
 echo "=========================================="
@@ -104,6 +111,16 @@ if ! flock -n 9; then
     exit 1
 fi
 # Lock is held for the lifetime of this process (fd 9 closes on exit)
+
+# ── Disk space pre-flight check ─────────────────────────────────
+
+if [ "${REMOTE_ONLY}" != "true" ]; then
+    REPO_FREE_KB=$(df -k "${BORG_REPO}" 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -n "${REPO_FREE_KB}" ] && [ "${REPO_FREE_KB}" -lt 104857600 ]; then
+        REPO_FREE_GB=$((REPO_FREE_KB / 1048576))
+        echo "WARNING: Low disk space on borg repo partition — ${REPO_FREE_GB} GB free"
+    fi
+fi
 
 # ── Healthcheck start ping ───────────────────────────────────────
 
@@ -250,34 +267,25 @@ if [ -n "${BORG_REMOTE_REPO}" ] && [ -n "${BORG_REMOTE_PASSPHRASE}" ]; then
     echo ""
     echo "── Remote (offsite) backup ──"
 
-    # Pre-flight disk space check on remote host
-    REMOTE_HOST=$(echo "${BORG_REMOTE_REPO}" | sed 's|ssh://||;s|/.*||')
-    REMOTE_AVAIL_GB=$(ssh -o ConnectTimeout=10 "${REMOTE_HOST}" df -BG /mnt/backup 2>/dev/null | awk 'NR==2{gsub(/G/,"",$4); print $4}') || true
-    if [ -n "${REMOTE_AVAIL_GB}" ] && [ "${REMOTE_AVAIL_GB}" -lt 50 ] 2>/dev/null; then
-        echo "WARNING: Remote host has only ${REMOTE_AVAIL_GB}GB free — skipping remote backup"
-        REMOTE_STATUS="failed"
-        REMOTE_ERROR="insufficient remote disk space (${REMOTE_AVAIL_GB}GB free, need 50GB)"
+    # No pre-flight disk space check — the borg user's shell is restricted to
+    # borg serve --append-only (ransomware protection), so we can't run arbitrary
+    # commands via SSH. The Pi's own health check monitors disk space and emails alerts.
+    REMOTE_START_TIME=$(date +%s)
+
+    if run_remote_backup; then
+        REMOTE_STATUS="success"
+        echo "Remote backup completed successfully"
     else
-        if [ -n "${REMOTE_AVAIL_GB}" ]; then
-            echo "Remote disk space: ${REMOTE_AVAIL_GB}GB available"
-        fi
-        REMOTE_START_TIME=$(date +%s)
-
-        if run_remote_backup; then
-            REMOTE_STATUS="success"
-            echo "Remote backup completed successfully"
-        else
-            REMOTE_STATUS="failed"
-            REMOTE_ERROR="remote borg create failed"
-            echo "WARNING: Remote backup failed — local backup is still intact"
-        fi
-
-        REMOTE_END_TIME=$(date +%s)
-        REMOTE_DURATION_SECS=$((REMOTE_END_TIME - REMOTE_START_TIME))
-        REMOTE_DURATION_MIN=$((REMOTE_DURATION_SECS / 60))
-        REMOTE_DURATION_REM=$((REMOTE_DURATION_SECS % 60))
-        REMOTE_DURATION="${REMOTE_DURATION_MIN}m ${REMOTE_DURATION_REM}s"
+        REMOTE_STATUS="failed"
+        REMOTE_ERROR="remote borg create failed"
+        echo "WARNING: Remote backup failed — local backup is still intact"
     fi
+
+    REMOTE_END_TIME=$(date +%s)
+    REMOTE_DURATION_SECS=$((REMOTE_END_TIME - REMOTE_START_TIME))
+    REMOTE_DURATION_MIN=$((REMOTE_DURATION_SECS / 60))
+    REMOTE_DURATION_REM=$((REMOTE_DURATION_SECS % 60))
+    REMOTE_DURATION="${REMOTE_DURATION_MIN}m ${REMOTE_DURATION_REM}s"
 elif [ -n "${BORG_REMOTE_REPO}" ]; then
     echo ""
     echo "── Remote (offsite) backup ──"
@@ -302,7 +310,7 @@ if [ "${REMOTE_ONLY}" = "true" ]; then
     REPO_SIZE="skipped"
     ARCHIVE_COUNT="skipped"
 else
-    REPO_SIZE=$(borg info "${BORG_REPO}" 2>/dev/null | grep "All archives:" | head -1 | awk '{print $3, $4}') || REPO_SIZE="unknown"
+    REPO_SIZE=$(borg info "${BORG_REPO}" 2>/dev/null | grep "All archives:" | head -1 | awk '{print $7, $8}') || REPO_SIZE="unknown"
     ARCHIVE_COUNT=$(borg list "${BORG_REPO}" 2>/dev/null | wc -l) || ARCHIVE_COUNT="unknown"
 fi
 
@@ -325,6 +333,8 @@ cat > "${BORG_STATUS_FILE}" << STATUSEOF
     }
 }
 STATUSEOF
+chown 1000:1000 "${BORG_STATUS_FILE}"
+chmod 644 "${BORG_STATUS_FILE}"
 
 echo ""
 echo "Status written to ${BORG_STATUS_FILE}"
@@ -336,7 +346,7 @@ if [ -n "${BORG_HEALTHCHECK_URL}" ]; then
     if [ "${BACKUP_STATUS}" = "success" ]; then
         curl -m 10 --retry 5 -s "${BORG_HEALTHCHECK_URL}" > /dev/null || true
     else
-        curl -m 10 --retry 5 -s "${BORG_HEALTHCHECK_URL}/fail" --data-raw "${BACKUP_ERROR}" > /dev/null || true
+        curl -m 10 --retry 5 -s "${BORG_HEALTHCHECK_URL}/fail" --data-raw "${BACKUP_ERROR} — Details: ${BORG_WEB_ADMIN_URL}" > /dev/null || true
     fi
 fi
 
@@ -346,5 +356,6 @@ echo "BorgBackup finished at $(date) — ${BACKUP_STATUS} (${DURATION_MIN}m)"
 echo "=========================================="
 
 if [ "${BACKUP_STATUS}" != "success" ]; then
+    echo "Details: ${BORG_WEB_ADMIN_URL}"
     exit 1
 fi

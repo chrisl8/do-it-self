@@ -40,6 +40,12 @@ fi
 HEALTHCHECK_URL=""
 if [ "${OP_AVAILABLE}" = "true" ]; then
     HEALTHCHECK_URL=$(load_op_secret "op://Docker/kopia-backup-check/HEALTHCHECK_URL") || true
+    TS_DOMAIN=$(load_op_secret "op://Docker/tailscale/TS_DOMAIN") || true
+fi
+
+# Build web admin URL from hostname and TS_DOMAIN if available
+if [ -n "${TS_DOMAIN}" ]; then
+    KOPIA_WEB_ADMIN_URL="http://$(hostname).${TS_DOMAIN}:3333/backup-status"
 fi
 
 # Rotate log files — keep 5 previous runs
@@ -50,8 +56,17 @@ if [ -f "${KOPIA_LOG_FILE}" ]; then
     mv "${KOPIA_LOG_FILE}" "${KOPIA_LOG_FILE}.1"
 fi
 
-# Redirect all output to log file
-exec > >(tee -a "${KOPIA_LOG_FILE}") 2>&1
+# Redirect all output to log file only — dump to stdout on failure (for cron email)
+exec 3>&1
+exec > "${KOPIA_LOG_FILE}" 2>&1
+
+dump_log_on_failure() {
+    local exit_code=$?
+    if [ "${exit_code}" -ne 0 ] || [ "${CHECK_STATUS:-}" != "success" ]; then
+        cat "${KOPIA_LOG_FILE}" >&3
+    fi
+}
+trap dump_log_on_failure EXIT
 
 echo "=========================================="
 echo "Kopia backup check starting at $(date)"
@@ -87,6 +102,15 @@ if ! docker ps --filter "name=^${KOPIA_CONTAINER}$" --filter "status=running" -q
 fi
 
 # ── Get and parse snapshots ──────────────────────────────────────
+
+# Check if a host is in the ignore list
+is_ignored_host() {
+    local check_host="$1"
+    for ignored in "${KOPIA_IGNORE_HOSTS[@]}"; do
+        [ "${ignored}" = "${check_host}" ] && return 0
+    done
+    return 1
+}
 
 SOURCES_JSON="[]"
 STALE_SOURCES=""
@@ -141,10 +165,15 @@ if [ "${CHECK_STATUS}" = "success" ]; then
             AGE_HOURS=$((AGE_SECS / 3600))
 
             if [ "${AGE_SECS}" -gt "${STALE_THRESHOLD_SECS}" ]; then
-                STATUS="stale"
-                STALE_COUNT=$((STALE_COUNT + 1))
-                STALE_SOURCES="${STALE_SOURCES}  ${host}@${userName}:${path} (${AGE_HOURS}h old)\n"
-                echo "  STALE: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago"
+                if is_ignored_host "${host}"; then
+                    STATUS="ignored"
+                    echo "  SKIP: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago (ignored)"
+                else
+                    STATUS="stale"
+                    STALE_COUNT=$((STALE_COUNT + 1))
+                    STALE_SOURCES="${STALE_SOURCES}  ${host}@${userName}:${path} (${AGE_HOURS}h old)\n"
+                    echo "  STALE: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago"
+                fi
             else
                 STATUS="fresh"
                 echo "  OK:    ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago"
@@ -166,6 +195,7 @@ if [ "${CHECK_STATUS}" = "success" ]; then
             CHECK_ERROR="${STALE_COUNT} of ${TOTAL_SOURCES} source(s) exceed ${KOPIA_STALE_HOURS}h threshold"
             echo ""
             echo "WARNING: ${CHECK_ERROR}"
+            echo "Details: ${KOPIA_WEB_ADMIN_URL}"
         else
             echo ""
             echo "All ${TOTAL_SOURCES} source(s) are fresh (within ${KOPIA_STALE_HOURS}h)"
@@ -205,7 +235,7 @@ if [ -n "${HEALTHCHECK_URL}" ]; then
     if [ "${CHECK_STATUS}" = "success" ]; then
         curl -m 10 --retry 5 -s "${HEALTHCHECK_URL}" > /dev/null || true
     else
-        curl -m 10 --retry 5 -s "${HEALTHCHECK_URL}/fail" --data-raw "${CHECK_ERROR}" > /dev/null || true
+        curl -m 10 --retry 5 -s "${HEALTHCHECK_URL}/fail" --data-raw "${CHECK_ERROR} — Details: ${KOPIA_WEB_ADMIN_URL}" > /dev/null || true
     fi
 fi
 
