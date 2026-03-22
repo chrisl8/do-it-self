@@ -76,6 +76,7 @@ services:
       - homepage.widget.type=paperlessngx
       - homepage.widget.url=https://paperless.${TS_DOMAIN}
       - homepage.widget.key=${API_KEY}
+    restart: on-failure
   broker:
     container_name: paperless-broker
     image: docker.io/library/redis:7
@@ -91,9 +92,25 @@ services:
       retries: 3
     networks:
       - paperless-net
+    restart: on-failure
   db:
     container_name: paperless-db
     image: docker.io/library/postgres:16
+    # PostgreSQL tuning for 67K+ documents on a shared host with 32GB RAM
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "effective_cache_size=2GB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
     volumes:
       - /mnt/2000/container-mounts/paperless-ngx/database:/var/lib/postgresql/data
     environment:
@@ -109,9 +126,10 @@ services:
       retries: 3
     networks:
       - paperless-net
+    restart: on-failure
   gotenberg:
     container_name: paperless-gotenberg
-    image: docker.io/gotenberg/gotenberg:8.7
+    image: docker.io/gotenberg/gotenberg
     networks:
       - paperless-net
     # The gotenberg chromium route is used to convert .eml files. We do not
@@ -119,8 +137,12 @@ services:
     # Actually allowing this so that I can get images from emails into my PDFs, for better or worse.
     command:
       - "gotenberg"
-      - "--api-timeout=120s" # Set to 120s when done processing large chunks
+      - "--api-timeout=120s"
       - "--chromium-disable-javascript=true"
+      - "--chromium-restart-after=100"
+      - "--chromium-auto-start=true"
+      - "--chromium-clear-cache=true"
+      - "--chromium-clear-cookies=true"
       #- "--chromium-allow-list=file:///tmp/.*"
       # https://gotenberg.dev/docs/routes#health-check-route
     healthcheck:
@@ -130,6 +152,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   tika:
     container_name: paperless-tika
     image: docker.io/apache/tika
@@ -142,6 +165,7 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
+    restart: on-failure
   ts:
     container_name: paperless-ts
     image: tailscale/tailscale
@@ -173,6 +197,7 @@ services:
     depends_on:
       webserver:
         condition: service_healthy
+    restart: on-failure
 volumes:
   redisdata:
 networks:
