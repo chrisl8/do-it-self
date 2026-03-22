@@ -9,6 +9,10 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    ports:
+      # Expose Sonarr and Radarr for Seerr (now in separate project)
+      - 8989:8989
+      - 7878:7878
     environment:
       # https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/custom.md
       - VPN_SERVICE_PROVIDER=custom
@@ -30,7 +34,7 @@ services:
       - homepage.widget.url=http://recon.${TS_DOMAIN}:8000/v1/vpn/status
       - homepage.widget.mappings[0].label=Status
       - homepage.widget.mappings[0].field=status
-    restart: unless-stopped
+    restart: on-failure
   ts:
     container_name: recon-ts
     image: tailscale/tailscale
@@ -49,7 +53,7 @@ services:
     cap_add:
       - net_admin
       - sys_module
-    restart: unless-stopped
+    restart: on-failure
     # https://github.com/tailscale/tailscale/issues/12758#issuecomment-2564770640
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
@@ -75,7 +79,7 @@ services:
       - LOG_HTML=${LOG_HTML:-false}
       - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
       - TZ=Europe/London
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:8191 || exit 1"
       start_period: 120s
@@ -105,7 +109,7 @@ services:
       - homepage.showstats=true
       - homepage.href=http://recon.${TS_DOMAIN}:9696/
       - homepage.description=The Ultimate Indexer Manager.
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:9696 || exit 1"
       start_period: 120s
@@ -143,7 +147,7 @@ services:
       - homepage.widget.url=http://recon.${TS_DOMAIN}:8000/v1/publicip/ip
       - homepage.widget.mappings[0].label=Public IP
       - homepage.widget.mappings[0].field=public_ip
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:8085 || exit 1"
       start_period: 30s
@@ -175,7 +179,7 @@ services:
       - homepage.showstats=true
       - homepage.href=http://recon.${TS_DOMAIN}:8989/
       - homepage.description=Internet PVR for Usenet and Torrents.
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:8989 || exit 1"
       start_period: 120s
@@ -211,7 +215,7 @@ services:
       - homepage.showstats=true
       - homepage.href=http://recon.${TS_DOMAIN}:7878/
       - homepage.description=See all your upcoming movies in one convenient location.
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:7878 || exit 1"
       start_period: 120s
@@ -246,7 +250,7 @@ services:
       - homepage.showstats=true
       - homepage.href=http://recon.${TS_DOMAIN}:8686/
       - homepage.description= Music collection manager for Usenet and BitTorrent users.
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:8686 || exit 1"
       start_period: 30s
@@ -281,7 +285,7 @@ services:
       - homepage.showstats=true
       - homepage.href=http://recon.${TS_DOMAIN}:6767/
       - homepage.description=Companion application to Sonarr and Radarr that manages and downloads subtitles based on your requirements.
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:6767 || exit 1"
       start_period: 120s
@@ -313,7 +317,7 @@ services:
       - homepage.icon=/dashboard-icons/png/mylar.png
       - homepage.href=http://recon.${TS_DOMAIN}:8090/
       - homepage.description=Comic Book downloader
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:8090 || exit 1"
       start_period: 120s
@@ -349,7 +353,7 @@ services:
       - homepage.showstats=true
       - homepage.href=http://recon.${TS_DOMAIN}:5299/
       - homepage.description=LazyLibrarian is a SickBeard, CouchPotato, Headphones-like application for ebooks, audiobooks and magazines
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:5299 || exit 1"
       start_period: 120s
@@ -431,7 +435,7 @@ services:
       SABNZBD: >
         - base_url: "http://recon.$TS_DOMAIN:8086"
           api_key: "$SABNZBD_API_KEY"
-    restart: unless-stopped
+    restart: on-failure
     depends_on:
       gluetun:
         condition: service_healthy
@@ -459,7 +463,7 @@ services:
       - homepage.showstats=true
       - homepage.href=http://recon.${TS_DOMAIN}:8086/
       - homepage.description=The free and easy binary newsreader
-    restart: unless-stopped
+    restart: on-failure
     healthcheck:
       test: "curl --fail http://localhost:8086 || exit 1"
       start_period: 120s
