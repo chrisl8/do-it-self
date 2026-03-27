@@ -1,0 +1,89 @@
+# Zipline - self-hosted screenshot/image sharing
+# https://zipline.diced.sh/
+services:
+  zipline-db:
+    image: postgres:16
+    container_name: zipline-db
+    environment:
+      POSTGRES_USER: zipline
+      POSTGRES_PASSWORD: ${ZIPLINE_DB_PASSWORD}
+      POSTGRES_DB: zipline
+    volumes:
+      - /mnt/2000/container-mounts/zipline/db:/var/lib/postgresql/data
+    networks:
+      - zipline-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zipline"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: on-failure
+  zipline:
+    image: ghcr.io/diced/zipline
+    container_name: zipline
+    depends_on:
+      zipline-db:
+        condition: service_healthy
+    environment:
+      - CORE_SECRET=${CORE_SECRET}
+      - DATABASE_URL=postgresql://zipline:${ZIPLINE_DB_PASSWORD}@zipline-db:5432/zipline
+      - CORE_RETURN_HTTPS=true
+      - CORE_HOST=0.0.0.0
+      - CORE_PORT=3000
+      - DATASOURCE_TYPE=local
+      - DATASOURCE_LOCAL_DIRECTORY=/uploads
+    volumes:
+      - /mnt/2000/container-mounts/zipline/uploads:/uploads
+      - /mnt/2000/container-mounts/zipline/public:/public
+      - /mnt/2000/container-mounts/zipline/themes:/themes
+    labels:
+      - homepage.group=Tools
+      - homepage.name=Zipline
+      - homepage.weight=25
+      - homepage.icon=/dashboard-icons/svg/zipline.svg
+      - homepage.href=https://zipline.${TS_DOMAIN}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/healthcheck').then(r=>{if(!r.ok)throw 1})"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - zipline-net
+    restart: on-failure
+  ts:
+    container_name: zipline-ts
+    image: tailscale/tailscale
+    environment:
+      - TS_HOSTNAME=zipline
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - zipline-net
+    depends_on:
+      zipline:
+        condition: service_healthy
+    restart: on-failure
+networks:
+  zipline-net:
