@@ -9,6 +9,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=kopia-backup-check.conf
 . "${SCRIPT_DIR}/kopia-backup-check.conf"
 
+# Load per-host threshold overrides (JSON file, read once)
+KOPIA_HOST_THRESHOLDS_FILE="${SCRIPT_DIR}/kopia-host-thresholds.json"
+if [ -f "${KOPIA_HOST_THRESHOLDS_FILE}" ]; then
+    HOST_THRESHOLDS_JSON=$(cat "${KOPIA_HOST_THRESHOLDS_FILE}")
+else
+    HOST_THRESHOLDS_JSON="{}"
+fi
+
+# Get the effective threshold for a host (per-host override or global default)
+get_host_threshold_hours() {
+    local host="$1"
+    local override
+    override=$(echo "${HOST_THRESHOLDS_JSON}" | jq -r --arg h "${host}" '.[$h] // empty')
+    if [ -n "${override}" ]; then
+        echo "${override}"
+    else
+        echo "${KOPIA_STALE_HOURS}"
+    fi
+}
+
 # Ensure log directory exists
 mkdir -p "$(dirname "${KOPIA_LOG_FILE}")"
 
@@ -56,17 +76,8 @@ if [ -f "${KOPIA_LOG_FILE}" ]; then
     mv "${KOPIA_LOG_FILE}" "${KOPIA_LOG_FILE}.1"
 fi
 
-# Redirect all output to log file only — dump to stdout on failure (for cron email)
-exec 3>&1
+# Redirect all output to log file only (healthchecks.io and web-admin handle alerting)
 exec > "${KOPIA_LOG_FILE}" 2>&1
-
-dump_log_on_failure() {
-    local exit_code=$?
-    if [ "${exit_code}" -ne 0 ] || [ "${CHECK_STATUS:-}" != "success" ]; then
-        cat "${KOPIA_LOG_FILE}" >&3
-    fi
-}
-trap dump_log_on_failure EXIT
 
 echo "=========================================="
 echo "Kopia backup check starting at $(date)"
@@ -129,7 +140,6 @@ if [ "${CHECK_STATUS}" = "success" ]; then
 
     if [ "${CHECK_STATUS}" = "success" ]; then
         NOW_EPOCH=$(date +%s)
-        STALE_THRESHOLD_SECS=$((KOPIA_STALE_HOURS * 3600))
 
         # Use jq to group snapshots by source and find the latest endTime per source
         # Output format: host|userName|path|endTime (one line per source)
@@ -164,19 +174,23 @@ if [ "${CHECK_STATUS}" = "success" ]; then
             AGE_SECS=$((NOW_EPOCH - SNAP_EPOCH))
             AGE_HOURS=$((AGE_SECS / 3600))
 
-            if [ "${AGE_SECS}" -gt "${STALE_THRESHOLD_SECS}" ]; then
+            # Per-host threshold (override or global default)
+            EFFECTIVE_THRESHOLD_HOURS=$(get_host_threshold_hours "${host}")
+            EFFECTIVE_THRESHOLD_SECS=$((EFFECTIVE_THRESHOLD_HOURS * 3600))
+
+            if [ "${AGE_SECS}" -gt "${EFFECTIVE_THRESHOLD_SECS}" ]; then
                 if is_ignored_host "${host}"; then
                     STATUS="ignored"
                     echo "  SKIP: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago (ignored)"
                 else
                     STATUS="stale"
                     STALE_COUNT=$((STALE_COUNT + 1))
-                    STALE_SOURCES="${STALE_SOURCES}  ${host}@${userName}:${path} (${AGE_HOURS}h old)\n"
-                    echo "  STALE: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago"
+                    STALE_SOURCES="${STALE_SOURCES}  ${host}@${userName}:${path} (${AGE_HOURS}h old, threshold ${EFFECTIVE_THRESHOLD_HOURS}h)\n"
+                    echo "  STALE: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago (threshold ${EFFECTIVE_THRESHOLD_HOURS}h)"
                 fi
             else
                 STATUS="fresh"
-                echo "  OK:    ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago"
+                echo "  OK:    ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago (threshold ${EFFECTIVE_THRESHOLD_HOURS}h)"
             fi
 
             # Accumulate source entries as JSON using jq
@@ -187,18 +201,19 @@ if [ "${CHECK_STATUS}" = "success" ]; then
                 --arg endTime "${endTime}" \
                 --arg status "${STATUS}" \
                 --argjson ageHours "${AGE_HOURS}" \
-                '. + [{host: $host, userName: $userName, path: $path, lastSnapshot: $endTime, status: $status, ageHours: $ageHours}]')
+                --argjson effectiveThreshold "${EFFECTIVE_THRESHOLD_HOURS}" \
+                '. + [{host: $host, userName: $userName, path: $path, lastSnapshot: $endTime, status: $status, ageHours: $ageHours, effectiveThreshold: $effectiveThreshold}]')
         done < <(echo "${LATEST_PER_SOURCE}")
 
         if [ "${STALE_COUNT}" -gt 0 ]; then
             CHECK_STATUS="stale"
-            CHECK_ERROR="${STALE_COUNT} of ${TOTAL_SOURCES} source(s) exceed ${KOPIA_STALE_HOURS}h threshold"
+            CHECK_ERROR="${STALE_COUNT} of ${TOTAL_SOURCES} source(s) exceed their stale threshold"
             echo ""
             echo "WARNING: ${CHECK_ERROR}"
             echo "Details: ${KOPIA_WEB_ADMIN_URL}"
         else
             echo ""
-            echo "All ${TOTAL_SOURCES} source(s) are fresh (within ${KOPIA_STALE_HOURS}h)"
+            echo "All ${TOTAL_SOURCES} source(s) are fresh (default threshold ${KOPIA_STALE_HOURS}h)"
         fi
     fi
 fi

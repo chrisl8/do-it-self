@@ -50,6 +50,7 @@ const useBackupStatus = () => {
   }, []);
 
   const [ignoreHosts, setIgnoreHosts] = useState(null);
+  const [hostThresholds, setHostThresholds] = useState({});
 
   const fetchIgnoreHosts = useCallback(async () => {
     try {
@@ -61,6 +62,29 @@ const useBackupStatus = () => {
     } catch {
       // non-critical, ignore
     }
+  }, []);
+
+  const fetchHostThresholds = useCallback(async () => {
+    try {
+      const res = await fetch("/api/kopia-host-thresholds");
+      if (res.ok) {
+        setHostThresholds(await res.json());
+      }
+    } catch {
+      // non-critical
+    }
+  }, []);
+
+  const saveHostThresholds = useCallback(async (thresholds) => {
+    const res = await fetch("/api/kopia-host-thresholds", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thresholds }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to save host thresholds");
+    setHostThresholds(thresholds);
+    return data;
   }, []);
 
   const saveIgnoreHosts = useCallback(async (hosts) => {
@@ -108,7 +132,8 @@ const useBackupStatus = () => {
   useEffect(() => {
     fetchStatus();
     fetchIgnoreHosts();
-  }, [fetchStatus, fetchIgnoreHosts]);
+    fetchHostThresholds();
+  }, [fetchStatus, fetchIgnoreHosts, fetchHostThresholds]);
 
   return {
     kopiaStatus,
@@ -122,9 +147,11 @@ const useBackupStatus = () => {
     fetchKopiaLog,
     fetchBorgLog,
     ignoreHosts,
+    hostThresholds,
     runKopiaCheck,
     saveKopiaThreshold,
     saveIgnoreHosts,
+    saveHostThresholds,
   };
 };
 
