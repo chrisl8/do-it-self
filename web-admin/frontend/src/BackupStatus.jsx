@@ -10,14 +10,83 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
+import Slider from "@mui/material/Slider";
 import Spinner from "@mui/material/CircularProgress";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import CloseIcon from "@mui/icons-material/Close";
 import TextField from "@mui/material/TextField";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import useBackupStatus from "./hooks/useBackupStatus";
+
+const THRESHOLD_MARKS = [
+  { value: 0, hours: 12, label: "12h" },
+  { value: 1, hours: 24, label: "1d" },
+  { value: 2, hours: 36, label: "" },
+  { value: 3, hours: 48, label: "2d" },
+  { value: 4, hours: 72, label: "3d" },
+  { value: 5, hours: 96, label: "" },
+  { value: 6, hours: 120, label: "5d" },
+  { value: 7, hours: 168, label: "1w" },
+  { value: 8, hours: 336, label: "2w" },
+  { value: 9, hours: 504, label: "" },
+  { value: 10, hours: 720, label: "1mo" },
+  { value: 11, hours: 1080, label: "" },
+  { value: 12, hours: 1440, label: "2mo" },
+  { value: 13, hours: 2160, label: "3mo" },
+];
+
+const hoursToIndex = (hours) => {
+  let best = 0;
+  let bestDiff = Math.abs(THRESHOLD_MARKS[0].hours - hours);
+  for (let i = 1; i < THRESHOLD_MARKS.length; i++) {
+    const diff = Math.abs(THRESHOLD_MARKS[i].hours - hours);
+    if (diff < bestDiff) {
+      best = i;
+      bestDiff = diff;
+    }
+  }
+  return best;
+};
+
+const indexToHours = (index) => THRESHOLD_MARKS[index]?.hours ?? 62;
+
+const formatDuration = (hours) => {
+  if (hours < 24) return `${hours}h`;
+  if (hours < 168) return `${Math.round(hours / 24)}d`;
+  if (hours < 720) return `${Math.round(hours / 168)}w`;
+  return `${Math.round(hours / 720)}mo`;
+};
+
+const ThresholdSlider = ({ value, onChange, onCommit, disabled, label }) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 200, flex: 1 }}>
+    {label && (
+      <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+        {label}
+      </Typography>
+    )}
+    <Slider
+      value={hoursToIndex(value)}
+      min={0}
+      max={THRESHOLD_MARKS.length - 1}
+      step={null}
+      marks={THRESHOLD_MARKS.map((m) => ({ value: m.value, label: m.label }))}
+      valueLabelDisplay="auto"
+      valueLabelFormat={(idx) => formatDuration(THRESHOLD_MARKS[idx]?.hours)}
+      onChange={(e, idx) => onChange(indexToHours(idx))}
+      onChangeCommitted={(e, idx) => onCommit && onCommit(indexToHours(idx))}
+      disabled={disabled}
+      size="small"
+      sx={{ flex: 1 }}
+    />
+    <Typography variant="body2" sx={{ minWidth: "3.5em", textAlign: "right", whiteSpace: "nowrap" }}>
+      {formatDuration(value)}
+    </Typography>
+  </Box>
+);
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -139,15 +208,18 @@ const BackupStatus = () => {
     fetchKopiaLog,
     fetchBorgLog,
     ignoreHosts,
+    hostThresholds,
     runKopiaCheck,
     saveKopiaThreshold,
     saveIgnoreHosts,
+    saveHostThresholds,
   } = useBackupStatus();
   const [expandedHosts, setExpandedHosts] = useState({});
   const [kopiaLogOpen, setKopiaLogOpen] = useState(false);
   const [borgLogOpen, setBorgLogOpen] = useState(false);
-  const [thresholdInput, setThresholdInput] = useState(null);
+  const [globalThresholdLocal, setGlobalThresholdLocal] = useState(null);
   const [thresholdSaving, setThresholdSaving] = useState(false);
+  const [localHostThresholds, setLocalHostThresholds] = useState({});
   const [newIgnoreHost, setNewIgnoreHost] = useState("");
   const [ignoreSaving, setIgnoreSaving] = useState(false);
 
@@ -393,43 +465,27 @@ const BackupStatus = () => {
                     </Typography>
                   </Box>
                 )}
-                <Box>
+                <Box sx={{ minWidth: { xs: "100%", sm: 300 }, flex: 1 }}>
                   <Typography variant="caption" color="text.secondary">
-                    Threshold
+                    Default Threshold
                   </Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <TextField
-                      type="number"
-                      size="small"
-                      value={thresholdInput ?? kopiaStatus.threshold_hours}
-                      onChange={(e) => setThresholdInput(parseInt(e.target.value, 10) || "")}
-                      slotProps={{ htmlInput: { min: 1, style: { width: "4ch", padding: "2px 6px" } } }}
-                      variant="outlined"
-                      sx={{ "& .MuiOutlinedInput-root": { height: 24 } }}
-                    />
-                    <Typography variant="body2">h</Typography>
-                    {thresholdInput != null && thresholdInput !== kopiaStatus.threshold_hours && (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        disabled={thresholdSaving || !thresholdInput || thresholdInput < 1}
-                        onClick={async () => {
-                          setThresholdSaving(true);
-                          try {
-                            await saveKopiaThreshold(thresholdInput);
-                            setThresholdInput(null);
-                            await refresh();
-                          } catch {
-                            // threshold stays edited so user can retry
-                          } finally {
-                            setThresholdSaving(false);
-                          }
-                        }}
-                      >
-                        {thresholdSaving ? "Saving..." : "Save"}
-                      </Button>
-                    )}
-                  </Box>
+                  <ThresholdSlider
+                    value={globalThresholdLocal ?? kopiaStatus.threshold_hours}
+                    onChange={(hours) => setGlobalThresholdLocal(hours)}
+                    onCommit={async (hours) => {
+                      setThresholdSaving(true);
+                      try {
+                        await saveKopiaThreshold(hours);
+                        setGlobalThresholdLocal(null);
+                        await refresh();
+                      } catch {
+                        // keep local state so user can retry
+                      } finally {
+                        setThresholdSaving(false);
+                      }
+                    }}
+                    disabled={thresholdSaving}
+                  />
                 </Box>
               </Box>
 
@@ -508,6 +564,11 @@ const BackupStatus = () => {
           {Object.entries(grouped).map(([host, sources]) => {
             const hostStatus = getHostStatus(sources);
             const isExpanded = expandedHosts[host] || false;
+            const hasOverride = host in hostThresholds;
+            const effectiveThreshold =
+              localHostThresholds[host] ??
+              hostThresholds[host] ??
+              kopiaStatus.threshold_hours;
 
             return (
               <Card key={host} sx={{ mb: 1 }}>
@@ -544,6 +605,53 @@ const BackupStatus = () => {
                       size="small"
                     />
                   </Box>
+                  <Box
+                    sx={{ ml: { xs: 1, sm: 5 }, mr: 1, mt: 0.5, display: "flex", alignItems: "center", gap: 0.5 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ThresholdSlider
+                      value={effectiveThreshold}
+                      onChange={(hours) =>
+                        setLocalHostThresholds((prev) => ({ ...prev, [host]: hours }))
+                      }
+                      onCommit={async (hours) => {
+                        const updated = { ...hostThresholds, [host]: hours };
+                        try {
+                          await saveHostThresholds(updated);
+                        } catch {
+                          // keep local state
+                        }
+                        setLocalHostThresholds((prev) => {
+                          const next = { ...prev };
+                          delete next[host];
+                          return next;
+                        });
+                      }}
+                      label={hasOverride ? "Custom:" : "Default:"}
+                    />
+                    {hasOverride && (
+                      <Tooltip title="Reset to global default">
+                        <IconButton
+                          size="small"
+                          onClick={async () => {
+                            const { [host]: _, ...rest } = hostThresholds;
+                            try {
+                              await saveHostThresholds(rest);
+                            } catch {
+                              // ignore
+                            }
+                            setLocalHostThresholds((prev) => {
+                              const next = { ...prev };
+                              delete next[host];
+                              return next;
+                            });
+                          }}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                   <Collapse in={isExpanded}>
                     <Box sx={{ mt: 1, ml: { xs: 1, sm: 5 } }}>
                       {sources.map((source) => (
@@ -578,7 +686,7 @@ const BackupStatus = () => {
                             {source.userName}:{source.path}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {source.ageHours}h ago
+                            {formatDuration(source.ageHours)} ago
                           </Typography>
                           <Typography
                             variant="caption"

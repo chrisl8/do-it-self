@@ -8,6 +8,7 @@ import os from "os";
 import "dotenv/config";
 import getFormattedDockerContainers from "./dockerStatus.js";
 import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
+import { getReleaseNotesForStack } from "./githubReleases.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -169,6 +170,7 @@ async function processUpdateQueue() {
 const CONTAINERS_DIR = join(os.homedir(), "containers");
 const ICONS_BASE_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
 const KOPIA_CONF_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf");
+const KOPIA_HOST_THRESHOLDS_FILE = join(CONTAINERS_DIR, "scripts/kopia-host-thresholds.json");
 
 app.use(express.json());
 app.use(express.static(join(dirName, "../public")));
@@ -300,6 +302,42 @@ app.put("/api/kopia-ignore-hosts", async (req, res) => {
   } catch (err) {
     console.error("Error updating kopia ignore hosts:", err);
     res.status(500).json({ error: "Failed to update kopia config" });
+  }
+});
+
+app.get("/api/kopia-host-thresholds", async (req, res) => {
+  try {
+    const data = await readFile(KOPIA_HOST_THRESHOLDS_FILE, "utf8");
+    res.json(JSON.parse(data));
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      res.json({});
+      return;
+    }
+    console.error("Error reading kopia host thresholds:", err);
+    res.status(500).json({ error: "Failed to read host thresholds" });
+  }
+});
+
+app.put("/api/kopia-host-thresholds", async (req, res) => {
+  const { thresholds } = req.body;
+  if (!thresholds || typeof thresholds !== "object" || Array.isArray(thresholds)) {
+    res.status(400).json({ error: "Thresholds must be an object" });
+    return;
+  }
+  for (const [host, hours] of Object.entries(thresholds)) {
+    if (!Number.isInteger(hours) || hours < 1) {
+      res.status(400).json({ error: `Invalid threshold for ${host}: must be a positive integer` });
+      return;
+    }
+  }
+  try {
+    await writeFile(KOPIA_HOST_THRESHOLDS_FILE, JSON.stringify(thresholds, null, 2) + "\n", "utf8");
+    console.log(`Kopia host thresholds updated: ${JSON.stringify(thresholds)}`);
+    res.json({ success: true, thresholds });
+  } catch (err) {
+    console.error("Error updating kopia host thresholds:", err);
+    res.status(500).json({ error: "Failed to update host thresholds" });
   }
 });
 
@@ -749,6 +787,44 @@ async function webserver() {
         }
       } else if (message.type === "dismissUpdateAll") {
         updateStatus("updateAllStatus", null);
+      } else if (message.type === "getReleaseNotes") {
+        const stackName = message.payload?.stackName;
+        if (!stackName) {
+          ws.send(
+            JSON.stringify({
+              type: "releaseNotes",
+              payload: { stackName, error: "No stack name provided" },
+            }),
+          );
+          return;
+        }
+
+        try {
+          const currentStatus = getStatus();
+          const stackContainers =
+            currentStatus?.docker?.running?.[stackName] || null;
+          const result = await getReleaseNotesForStack(
+            stackName,
+            stackContainers,
+          );
+          ws.send(
+            JSON.stringify({ type: "releaseNotes", payload: result }),
+          );
+        } catch (e) {
+          console.error(
+            `Error fetching release notes for ${stackName}:`,
+            e,
+          );
+          ws.send(
+            JSON.stringify({
+              type: "releaseNotes",
+              payload: {
+                stackName,
+                error: e?.message || "Failed to fetch release notes",
+              },
+            }),
+          );
+        }
       }
     });
 
