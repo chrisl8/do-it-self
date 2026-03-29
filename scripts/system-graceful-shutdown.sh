@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2129,SC2002
-set -e
+
+RED='\033[0;31m'
+NC='\033[0m' # NoColor
 
 REBOOT=false
 HALT=false
@@ -31,7 +33,7 @@ elif [[ "${REBOOT}" = "true" ]] && [[ "${HALT}" = "true" ]];then
 elif [[ "${REBOOT}" = "true" ]];then
   ACTION=reboot
 elif [[ "${HALT}" = "true" ]];then
-  ACTION=reboot
+  ACTION=halt
 else
   echo "Something isn't right here, this should never happen."
   exit 1
