@@ -36,7 +36,7 @@ services:
       - DATASOURCE_LOCAL_DIRECTORY=/uploads
     volumes:
       - /mnt/2000/container-mounts/zipline/uploads:/uploads
-      - /mnt/2000/container-mounts/zipline/public:/public
+      - /mnt/2000/container-mounts/zipline/public:/zipline/public
       - /mnt/2000/container-mounts/zipline/themes:/themes
     labels:
       - homepage.group=Tools
