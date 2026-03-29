@@ -21,6 +21,8 @@ import UpgradeIcon from "@mui/icons-material/Upgrade";
 import WarningIcon from "@mui/icons-material/Warning";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import NewReleasesIcon from "@mui/icons-material/NewReleases";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
 import Snackbar from "@mui/material/Snackbar";
@@ -185,6 +187,10 @@ const DockerStatus = ({
   dismissUpdateAll,
   connectionState,
   isLoading,
+  releaseNotes,
+  releaseNotesLoading,
+  fetchReleaseNotes,
+  clearReleaseNotes,
 }) => {
   const [expandedStacks, setExpandedStacks] = useState({});
   const [expandedContainers, setExpandedContainers] = useState({});
@@ -704,19 +710,35 @@ const DockerStatus = ({
                     })() &&
                     !updateAllStatus?.queue?.includes(stack.name) &&
                     updateAllStatus?.current !== stack.name && (
-                      <Tooltip title="Click to apply pending updates">
-                        <Chip
-                          icon={<WarningIcon />}
-                          label="Update"
-                          size="small"
-                          color="warning"
-                          sx={{ cursor: "pointer" }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRestart(stack.name, "upgrade");
-                          }}
-                        />
-                      </Tooltip>
+                      <>
+                        <Tooltip title="Click to apply pending updates">
+                          <Chip
+                            icon={<WarningIcon />}
+                            label="Update"
+                            size="small"
+                            color="warning"
+                            sx={{ cursor: "pointer" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRestart(stack.name, "upgrade");
+                            }}
+                          />
+                        </Tooltip>
+                        <Tooltip title="View release notes">
+                          <Chip
+                            icon={<NewReleasesIcon />}
+                            label="What's new?"
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                            sx={{ cursor: "pointer" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fetchReleaseNotes(stack.name);
+                            }}
+                          />
+                        </Tooltip>
+                      </>
                     )}
                   <Box sx={{ display: "flex", gap: 0.5 }}>
                     {(() => {
@@ -1047,6 +1069,116 @@ const DockerStatus = ({
           >
             Close
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={releaseNotes !== null || releaseNotesLoading}
+        onClose={clearReleaseNotes}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {releaseNotesLoading
+            ? "Loading release notes..."
+            : releaseNotes?.error && !releaseNotes?.releases?.length
+              ? "Release Notes Unavailable"
+              : `What's new in ${releaseNotes?.stackName}?`}
+          {releaseNotes?.currentVersion && releaseNotes?.latestVersion && (
+            <Typography variant="body2" color="text.secondary">
+              {releaseNotes.currentVersion} &rarr; {releaseNotes.latestVersion}
+            </Typography>
+          )}
+          {releaseNotes?.versionNotFound && releaseNotes?.currentVersion && (
+            <Typography variant="caption" color="text.secondary">
+              Could not find version {releaseNotes.currentVersion} in release
+              history. Showing recent releases.
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent dividers>
+          {releaseNotesLoading && (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <Spinner />
+            </Box>
+          )}
+          {releaseNotes?.error && !releaseNotes?.releases?.length && (
+            <Alert severity="warning">{releaseNotes.error}</Alert>
+          )}
+          {releaseNotes?.releases?.length === 0 &&
+            !releaseNotes?.error &&
+            !releaseNotesLoading && (
+              <Typography color="text.secondary">
+                You are already on the latest release.
+              </Typography>
+            )}
+          {releaseNotes?.releases?.map((release) => (
+            <Box key={release.tag} sx={{ mb: 3, "&:last-child": { mb: 0 } }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {release.name || release.tag}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mb: 1, display: "block" }}
+              >
+                {new Date(release.publishedAt).toLocaleDateString()}
+              </Typography>
+              {release.bodyHtml ? (
+                <Box
+                  sx={{
+                    "& p": { my: 1 },
+                    "& h1, & h2, & h3": { mt: 2, mb: 1 },
+                    "& ul, & ol": { pl: 3 },
+                    "& li": { my: 0.5 },
+                    "& code": {
+                      backgroundColor: "grey.100",
+                      px: 0.5,
+                      borderRadius: 0.5,
+                      fontFamily: "monospace",
+                      fontSize: "0.875em",
+                    },
+                    "& pre": {
+                      backgroundColor: "grey.100",
+                      p: 2,
+                      borderRadius: 1,
+                      overflow: "auto",
+                      fontFamily: "monospace",
+                      fontSize: "0.875rem",
+                    },
+                    "& a": { color: "primary.main" },
+                    "& img": { maxWidth: "100%" },
+                  }}
+                  dangerouslySetInnerHTML={{ __html: release.bodyHtml }}
+                />
+              ) : (
+                <Box
+                  component="pre"
+                  sx={{
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    fontFamily: "monospace",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  {release.body}
+                </Box>
+              )}
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions>
+          {releaseNotes?.repoUrl && (
+            <Button
+              href={`${releaseNotes.repoUrl}/releases`}
+              target="_blank"
+              rel="noopener noreferrer"
+              startIcon={<OpenInNewIcon />}
+            >
+              View on GitHub
+            </Button>
+          )}
+          <Button onClick={clearReleaseNotes}>Close</Button>
         </DialogActions>
       </Dialog>
 

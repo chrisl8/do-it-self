@@ -53,6 +53,10 @@ const App = () => {
     dismissUpdateAll,
     connectionState,
     isLoading,
+    releaseNotes,
+    releaseNotesLoading,
+    fetchReleaseNotes,
+    clearReleaseNotes,
   } = useDockerStatus();
 
   return (
@@ -77,6 +81,10 @@ const App = () => {
               dismissUpdateAll={dismissUpdateAll}
               connectionState={connectionState}
               isLoading={isLoading}
+              releaseNotes={releaseNotes}
+              releaseNotesLoading={releaseNotesLoading}
+              fetchReleaseNotes={fetchReleaseNotes}
+              clearReleaseNotes={clearReleaseNotes}
             />
           }
         />

@@ -10,6 +10,8 @@ function useDockerStatus() {
   const [isLoading, setIsLoading] = useState(true);
   const [restartStatus, setRestartStatus] = useState({});
   const [updateAllStatus, setUpdateAllStatus] = useState(null);
+  const [releaseNotes, setReleaseNotes] = useState(null);
+  const [releaseNotesLoading, setReleaseNotesLoading] = useState(false);
   const socketRef = useRef(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef(null);
@@ -93,6 +95,9 @@ function useDockerStatus() {
               operation: data.operation || "restart",
             },
           }));
+        } else if (data.type === "releaseNotes") {
+          setReleaseNotes(data.payload);
+          setReleaseNotesLoading(false);
         } else if (data.type === "dockerStackRestartResult") {
           setRestartStatus((prev) => ({
             ...prev,
@@ -186,6 +191,21 @@ function useDockerStatus() {
     setUpdateAllStatus(null);
   }, []);
 
+  const fetchReleaseNotes = useCallback((stackName) => {
+    setReleaseNotesLoading(true);
+    setReleaseNotes(null);
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "getReleaseNotes", payload: { stackName } }),
+      );
+    }
+  }, []);
+
+  const clearReleaseNotes = useCallback(() => {
+    setReleaseNotes(null);
+    setReleaseNotesLoading(false);
+  }, []);
+
   useEffect(() => {
     connectWebSocket();
 
@@ -213,6 +233,10 @@ function useDockerStatus() {
     dismissUpdateAll,
     connectionState,
     isLoading,
+    releaseNotes,
+    releaseNotesLoading,
+    fetchReleaseNotes,
+    clearReleaseNotes,
   };
 }
 
