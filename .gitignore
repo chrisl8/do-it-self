@@ -50,3 +50,6 @@ witchazzan/Witchazzan
 meshtastic/meshtastic
 
 cloudflared/config
+
+# Node.js
+actual-budget-sync/node_modules/

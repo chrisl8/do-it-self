@@ -1,0 +1,9 @@
+{
+  "name": "actual-budget-sync",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@actual-app/api": "^26.1.0"
+  }
+}
