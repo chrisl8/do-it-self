@@ -710,6 +710,9 @@ if [[ ${NO_WAIT} = false ]];then
     # This ensures all images we don't use are pruned, but none that we do use
     docker image prune -af
 
+    # Remove build cache that accumulates from docker build
+    docker builder prune -af
+
     # Remove unnamed and unused volumes that get left behind
     docker volume prune -af
 
