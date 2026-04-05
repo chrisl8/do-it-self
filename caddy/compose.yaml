@@ -11,6 +11,7 @@ services:
       - /mnt/2000/container-mounts/caddy/data:/data
       - /mnt/2000/container-mounts/caddy/config:/config
       - /mnt/2000/container-mounts/caddy/logs:/var/log/caddy
+      - /home/chrisl8/voidship_ephemeral/dist/admin:/srv/voidship-admin:ro
     networks:
       - caddy-net
     healthcheck:
