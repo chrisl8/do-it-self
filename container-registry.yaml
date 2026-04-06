@@ -1,0 +1,869 @@
+# Container Configuration Registry
+# Source of truth for what each container needs to run.
+# User-specific values go in user-config.yaml (gitignored).
+
+shared_variables:
+  DATA_ROOT:
+    type: path
+    description: "Primary data storage root for container mounts"
+    default: "~/container-data"
+    required: true
+  MEDIA_ROOT:
+    type: path
+    description: "Large media storage (movies, TV, downloads, backups)"
+    default: "${DATA_ROOT}"
+  CACHE_ROOT:
+    type: path
+    description: "Fast storage for caches and temporary data"
+    default: "${DATA_ROOT}"
+  MONITOR_ROOT:
+    type: path
+    description: "Monitored filesystem mount point"
+    default: "${DATA_ROOT}"
+  TS_AUTHKEY:
+    type: secret
+    description: "Tailscale authentication key for container networking"
+    required: true
+  TS_DOMAIN:
+    type: string
+    description: "Your Tailscale domain (e.g. tail1234.ts.net)"
+    required: true
+  HOST_NAME:
+    type: string
+    description: "This server's hostname on the Tailnet"
+    default: ""
+  DOCKER_GID:
+    type: number
+    description: "GID of the docker group on the host (for socket access)"
+    default: "985"
+
+categories:
+  desktop-apps:
+    label: "Desktop Apps"
+  favorites:
+    label: "Favorites"
+  home:
+    label: "Home"
+  kanboard:
+    label: "KanBoard"
+  my-stuff:
+    label: "My Stuff"
+  reading:
+    label: "Reading"
+  recon:
+    label: "Recon"
+  system-monitoring:
+    label: "System Monitoring"
+  tools:
+    label: "Tools"
+  uncategorized:
+    label: "Uncategorized"
+
+containers:
+  1password:
+    description: "1Password Connect API for credential injection"
+    category: uncategorized
+    start_order: "000"
+    mount_roots:
+      - CACHE_ROOT
+  actual-budget:
+    description: "Privacy-focused personal budgeting app"
+    category: my-stuff
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  actual-budget-api:
+    description: "Actual Budget API server"
+    category: uncategorized
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      ACTUAL_SERVER_PASSWORD:
+        type: secret
+        required: true
+        description: "Password for the Actual Budget server"
+      API_KEY:
+        type: secret
+        required: false
+        description: "API key for homepage widget"
+  adminer:
+    description: "Lightweight database management web UI"
+    category: uncategorized
+  beszel:
+    description: "Server monitoring dashboard"
+    category: system-monitoring
+    uses_docker_gid: true
+    mount_roots:
+      - CACHE_ROOT
+      - MONITOR_ROOT
+      - DATA_ROOT
+      - MEDIA_ROOT
+    variables:
+      KEY:
+        type: secret
+        required: true
+        description: "Beszel agent authentication key"
+      SYSTEM_ID_FOR_HOMEPAGE:
+        type: string
+        required: false
+        description: "System identifier for homepage widget URL"
+      USERNAME_FOR_HOMEPAGE:
+        type: string
+        required: false
+        description: "Beszel username for homepage widget"
+      PASSWORD_FOR_HOMEPAGE:
+        type: secret
+        required: false
+        description: "Beszel password for homepage widget"
+  borgitory:
+    description: "Web UI for browsing BorgBackup repositories"
+    category: tools
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+      - MEDIA_ROOT
+  caddy:
+    description: "Reverse proxy and web server with automatic HTTPS"
+    category: uncategorized
+    start_order: "030"
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      MYSQL_ROOT_PASSWORD:
+        type: secret
+        required: true
+        description: "Root password for Ghost blog's MariaDB"
+      GHOST_MAIL_PASSWORD:
+        type: secret
+        required: false
+        description: "SMTP password for Ghost blog email"
+      GHOST_MAIL_HOST:
+        type: string
+        required: false
+        description: "SMTP host for Ghost blog email"
+      GHOST_MAIL_USER:
+        type: string
+        required: false
+        description: "SMTP username for Ghost blog email"
+      GHOST_MAIL_FROM:
+        type: string
+        required: false
+        description: "From address for Ghost blog email"
+      GHOST_MAIL_TO:
+        type: string
+        required: false
+        description: "Recipient address for Ghost blog email"
+      GHOST_URL:
+        type: string
+        required: false
+        description: "Public URL for the Ghost blog"
+  changedetection:
+    description: "Website change detection and notification"
+    category: reading
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      API_KEY:
+        type: secret
+        required: false
+        description: "API key for homepage widget"
+  cloudflared:
+    description: "Cloudflare Tunnel for external access without port forwarding"
+    category: uncategorized
+    start_order: "029"
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      TUNNEL_TOKEN:
+        type: secret
+        required: true
+        description: "Cloudflare Tunnel authentication token"
+  code:
+    description: "VS Code Server in the browser"
+    category: my-stuff
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  crater-manipulator:
+    description: "Crater Manipulator game server component"
+    category: uncategorized
+    start_order: "031"
+    mount_roots:
+      - DATA_ROOT
+  dawarich:
+    description: "Self-hosted location history and tracking"
+    category: favorites
+    uses_tailscale: true
+    start_order: "z010"
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      DATABASE_PASSWORD:
+        type: secret
+        required: true
+        description: "PostgreSQL database password"
+      SECRET_KEY_BASE:
+        type: secret
+        required: true
+        description: "Rails secret key for session encryption"
+      API_KEY:
+        type: secret
+        required: false
+        description: "API key for homepage widget"
+      OIDC_CLIENT_ID:
+        type: string
+        required: false
+        description: "OIDC client ID for SSO integration"
+      OIDC_CLIENT_SECRET:
+        type: secret
+        required: false
+        description: "OIDC client secret for SSO integration"
+  diun:
+    description: "Docker Image Update Notifier"
+    category: uncategorized
+    uses_docker_gid: true
+    mount_roots:
+      - CACHE_ROOT
+  factorio:
+    description: "Factorio dedicated game server"
+    category: uncategorized
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  filez:
+    description: "Simple file browser and manager"
+    category: my-stuff
+    uses_tailscale: true
+    mount_roots:
+      - MEDIA_ROOT
+  forgejo:
+    description: "Self-hosted Git forge (Gitea fork)"
+    category: my-stuff
+    uses_tailscale: true
+    start_order: "040"
+    mount_roots:
+      - DATA_ROOT
+  formbricks:
+    description: "Open-source survey and feedback platform"
+    category: uncategorized
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      WEBAPP_URL:
+        type: string
+        required: true
+        description: "Public URL for the Formbricks web app"
+      NEXTAUTH_URL:
+        type: string
+        required: true
+        description: "NextAuth callback URL (usually same as WEBAPP_URL)"
+      NEXTAUTH_SECRET:
+        type: secret
+        required: true
+        description: "Secret for NextAuth session encryption"
+      ENCRYPTION_KEY:
+        type: secret
+        required: true
+        description: "Encryption key for stored data"
+      CRON_SECRET:
+        type: secret
+        required: true
+        description: "Secret for cron job authentication"
+  freshrss:
+    description: "Self-hosted RSS feed reader"
+    category: reading
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      FRESHRSS_USERNAME:
+        type: string
+        required: true
+        description: "Default admin username"
+      FRESHRSS_PASSWORD:
+        type: secret
+        required: true
+        description: "Default admin password"
+  geomyidae:
+    description: "Gopher protocol server"
+    category: uncategorized
+    start_order: "031"
+    mount_roots:
+      - DATA_ROOT
+  homarr:
+    description: "Customizable dashboard for self-hosted services"
+    category: tools
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      SECRET_ENCRYPTION_KEY:
+        type: secret
+        required: true
+        description: "Encryption key for stored secrets"
+      OIDC_CLIENT_ID:
+        type: string
+        required: false
+        description: "OIDC client ID for SSO integration"
+      OIDC_CLIENT_SECRET:
+        type: secret
+        required: false
+        description: "OIDC client secret for SSO integration"
+  homepage:
+    description: "Application dashboard with service widgets"
+    category: uncategorized
+    uses_tailscale: true
+    uses_docker_gid: true
+    start_order: "002"
+    mount_roots:
+      - MONITOR_ROOT
+      - CACHE_ROOT
+      - DATA_ROOT
+      - MEDIA_ROOT
+  immich:
+    description: "Self-hosted photo and video backup"
+    category: my-stuff
+    uses_tailscale: true
+    start_order: "020"
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      DB_PASSWORD:
+        type: secret
+        required: true
+        description: "PostgreSQL database password"
+      API_KEY:
+        type: secret
+        required: false
+        description: "API key for homepage widget"
+  jellyfin:
+    description: "Media server for movies, TV, music, and audiobooks"
+    category: my-stuff
+    uses_tailscale: true
+    requires_gpu: true
+    mount_roots:
+      - DATA_ROOT
+      - MEDIA_ROOT
+    variables:
+      API_KEY:
+        type: secret
+        required: false
+        description: "API key for homepage widget"
+  kanboard:
+    description: "Kanban project management board"
+    category: kanboard
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  karakeep:
+    description: "Bookmark and read-it-later manager"
+    category: reading
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      HOME_PAGE_API_KEY:
+        type: secret
+        required: false
+        description: "API key for homepage widget"
+      NEXTAUTH_SECRET:
+        type: secret
+        required: true
+        description: "Secret for NextAuth session encryption"
+      NEXT_PUBLIC_SECRET:
+        type: secret
+        required: true
+        description: "Public-facing secret for client-side auth"
+      MEILI_MASTER_KEY:
+        type: secret
+        required: true
+        description: "Master key for MeiliSearch full-text search"
+  kopia:
+    description: "Backup repository server with web UI"
+    category: favorites
+    mount_roots:
+      - DATA_ROOT
+      - CACHE_ROOT
+      - MEDIA_ROOT
+    variables:
+      SERVER_USERNAME:
+        type: string
+        required: true
+        description: "Web UI login username"
+      SERVER_PASSWORD:
+        type: secret
+        required: true
+        description: "Web UI login password"
+      KOPIA_PASSWORD:
+        type: secret
+        required: true
+        description: "Repository encryption password"
+      USER:
+        type: string
+        required: true
+        description: "System user identity for Kopia"
+      SYSTEM_IP_ADDRESS:
+        type: string
+        required: true
+        description: "Local IP address for dashboard link"
+  kopia-tr0n:
+    description: "Secondary Kopia backup instance"
+    category: uncategorized
+    uses_tailscale: true
+    default_disabled: true
+    mount_roots:
+      - MEDIA_ROOT
+      - CACHE_ROOT
+    variables:
+      SERVER_USERNAME:
+        type: string
+        required: true
+        description: "Web UI login username"
+      SERVER_PASSWORD:
+        type: secret
+        required: true
+        description: "Web UI login password"
+      KOPIA_PASSWORD:
+        type: secret
+        required: true
+        description: "Repository encryption password"
+      USER:
+        type: string
+        required: true
+        description: "System user identity for Kopia"
+  mame:
+    description: "MAME arcade emulator in the browser"
+    category: desktop-apps
+    uses_tailscale: true
+    requires_gpu: true
+    default_disabled: true
+    mount_roots:
+      - DATA_ROOT
+      - MEDIA_ROOT
+  mariadb:
+    description: "Shared MariaDB database server"
+    category: uncategorized
+    start_order: "001"
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      MARIADB_ROOT_PASSWORD:
+        type: secret
+        required: true
+        description: "MariaDB root password"
+  meshtastic:
+    description: "Meshtastic mesh networking web client"
+    category: uncategorized
+    start_order: "031"
+    default_disabled: true
+    variables:
+      MESHTASTIC_DB_USER:
+        type: string
+        required: true
+        description: "Database username"
+      MESHTASTIC_DB_PASSWORD:
+        type: secret
+        required: true
+        description: "Database password"
+      ADMIN_PASSWORD:
+        type: secret
+        required: true
+        description: "Admin panel password"
+  minecraft:
+    description: "Minecraft Bedrock Edition dedicated server"
+    category: uncategorized
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  netdata:
+    description: "Real-time server performance monitoring"
+    category: system-monitoring
+    uses_tailscale: true
+    uses_docker_gid: true
+    start_order: "z090"
+    mount_roots:
+      - CACHE_ROOT
+  nextcloud:
+    description: "Self-hosted cloud storage, calendar, and contacts"
+    category: my-stuff
+    uses_tailscale: true
+    start_order: "010"
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      MYSQL_ROOT_PASSWORD:
+        type: secret
+        required: true
+        description: "Root password for the MariaDB instance"
+      MYSQL_PASSWORD:
+        type: secret
+        required: true
+        description: "Database password for the nextcloud user"
+      NEXTCLOUD_ADMIN_USER:
+        type: string
+        required: true
+        description: "Initial admin username"
+      NEXTCLOUD_ADMIN_PASSWORD:
+        type: secret
+        required: true
+        description: "Initial admin password"
+      USERNAME_FOR_HOMEPAGE:
+        type: string
+        required: false
+        description: "Nextcloud username for homepage widget"
+      PASSWORD_FOR_HOMEPAGE:
+        type: secret
+        required: false
+        description: "Nextcloud password for homepage widget"
+      COLLABORA_ADMIN_USERNAME:
+        type: string
+        required: false
+        description: "Collabora Online admin username"
+      COLLABORA_ADMIN_PASSWORD:
+        type: secret
+        required: false
+        description: "Collabora Online admin password"
+      ELASTIC_PASSWORD:
+        type: secret
+        required: true
+        description: "Password for Elasticsearch full-text search"
+  nextcloud-whiteboard:
+    description: "Collaborative whiteboard for Nextcloud"
+    category: uncategorized
+    uses_tailscale: true
+    start_order: "012"
+    default_disabled: true
+    variables:
+      WHITEBOARD_JWT_SECRET_KEY:
+        type: secret
+        required: true
+        description: "JWT secret for whiteboard authentication"
+  obsidian:
+    description: "Obsidian note-taking app in the browser via KasmVNC"
+    category: desktop-apps
+    uses_tailscale: true
+    requires_gpu: true
+    mount_roots:
+      - DATA_ROOT
+  obsidian-babel-livesync:
+    description: "CouchDB sync server for Obsidian LiveSync plugin"
+    category: uncategorized
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      COUCHDB_USER:
+        type: string
+        required: true
+        description: "CouchDB admin username"
+      COUCHDB_PASSWORD:
+        type: secret
+        required: true
+        description: "CouchDB admin password"
+  onlyoffice:
+    description: "Online office suite for document editing"
+    category: uncategorized
+    uses_tailscale: true
+    start_order: "011"
+    mount_roots:
+      - CACHE_ROOT
+    variables:
+      JWT_SECRET:
+        type: secret
+        required: true
+        description: "JWT secret for OnlyOffice integration"
+  paperless:
+    description: "Document management system with OCR"
+    category: my-stuff
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      PAPERLESS_SECRET_KEY:
+        type: secret
+        required: true
+        description: "Django secret key for session encryption"
+      API_KEY:
+        type: secret
+        required: false
+        description: "API key for homepage widget"
+  paste:
+    description: "Self-hosted pastebin and code sharing"
+    category: tools
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  pihole:
+    description: "Network-wide ad blocking via DNS"
+    category: uncategorized
+    default_disabled: true
+    mount_roots:
+      - DATA_ROOT
+  portainer:
+    description: "Docker container management web UI"
+    category: system-monitoring
+    uses_tailscale: true
+    uses_docker_gid: true
+    mount_roots:
+      - DATA_ROOT
+  pure-ftpd:
+    description: "FTP server for scanner file uploads"
+    category: uncategorized
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      FTP_USER_NAME:
+        type: string
+        required: true
+        description: "FTP login username"
+      FTP_USER_PASS:
+        type: secret
+        required: true
+        description: "FTP login password"
+  quicken:
+    description: "Quicken Classic web companion"
+    category: my-stuff
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  recon:
+    description: "Media acquisition stack (Sonarr, Radarr, SABnzbd, etc.)"
+    category: recon
+    uses_tailscale: true
+    start_order: "z110"
+    mount_roots:
+      - DATA_ROOT
+      - MEDIA_ROOT
+    variables:
+      SONARR_API_KEY:
+        type: secret
+        required: false
+        description: "Sonarr API key for homepage widget"
+      RADARR_API_KEY:
+        type: secret
+        required: false
+        description: "Radarr API key for homepage widget"
+      SABNZBD_API_KEY:
+        type: secret
+        required: false
+        description: "SABnzbd API key for homepage widget"
+      WIREGUARD_ENDPOINT_IP:
+        type: string
+        required: true
+        description: "VPN server IP address"
+      WIREGUARD_ENDPOINT_PORT:
+        type: number
+        required: true
+        description: "VPN server port"
+      WIREGUARD_PUBLIC_KEY:
+        type: secret
+        required: true
+        description: "WireGuard server public key"
+      WIREGUARD_PRIVATE_KEY:
+        type: secret
+        required: true
+        description: "WireGuard client private key"
+      WIREGUARD_ADDRESSES:
+        type: string
+        required: true
+        description: "WireGuard client IP address (e.g. 10.x.x.x/32)"
+  retroarch:
+    description: "RetroArch game emulator in the browser"
+    category: desktop-apps
+    uses_tailscale: true
+    requires_gpu: true
+    default_disabled: true
+    mount_roots:
+      - DATA_ROOT
+      - MEDIA_ROOT
+  rustdesk:
+    description: "Self-hosted remote desktop server"
+    category: uncategorized
+    uses_tailscale: true
+    default_disabled: true
+    mount_roots:
+      - DATA_ROOT
+  searxng:
+    description: "Privacy-respecting metasearch engine"
+    category: uncategorized
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  secure-browser:
+    description: "Isolated browser via KasmVNC with VPN"
+    category: desktop-apps
+    uses_tailscale: true
+    requires_gpu: true
+    variables:
+      WIREGUARD_ENDPOINT_IP:
+        type: string
+        required: true
+        description: "VPN server IP address"
+      WIREGUARD_ENDPOINT_PORT:
+        type: number
+        required: true
+        description: "VPN server port"
+      WIREGUARD_PUBLIC_KEY:
+        type: secret
+        required: true
+        description: "WireGuard server public key"
+      WIREGUARD_PRIVATE_KEY:
+        type: secret
+        required: true
+        description: "WireGuard client private key"
+      WIREGUARD_ADDRESSES:
+        type: string
+        required: true
+        description: "WireGuard client IP address (e.g. 10.x.x.x/32)"
+  seerr:
+    description: "Media request management for Jellyfin"
+    category: my-stuff
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  space-game:
+    description: "Space game web application"
+    category: uncategorized
+    start_order: "031"
+    mount_roots:
+      - DATA_ROOT
+  spacymote:
+    description: "SpacyMote remote control web app"
+    category: uncategorized
+    start_order: "031"
+  speedtest:
+    description: "Self-hosted internet speed test tracker"
+    category: system-monitoring
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      APP_KEY:
+        type: secret
+        required: true
+        description: "Laravel application key"
+  starbound:
+    description: "Starbound dedicated game server"
+    category: uncategorized
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      STEAM_USER:
+        type: string
+        required: true
+        description: "Steam username for server downloads"
+  stirling-pdf:
+    description: "PDF manipulation toolkit"
+    category: tools
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  the-lounge:
+    description: "Self-hosted IRC web client"
+    category: home
+    uses_tailscale: true
+  trilium:
+    description: "Hierarchical note-taking application"
+    category: my-stuff
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  tsidp:
+    description: "Tailscale Identity Provider"
+    category: tools
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+  uptime:
+    description: "Uptime Kuma service monitoring"
+    category: system-monitoring
+    uses_tailscale: true
+    start_order: "z091"
+    mount_roots:
+      - DATA_ROOT
+  valheim:
+    description: "Valheim dedicated game server"
+    category: home
+    uses_tailscale: true
+    start_order: "z100"
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      SERVER_NAME:
+        type: string
+        required: true
+        description: "Server name shown in server browser"
+      WORLD_NAME:
+        type: string
+        required: true
+        description: "Name of the game world"
+      SERVER_PASS:
+        type: secret
+        required: true
+        description: "Password to join the server"
+      ADMINLIST_IDS:
+        type: string
+        required: true
+        description: "Comma-separated Steam IDs for admin access"
+  vaultwarden:
+    description: "Bitwarden-compatible password manager server"
+    category: tools
+    uses_tailscale: true
+    default_disabled: true
+    mount_roots:
+      - DATA_ROOT
+  voidship-ephemeral:
+    description: "Voidship Ephemeral web application"
+    category: uncategorized
+  wallabag:
+    description: "Self-hosted read-it-later and article archiver"
+    category: reading
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      SYMFONY__ENV__MAILER_DSN:
+        type: string
+        required: false
+        description: "SMTP DSN for email notifications"
+      SYMFONY__ENV__FROM_EMAIL:
+        type: string
+        required: false
+        description: "From address for email notifications"
+  witchazzan:
+    description: "Witchazzan multiplayer web game"
+    category: uncategorized
+    start_order: "031"
+    mount_roots:
+      - DATA_ROOT
+  your-spotify:
+    description: "Personal Spotify listening statistics"
+    category: favorites
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      SPOTIFY_PUBLIC:
+        type: string
+        required: true
+        description: "Spotify API client ID"
+      SPOTIFY_SECRET:
+        type: secret
+        required: true
+        description: "Spotify API client secret"
+  zipline:
+    description: "File and image hosting with ShareX support"
+    category: tools
+    uses_tailscale: true
+    mount_roots:
+      - DATA_ROOT
+    variables:
+      CORE_SECRET:
+        type: secret
+        required: true
+        description: "Secret key for session encryption"
+      ZIPLINE_DB_PASSWORD:
+        type: secret
+        required: true
+        description: "PostgreSQL database password"

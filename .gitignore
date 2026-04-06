@@ -6,6 +6,7 @@
 _DISABLED_
 tailscale.env
 tailscale-state/
+user-config.yaml
 
 # Application Configuration Files
 forgejo/app.ini
