@@ -20,7 +20,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 SERVER_NAME="do-it-self-test"
-SERVER_TYPE="cx22"
+SERVER_TYPE="cpx22"
 IMAGE="ubuntu-24.04"
 LOCATION="ash"
 KEEP=false
@@ -44,8 +44,8 @@ done
 # Check prerequisites
 if ! command -v hcloud &>/dev/null; then
   printf "${RED}hcloud CLI not installed.${NC}\n"
-  echo "Install: brew install hcloud"
-  echo "Then: hcloud context create my-project"
+  echo "Install: sudo apt install hcloud-cli"
+  echo "Then: hcloud context create do-it-self-test"
   exit 1
 fi
 
@@ -57,13 +57,14 @@ if [[ "$DESTROY_ONLY" == true ]]; then
   exit 0
 fi
 
-# Get SSH key name (use the first one)
-SSH_KEY=$(hcloud ssh-key list -o noheader | head -1 | awk '{print $2}')
+# Get SSH key name (use the last/most-recent one, since names can contain spaces)
+SSH_KEY=$(hcloud ssh-key list -o noheader -o columns=name | tail -1)
 if [[ -z "$SSH_KEY" ]]; then
   printf "${RED}No SSH keys registered with Hetzner.${NC}\n"
   echo "Add one: hcloud ssh-key create --name mykey --public-key-from-file ~/.ssh/id_ed25519.pub"
   exit 1
 fi
+printf "${GREEN}Using SSH key: %s${NC}\n" "$SSH_KEY"
 
 # Create or reuse server
 if [[ "$RETEST" == true ]]; then
