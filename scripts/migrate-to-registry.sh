@@ -40,10 +40,12 @@ printf "${GREEN}Detected Docker group GID: %s${NC}\n" "$DOCKER_GID" >&2
   echo "  - path: \"/mnt/120\""
   echo "    label: \"Monitor\""
   echo ""
+  DETECTED_HOSTNAME=$(hostname)
+  printf "${GREEN}Detected hostname: %s${NC}\n" "$DETECTED_HOSTNAME" >&2
   echo "shared:"
   echo "  TS_AUTHKEY: \"\""
   echo "  TS_DOMAIN: \"\""
-  echo "  HOST_NAME: \"\""
+  echo "  HOST_NAME: \"${DETECTED_HOSTNAME}\""
   echo "  DOCKER_GID: \"${DOCKER_GID}\""
   echo ""
   echo "containers:"

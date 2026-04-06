@@ -50,7 +50,12 @@ fi
 CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
 if [[ ! -f "$CONFIG_FILE" ]]; then
   printf "${YELLOW}Creating default user-config.yaml...${NC}\n"
-  cat > "$CONFIG_FILE" << 'YAML'
+  DETECTED_HOSTNAME=$(hostname)
+  DETECTED_DOCKER_GID=$(getent group docker 2>/dev/null | cut -d: -f3)
+  DETECTED_DOCKER_GID=${DETECTED_DOCKER_GID:-985}
+  printf "${GREEN}  Detected hostname: %s${NC}\n" "$DETECTED_HOSTNAME"
+  printf "${GREEN}  Detected Docker GID: %s${NC}\n" "$DETECTED_DOCKER_GID"
+  cat > "$CONFIG_FILE" << YAML
 # Container Configuration
 # Edit these values here or use the web-admin UI.
 #
@@ -64,8 +69,8 @@ mounts:
 shared:
   TS_AUTHKEY: ""
   TS_DOMAIN: ""
-  HOST_NAME: ""
-  DOCKER_GID: "985"
+  HOST_NAME: "${DETECTED_HOSTNAME}"
+  DOCKER_GID: "${DETECTED_DOCKER_GID}"
 
 containers: {}
 YAML
