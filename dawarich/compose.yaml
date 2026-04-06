@@ -10,7 +10,7 @@ services:
     networks:
       - dawarich
     volumes:
-      - /mnt/2000/container-mounts/dawarich/redis_data:/data
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/redis_data:/data
     restart: on-failure
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
@@ -25,7 +25,7 @@ services:
     container_name: dawarich_db
     user: 1000:1000
     volumes:
-      - /mnt/2000/container-mounts/dawarich/db_data:/var/lib/postgresql/data
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/db_data:/var/lib/postgresql/data
     networks:
       - dawarich
     environment:
@@ -47,9 +47,9 @@ services:
     image: freikin/dawarich
     container_name: dawarich_app
     volumes:
-      - /mnt/2000/container-mounts/dawarich/public:/var/app/public
-      - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
-      - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/public:/var/app/public
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/storage:/var/app/storage
     networks:
       - dawarich
     stdin_open: true
@@ -120,9 +120,9 @@ services:
     image: freikin/dawarich
     container_name: dawarich_sidekiq
     volumes:
-      - /mnt/2000/container-mounts/dawarich/public:/var/app/public
-      - /mnt/2000/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
-      - /mnt/2000/container-mounts/dawarich/storage:/var/app/storage
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/public:/var/app/public
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/watched:/var/app/tmp/imports/watched
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/dawarich/storage:/var/app/storage
     networks:
       - dawarich
     stdin_open: true

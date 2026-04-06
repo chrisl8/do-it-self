@@ -6,7 +6,7 @@ services:
       context: ./Witchazzan
       dockerfile: Dockerfile
     volumes:
-      - /mnt/2000/container-mounts/caddy/witchazzan/persistentData:/app/persistentData
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/witchazzan/persistentData:/app/persistentData
     networks:
       - caddy-net
     healthcheck:

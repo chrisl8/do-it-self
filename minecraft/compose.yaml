@@ -9,7 +9,7 @@ services:
     environment:
       EULA: "TRUE"
     volumes:
-      - /mnt/2000/container-mounts/minecraft/data:/data
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/minecraft/data:/data
     stdin_open: true
     tty: true
     network_mode: service:ts

@@ -5,7 +5,7 @@ services:
     user: 1000:1000
     # This must be the ID of the Docker group.
     group_add:
-      - 985
+      - ${DOCKER_GID:-985}
     volumes:
       - ./config:/app/config # Make sure your local config directory exists
       - ./images:/app/public/images
@@ -13,10 +13,10 @@ services:
       - ./dashboard-icons:/app/public/dashboard-icons
       - /var/run/docker.sock:/var/run/docker.sock # pass local proxy
       # To allow homepage to show disk space free on all disks I have an empty folder on each disk that I mount here.
-      - /mnt/120/for-homepage:/mnt/120
-      - /mnt/250/for-homepage:/mnt/250
-      - /mnt/2000/for-homepage:/mnt/2000
-      - /mnt/22TB/for-homepage:/mnt/22TB
+      - ${MONITOR_ROOT:-/mnt/120}/for-homepage:/mnt/120
+      - ${CACHE_ROOT:-/mnt/250}/for-homepage:/mnt/250
+      - ${DATA_ROOT:-/mnt/2000}/for-homepage:/mnt/2000
+      - ${MEDIA_ROOT:-/mnt/22TB}/for-homepage:/mnt/22TB
     networks:
       - homepage-net
     environment:

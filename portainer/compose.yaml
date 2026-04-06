@@ -4,11 +4,11 @@ services:
     user: 1000:1000
     # This must be the ID of the Docker group.
     group_add:
-      - 985
+      - ${DOCKER_GID:-985}
     image: portainer/portainer-ce
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /mnt/2000/container-mounts/portainer/data:/data
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/portainer/data:/data
     networks:
       - portainer-net
     labels:

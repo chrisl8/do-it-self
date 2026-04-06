@@ -6,7 +6,7 @@ services:
       context: ./crater-manipulator
       dockerfile: Dockerfile
     volumes:
-      - /mnt/2000/container-mounts/caddy/crater-manipulator:/crater-manipulator
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/crater-manipulator:/crater-manipulator
       - ./healthcheck:/healthcheck
     environment:
       - HOME=/crater-manipulator

@@ -7,10 +7,10 @@ services:
       - PGID=1000
       - TZ=America/Chicago
     volumes:
-      - /mnt/2000/container-mounts/mame/config:/config
-      - /mnt/22TB/container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs:/mame
-      - /mnt/22TB/container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged):/mame/roms:ro
-      - /mnt/22TB/container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged):/mame/chds:ro
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/mame/config:/config
+      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs:/mame
+      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged):/mame/roms:ro
+      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged):/mame/chds:ro
     shm_size: "1gb"
     networks:
       - mame-net

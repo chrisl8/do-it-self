@@ -6,7 +6,7 @@ services:
       - COUCHDB_USER=${COUCHDB_USER}
       - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
     volumes:
-      - /mnt/2000/container-mounts/obsidian-babel-livesync/data:/opt/couchdb/data
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/obsidian-babel-livesync/data:/opt/couchdb/data
       - ./docker.ini:/opt/couchdb/etc/local.d/docker.ini
     networks:
       - obsidian-babel-livesync-net

@@ -24,13 +24,13 @@ services:
       SERVER_PASSWORD: ${SERVER_PASSWORD}
     volumes:
       # Mount local folders needed by kopia
-      - /mnt/2000/container-mounts/kopia/config:/app/config
-      - /mnt/250/container-mounts/kopia/cache:/app/cache
-      - /mnt/22TB/container-mounts/kopia/logs:/app/logs
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/kopia/config:/app/config
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/kopia/cache:/app/cache
+      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/kopia/logs:/app/logs
       # Mount repository location
-      - /mnt/22TB/container-mounts/kopia/repository:/repository
+      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/kopia/repository:/repository
       # Mount path for browsing mounted snaphots
-      - /mnt/22TB/container-mounts/kopia/tmp:/tmp:shared
+      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/kopia/tmp:/tmp:shared
     labels:
       # For homepage
       - homepage.group=Favorites

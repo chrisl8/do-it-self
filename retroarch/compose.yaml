@@ -7,8 +7,8 @@ services:
       - PGID=1000
       - TZ=America/Chicago
     volumes:
-      - /mnt/2000/container-mounts/retroarch/config:/config
-      - /mnt/22TB/container-mounts/secure-webtop/downloads/mame:/mame:ro
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/retroarch/config:/config
+      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/secure-webtop/downloads/mame:/mame:ro
     shm_size: "1gb"
     networks:
       - retroarch-net

@@ -3,7 +3,7 @@ services:
     container_name: factorio
     image: factoriotools/factorio:stable
     volumes:
-      - /mnt/2000/container-mounts/factorio/data:/factorio
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/factorio/data:/factorio
     network_mode: service:ts
     environment:
       - USERNAME=FactorioProfileName

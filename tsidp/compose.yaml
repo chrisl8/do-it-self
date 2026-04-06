@@ -18,7 +18,7 @@ services:
       - TS_STATE_DIR=/data
       - TS_AUTHKEY=${TS_AUTHKEY}
     volumes:
-      - /mnt/2000/container-mounts/tsidp/tsidp:/data
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/tsidp/tsidp:/data
     labels:
       # For homepage
       - homepage.group=Tools
