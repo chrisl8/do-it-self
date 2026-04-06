@@ -36,7 +36,7 @@ services:
     user: 1000:1000
     image: mongo:6
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/your-spotify/db:/data/db
+      - ${VOL_YOUR_SPOTIFY_DB:-~/container-data}/container-mounts/your-spotify/db:/data/db
     healthcheck:
       test: echo 'db.runCommand({find:"app_db_name.devUser"}).ok' | mongosh --host localhost --quiet | grep -q 1
       start_period: 120s

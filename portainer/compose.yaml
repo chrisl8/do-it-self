@@ -8,7 +8,7 @@ services:
     image: portainer/portainer-ce
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/portainer/data:/data
+      - ${VOL_PORTAINER_DATA:-~/container-data}/container-mounts/portainer/data:/data
     networks:
       - portainer-net
     labels:

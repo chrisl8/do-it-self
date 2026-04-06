@@ -6,11 +6,11 @@ services:
     ports:
       - 80:80
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/conf:/etc/caddy
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/site:/srv
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/data:/data
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/config:/config
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/logs:/var/log/caddy
+      - ${VOL_CADDY_CONF:-~/container-data}/container-mounts/caddy/conf:/etc/caddy
+      - ${VOL_CADDY_SITE:-~/container-data}/container-mounts/caddy/site:/srv
+      - ${VOL_CADDY_DATA:-~/container-data}/container-mounts/caddy/data:/data
+      - ${VOL_CADDY_CONFIG:-~/container-data}/container-mounts/caddy/config:/config
+      - ${VOL_CADDY_LOGS:-~/container-data}/container-mounts/caddy/logs:/var/log/caddy
       - /home/chrisl8/voidship_ephemeral/dist/admin:/srv/voidship-admin:ro
     networks:
       - caddy-net

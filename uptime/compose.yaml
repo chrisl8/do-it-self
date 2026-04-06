@@ -3,7 +3,7 @@ services:
     container_name: uptime
     image: louislam/uptime-kuma
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/uptime/data:/app/data
+      - ${VOL_UPTIME_DATA:-~/container-data}/container-mounts/uptime/data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - uptime-net

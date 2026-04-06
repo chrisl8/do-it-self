@@ -5,7 +5,7 @@ services:
     environment:
       - DOMAIN=https://vaultwarden.${TS_DOMAIN}
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/vaultwarden/data:/data/
+      - ${VOL_VAULTWARDEN_DATA:-~/container-data}/container-mounts/vaultwarden/data:/data/
     networks:
       - vaultwarden-net
     labels:

@@ -3,8 +3,8 @@ services:
     container_name: stirling-pdf
     image: stirlingtools/stirling-pdf:V2-Beta
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/stirling-pdf/tessdata:/usr/share/tessdata #Required for extra OCR languages
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/stirling-pdf/configs:/configs
+      - ${VOL_STIRLING_PDF_TESSDATA:-~/container-data}/container-mounts/stirling-pdf/tessdata:/usr/share/tessdata #Required for extra OCR languages
+      - ${VOL_STIRLING_PDF_CONFIGS:-~/container-data}/container-mounts/stirling-pdf/configs:/configs
     # - ./customFiles:/customFiles/ # Not used yet.
     # - ./logs:/logs/ # Don't care, they can be lost
     environment:

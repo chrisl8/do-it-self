@@ -4,7 +4,7 @@ services:
     image: ghcr.io/homarr-labs/homarr
     # Homarr needs root for nginx and Next.js cache directories
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/homarr/appdata:/appdata
+      - ${VOL_HOMARR_APPDATA:-~/container-data}/container-mounts/homarr/appdata:/appdata
     environment:
       - TZ=America/Chicago
       - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY}

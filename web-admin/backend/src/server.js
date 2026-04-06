@@ -494,12 +494,25 @@ app.put("/api/config/shared", async (req, res) => {
     const userConfig = await getUserConfig();
     userConfig.shared = { ...userConfig.shared, ...req.body };
     await saveUserConfig(userConfig);
-    // Shared vars affect all containers, so regenerate all .env files
     const envResults = await writeAllContainerEnvs();
     res.json({ success: true, envsGenerated: Object.keys(envResults).length });
   } catch (err) {
     console.error("Error saving shared config:", err);
     res.status(500).json({ error: "Failed to save shared config" });
+  }
+});
+
+app.put("/api/config/mounts", async (req, res) => {
+  try {
+    const userConfig = await getUserConfig();
+    userConfig.mounts = req.body.mounts;
+    await saveUserConfig(userConfig);
+    // Mounts affect all container volumes, so regenerate everything
+    const envResults = await writeAllContainerEnvs();
+    res.json({ success: true, envsGenerated: Object.keys(envResults).length });
+  } catch (err) {
+    console.error("Error saving mounts:", err);
+    res.status(500).json({ error: "Failed to save mounts" });
   }
 });
 
@@ -513,6 +526,7 @@ app.put("/api/config/container/:name", async (req, res) => {
       ...existing,
       ...req.body,
       variables: { ...(existing.variables || {}), ...(req.body.variables || {}) },
+      volume_mounts: { ...(existing.volume_mounts || {}), ...(req.body.volume_mounts || {}) },
     };
     await saveUserConfig(userConfig);
     // Regenerate this container's .env file immediately

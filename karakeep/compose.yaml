@@ -3,7 +3,7 @@ services:
     container_name: karakeep
     image: ghcr.io/karakeep-app/karakeep:release
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/karakeep/data:/data
+      - ${VOL_KARAKEEP_DATA:-~/container-data}/container-mounts/karakeep/data:/data
     networks:
       - karakeep-net
     environment:
@@ -63,7 +63,7 @@ services:
       - MEILI_NO_ANALYTICS=true
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/karakeep/meilisearch:/meili_data
+      - ${VOL_KARAKEEP_MEILISEARCH:-~/container-data}/container-mounts/karakeep/meilisearch:/meili_data
     networks:
       - karakeep-net
     healthcheck:

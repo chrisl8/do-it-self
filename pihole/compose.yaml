@@ -30,8 +30,8 @@ services:
       - VIRTUAL_PORT=80
       - PIHOLE_DNS_=cloudflared#5053
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/pihole/etc:/etc/pihole
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/pihole/dnsmasq:/etc/dnsmasq.d
+      - ${VOL_PIHOLE_ETC:-~/container-data}/container-mounts/pihole/etc:/etc/pihole
+      - ${VOL_PIHOLE_DNSMASQ:-~/container-data}/container-mounts/pihole/dnsmasq:/etc/dnsmasq.d
     restart: on-failure
   cloudflared:
     image: crazymax/cloudflared

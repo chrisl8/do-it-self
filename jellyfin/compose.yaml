@@ -4,15 +4,15 @@ services:
     image: jellyfin/jellyfin
     # network_mode: 'host'
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/jellyfin/config:/config
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/jellyfin/cache:/cache
+      - ${VOL_JELLYFIN_CONFIG:-~/container-data}/container-mounts/jellyfin/config:/config
+      - ${VOL_JELLYFIN_CACHE:-~/container-data}/container-mounts/jellyfin/cache:/cache
       # You can repeat the /media subfolders to have more than one media folder
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/jellyfin/music:/media/music
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/jellyfin/videos:/media/videos
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/jellyfin/movies:/media/movies
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/jellyfin:/media/downloads
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/jellyfin/audiobooks:/media/audiobooks
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/recon
+      - ${VOL_JELLYFIN_MUSIC:-~/container-data}/container-mounts/jellyfin/music:/media/music
+      - ${VOL_JELLYFIN_VIDEOS:-~/container-data}/container-mounts/jellyfin/videos:/media/videos
+      - ${VOL_JELLYFIN_MOVIES:-~/container-data}/container-mounts/jellyfin/movies:/media/movies
+      - ${VOL_JELLYFIN_DATA:-~/container-data}/container-mounts/jellyfin:/media/downloads
+      - ${VOL_JELLYFIN_AUDIOBOOKS:-~/container-data}/container-mounts/jellyfin/audiobooks:/media/audiobooks
+      - ${VOL_JELLYFIN_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/recon
     runtime: nvidia
     ports:
       - 8096:8096

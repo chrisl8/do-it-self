@@ -10,7 +10,7 @@ services:
     environment:
       - USER_CREATION=true
     volumes:
-      - ${CACHE_ROOT:-/mnt/250}/container-mounts/beszel/data:/beszel_data
+      - ${VOL_BESZEL_DATA:-~/container-data}/container-mounts/beszel/data:/beszel_data
       - ./healthcheck:/healthcheck
     healthcheck:
       test: ["CMD", "/healthcheck/get-home-page"]
