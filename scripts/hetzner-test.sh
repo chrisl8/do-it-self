@@ -192,7 +192,8 @@ printf "${YELLOW}Running test suite...${NC}\n"
 
 scp "${BASH_SOURCE[0]%/*}/test-fresh-install.sh" "ubuntu@${IP}:/home/ubuntu/test-fresh-install.sh"
 set +e
-ssh "ubuntu@${IP}" "chmod +x /home/ubuntu/test-fresh-install.sh && /home/ubuntu/test-fresh-install.sh"
+# Use bash -l (login shell) so .profile is sourced and fnm/node are in PATH
+ssh "ubuntu@${IP}" "chmod +x /home/ubuntu/test-fresh-install.sh && bash -l /home/ubuntu/test-fresh-install.sh"
 TEST_EXIT=$?
 set -e
 
