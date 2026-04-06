@@ -5,13 +5,14 @@ Test the full setup flow on a fresh Ubuntu server. Creates a VPS, runs setup.sh 
 ## One-Time Setup
 
 1. Create a [Hetzner Cloud](https://www.hetzner.com/cloud/) account
-2. Install the CLI: `brew install hcloud` (or see [releases](https://github.com/hetznercloud/cli/releases))
-3. Create a project and authenticate:
+2. Visit Hetzner Cloud Console at https://console.hetzner.cloud, select your project, select "Security" tab and create a new Read 7 Write API Token.
+3. Install the CLI: `sudo apt install hcloud-cli`
+4. Create a project and authenticate:
    ```bash
    hcloud context create do-it-self-test
    # Paste your API token when prompted
    ```
-4. Register your SSH key:
+5. Register your SSH key:
    ```bash
    hcloud ssh-key create --name mykey --public-key-from-file ~/.ssh/id_ed25519.pub
    ```
@@ -34,22 +35,22 @@ scripts/hetzner-test.sh --destroy
 
 ## Options
 
-| Flag | Description |
-|------|-------------|
-| `--keep` | Don't destroy server after test |
-| `--destroy` | Just destroy the test server |
-| `--retest` | Run tests on existing server |
-| `--type cx32` | Server type (default: cx22) |
-| `--location ash` | Location (default: ash / Ashburn VA) |
-| `--ts-key KEY` | Tailscale auth key for full integration test |
+| Flag             | Description                                  |
+| ---------------- | -------------------------------------------- |
+| `--keep`         | Don't destroy server after test              |
+| `--destroy`      | Just destroy the test server                 |
+| `--retest`       | Run tests on existing server                 |
+| `--type cx32`    | Server type (default: cx22)                  |
+| `--location ash` | Location (default: ash / Ashburn VA)         |
+| `--ts-key KEY`   | Tailscale auth key for full integration test |
 
 ## Server Types
 
-| Type | vCPU | RAM | Disk | ~Cost/hour |
-|------|------|-----|------|------------|
-| cx22 | 2 | 4GB | 40GB | €0.005 |
-| cx32 | 4 | 8GB | 80GB | €0.007 |
-| cx42 | 8 | 16GB | 160GB | €0.019 |
+| Type | vCPU | RAM  | Disk  | ~Cost/hour |
+| ---- | ---- | ---- | ----- | ---------- |
+| cx22 | 2    | 4GB  | 40GB  | €0.005     |
+| cx32 | 4    | 8GB  | 80GB  | €0.007     |
+| cx42 | 8    | 16GB | 160GB | €0.019     |
 
 A typical test run takes 10-15 minutes and costs less than €0.01.
 
