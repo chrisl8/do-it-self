@@ -35,17 +35,17 @@ scripts/hetzner-test.sh --destroy
 
 ## Options
 
-| Flag                       | Description                                                  |
-| -------------------------- | ------------------------------------------------------------ |
-| `--keep`                   | Always keep the server (don't destroy even on success)       |
-| `--no-keep-if-fails`       | Destroy server even if tests fail (default: keep on failure) |
-| `--destroy`                | Just destroy the test server                                 |
-| `--retest`                 | Run tests on existing server                                 |
-| `--type cx33`              | Server type (default: cx23)                                  |
-| `--location ash`           | Location (default: nbg1 / Nuremberg, Germany)                |
-| `--ts-key KEY`             | Tailscale auth key (joins server, enables container startup) |
-| `--ts-api-token TOKEN`     | Tailscale API token (for removing the node after destruction)|
-| `--ts-tailnet TAILNET`     | Tailnet name for API calls (e.g. your-name.ts.net)           |
+| Flag                   | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `--keep`               | Always keep the server (don't destroy even on success)        |
+| `--no-keep-if-fails`   | Destroy server even if tests fail (default: keep on failure)  |
+| `--destroy`            | Just destroy the test server                                  |
+| `--retest`             | Run tests on existing server                                  |
+| `--type cx33`          | Server type (default: cx23)                                   |
+| `--location ash`       | Location (default: nbg1 / Nuremberg, Germany)                 |
+| `--ts-key KEY`         | Tailscale auth key (joins server, enables container startup)  |
+| `--ts-api-token TOKEN` | Tailscale API token (for removing the node after destruction) |
+| `--ts-tailnet TAILNET` | Tailnet name (optional, auto-detected from API token)         |
 
 ## Realtime Output
 
@@ -84,7 +84,6 @@ Don't pollute your real Tailscale network with ephemeral test machines. Create a
 2. Click "Generate auth key"
 3. Settings:
    - **Reusable:** ON (lets you use the same key across multiple test runs)
-   - **Pre-authorized:** ON (no manual approval needed)
    - **Ephemeral:** OFF (we want to test the same flow real users do, not the ephemeral one)
    - **Tags:** optional
    - **Expiration:** up to 90 days
@@ -100,20 +99,20 @@ The API token is needed to remove the test node from the tailnet after the serve
 4. Expiration: up to 90 days
 5. Copy the token (starts with `tskey-api-`)
 
-### Find your tailnet name
-
-Visit the Tailscale admin console; the tailnet name is shown in the URL or settings (e.g. `your-name.ts.net`).
-
 ### Run a Tailscale test
 
 ```bash
 scripts/hetzner-test.sh \
   --ts-key tskey-auth-xxxxxxxxxxxxx \
-  --ts-api-token tskey-api-xxxxxxxxxxxxx \
-  --ts-tailnet your-test-tailnet.ts.net
+  --ts-api-token tskey-api-xxxxxxxxxxxxx
 ```
 
+The tailnet name is auto-detected from the API token (it uses Tailscale's
+default tailnet for the token). Pass `--ts-tailnet your-name.ts.net` only
+if your token has access to multiple tailnets and you need to disambiguate.
+
 This will:
+
 1. Provision the Hetzner server
 2. Run setup.sh which joins the test tailnet automatically
 3. Auto-detect your TS_DOMAIN and write it (along with TS_AUTHKEY) to Infisical
