@@ -17,6 +17,9 @@ NC='\033[0m'
 REPO_URL="https://github.com/chrisl8/do-it-self.git"
 CONTAINERS_DIR="${HOME}/containers"
 
+# Avoid interactive prompts during apt installs (works in cloud-init contexts)
+export DEBIAN_FRONTEND=noninteractive
+
 step() {
   printf "\n${YELLOW}=== %s ===${NC}\n" "$1"
 }
@@ -51,15 +54,15 @@ echo "============================================"
 echo "  Self-Hosted Container Platform Setup"
 echo "============================================"
 
-# ── Step 1: Git ──────────────────────────────────────────────────────────
+# ── Step 1: Base packages ────────────────────────────────────────────────
+# Tools needed by later install steps. fnm needs unzip, Docker repo needs
+# ca-certificates and curl, etc. Install everything up front so failures
+# happen early and clearly.
 
-if ! command -v git &>/dev/null; then
-  step "Installing git"
-  sudo apt-get update -qq
-  sudo apt-get install -y -qq git
-else
-  ok "git already installed"
-fi
+step "Installing base packages"
+sudo apt-get update -qq
+sudo apt-get install -y -qq git curl ca-certificates unzip jq
+ok "Base packages installed"
 
 # ── Step 2: Docker ───────────────────────────────────────────────────────
 
@@ -94,11 +97,18 @@ if ! command -v node &>/dev/null; then
   curl -fsSL https://fnm.vercel.app/install | bash
   # Source fnm into current shell
   FNM_DIR="${HOME}/.local/share/fnm"
-  if [[ -d "$FNM_DIR" ]]; then
-    export PATH="${FNM_DIR}:${PATH}"
-    eval "$(fnm env)"
+  if [[ ! -d "$FNM_DIR" ]] || ! command -v "${FNM_DIR}/fnm" &>/dev/null; then
+    printf "${RED}fnm install failed.${NC}\n"
+    exit 1
   fi
+  export PATH="${FNM_DIR}:${PATH}"
+  eval "$(fnm env)"
   fnm install --lts
+  fnm use lts-latest
+  if ! command -v node &>/dev/null; then
+    printf "${RED}node still not in PATH after fnm install.${NC}\n"
+    exit 1
+  fi
   ok "Node.js $(node --version) installed"
 else
   ok "Node.js $(node --version) already installed"
