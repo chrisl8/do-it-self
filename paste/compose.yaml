@@ -6,10 +6,10 @@ services:
     volumes:
       - ${VOL_PASTE_DATA:-~/container-data}/container-mounts/paste/data:/var/lib/mysql
     environment:
-      MYSQL_ROOT_PASSWORD: pastefy
+      MYSQL_ROOT_PASSWORD: ${PASTE_DB_ROOT_PASSWORD}
       MYSQL_DATABASE: pastefy
       MYSQL_USER: pastefy
-      MYSQL_PASSWORD: pastefy
+      MYSQL_PASSWORD: ${PASTE_DB_PASSWORD}
     networks:
       - paste-net
     # https://mariadb.com/kb/en/using-healthcheck-sh/
@@ -32,10 +32,10 @@ services:
       DATABASE_DRIVER: mysql
       DATABASE_NAME: pastefy
       DATABASE_USER: pastefy
-      DATABASE_PASSWORD: pastefy
+      DATABASE_PASSWORD: ${PASTE_DB_PASSWORD}
       DATABASE_HOST: paste-db
       DATABASE_PORT: 3306
-      SERVER_NAME: "https://paste.jamnapari-goblin.ts.net"
+      SERVER_NAME: "https://paste.${TS_DOMAIN}"
       PASTEFY_PUBLIC_PASTES: true
       PASTEFY_LIST_PASTES: true
     labels:

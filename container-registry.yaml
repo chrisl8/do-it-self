@@ -876,6 +876,15 @@ containers:
     description: "Self-hosted pastebin and code sharing"
     category: tools
     uses_tailscale: true
+    variables:
+      PASTE_DB_ROOT_PASSWORD:
+        type: secret
+        required: true
+        description: "MariaDB root password"
+      PASTE_DB_PASSWORD:
+        type: secret
+        required: true
+        description: "Database password for the paste app"
     volumes:
       data:
         var: VOL_PASTE_DATA

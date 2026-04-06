@@ -180,3 +180,25 @@ Several scripts expect cron entries but none are installed automatically:
 ### 27. The Docker GUID is "hand coded" in the config right now
 
 - Same as hostname/ip, should be set by initial setup or at run-time rather than user config.
+
+### 28. Internal secrets (DB passwords, JWT keys) should be auto-generated
+
+- Many containers need passwords that no human ever types (database credentials, encryption keys, session secrets)
+- Currently users must manually create and enter these in the Configuration tab
+- The registry should distinguish between `auto_generate: true` secrets (internal, can be random) and external secrets (API keys, VPN credentials the user must provide)
+- When a container is first enabled, the web-admin should auto-generate any empty `auto_generate` secrets with a random value and store them in Infisical
+- This would help: paste DB passwords, nextcloud MYSQL_*, immich DB_PASSWORD, dawarich SECRET_KEY_BASE, zipline CORE_SECRET, formbricks ENCRYPTION_KEY, and many others
+
+### 29. Caddy is there to host MY website specifically.
+
+- Perhaps the public version just doesn't even include any caddy at all or any config?
+- Or perhaps it has some helps on hosting one's on website?
+- Either eay My website shouldn't be included
+
+### 29. Several other PERSONAL stacks that are for Caddy to serve
+
+- How do I retain those but not bother other people with them?
+
+### 30. Config embedded in mounts
+
+- Some containers, like homepage, have a lot of their config buried in mounts, new users will end up with NOTHING. Need to review each such case and make a plan for each.
