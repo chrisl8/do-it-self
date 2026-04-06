@@ -632,23 +632,26 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           docker --log-level ERROR compose build
         fi
 
-        # Validate container configuration and generate .env file
+        # Generate .env file from registry + user config (non-secret config like volume paths)
         REGISTRY_FILE="${SCRIPT_DIR}/container-registry.yaml"
         USER_CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
         GENERATE_ENV_SCRIPT="${SCRIPT_DIR}/scripts/generate-env.js"
+        INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
         if [[ -f "${REGISTRY_FILE}" ]] && [[ -f "${USER_CONFIG_FILE}" ]] && [[ -x "$(command -v node)" ]] && [[ -f "${GENERATE_ENV_SCRIPT}" ]]; then
-          # Validate that required variables are configured
-          set +e
-          node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --validate-only --quiet
-          VALIDATE_EXIT=$?
-          set -e
-          if [[ ${VALIDATE_EXIT} -ne 0 ]]; then
-            printf "${RED}  SKIPPING ${CONTAINER_DIR}: missing required configuration.${NC}\n"
-            printf "${RED}  Run 'node scripts/generate-env.js ${CONTAINER_DIR} --validate-only' for details.${NC}\n"
-            FAILED_CONTAINERS+=("${CONTAINER_DIR}")
-            continue
+          # Only validate when Infisical is NOT available (secrets come from infisical run, not .env)
+          if [[ ! -f "${INFISICAL_CRED_FILE}" ]] || ! docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+            set +e
+            node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --validate-only --quiet
+            VALIDATE_EXIT=$?
+            set -e
+            if [[ ${VALIDATE_EXIT} -ne 0 ]]; then
+              printf "${RED}  SKIPPING ${CONTAINER_DIR}: missing required configuration.${NC}\n"
+              printf "${RED}  Run 'node scripts/generate-env.js ${CONTAINER_DIR} --validate-only' for details.${NC}\n"
+              FAILED_CONTAINERS+=("${CONTAINER_DIR}")
+              continue
+            fi
           fi
-          # Generate .env file from registry + user config
+          # Generate .env file (volume paths, DOCKER_GID -- non-secret config)
           set +e
           node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --quiet
           set -e
