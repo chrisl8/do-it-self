@@ -3,6 +3,7 @@ import esMain from 'es-main';
 import scanContainerFolders from './containerFolderScanner.js';
 import { getContainerIconFilename, getStackIcon } from './dockerContainerIcons.js';
 import { getPendingUpdates } from './pendingUpdates.js';
+import { getConfigStatus } from './configRegistry.js';
 
 const docker = new Docker();
 
@@ -58,13 +59,23 @@ async function getFormattedDockerContainers() {
 
     const pendingUpdates = getPendingUpdates();
 
+    let configStatus = { containers: {} };
+    try {
+      configStatus = await getConfigStatus();
+    } catch {
+      // Config registry not set up yet -- that's fine
+    }
+
     const stacksWithIcons = {};
     for (const [name, info] of Object.entries(stacks)) {
       const stackIcons = containerIconMap[name] || [];
+      const config = configStatus.containers[name];
       stacksWithIcons[name] = {
         ...info,
         icon: getStackIcon(name, stackIcons),
         hasPendingUpdates: pendingUpdates.has(name),
+        configReady: config?.ready ?? null,
+        configMissing: config?.missing ?? [],
       };
     }
 

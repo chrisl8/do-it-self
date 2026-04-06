@@ -9,6 +9,16 @@ import "dotenv/config";
 import getFormattedDockerContainers from "./dockerStatus.js";
 import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 import { getReleaseNotesForStack } from "./githubReleases.js";
+import {
+  getRegistry,
+  getUserConfig,
+  saveUserConfig,
+  getConfigStatus,
+  validateContainer,
+  writeContainerEnv,
+  writeAllContainerEnvs,
+  maskSecrets,
+} from "./configRegistry.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -442,6 +452,113 @@ app.get("/api/borg-log", async (req, res) => {
   } catch (err) {
     console.error("Error reading borg log:", err);
     res.status(500).json({ error: "Failed to read borg log" });
+  }
+});
+
+// --- Container Configuration Registry APIs ---
+
+app.get("/api/registry", async (req, res) => {
+  try {
+    const registry = await getRegistry();
+    res.json(registry);
+  } catch (err) {
+    console.error("Error reading registry:", err);
+    res.status(500).json({ error: "Failed to read container registry" });
+  }
+});
+
+app.get("/api/config", async (req, res) => {
+  try {
+    const registry = await getRegistry();
+    const userConfig = await getUserConfig();
+    const masked = maskSecrets(registry, userConfig);
+    res.json(masked);
+  } catch (err) {
+    console.error("Error reading config:", err);
+    res.status(500).json({ error: "Failed to read user config" });
+  }
+});
+
+app.get("/api/config/raw", async (req, res) => {
+  try {
+    const userConfig = await getUserConfig();
+    res.json(userConfig);
+  } catch (err) {
+    console.error("Error reading raw config:", err);
+    res.status(500).json({ error: "Failed to read user config" });
+  }
+});
+
+app.put("/api/config/shared", async (req, res) => {
+  try {
+    const userConfig = await getUserConfig();
+    userConfig.shared = { ...userConfig.shared, ...req.body };
+    await saveUserConfig(userConfig);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error saving shared config:", err);
+    res.status(500).json({ error: "Failed to save shared config" });
+  }
+});
+
+app.put("/api/config/container/:name", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const userConfig = await getUserConfig();
+    if (!userConfig.containers) userConfig.containers = {};
+    const existing = userConfig.containers[name] || {};
+    userConfig.containers[name] = {
+      ...existing,
+      ...req.body,
+      variables: { ...(existing.variables || {}), ...(req.body.variables || {}) },
+    };
+    await saveUserConfig(userConfig);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error saving container config:", err);
+    res.status(500).json({ error: "Failed to save container config" });
+  }
+});
+
+app.get("/api/config/validate", async (req, res) => {
+  try {
+    const status = await getConfigStatus();
+    res.json(status);
+  } catch (err) {
+    console.error("Error validating config:", err);
+    res.status(500).json({ error: "Failed to validate config" });
+  }
+});
+
+app.get("/api/config/validate/:name", async (req, res) => {
+  try {
+    const registry = await getRegistry();
+    const userConfig = await getUserConfig();
+    const result = validateContainer(registry, userConfig, req.params.name);
+    res.json(result);
+  } catch (err) {
+    console.error("Error validating container:", err);
+    res.status(500).json({ error: "Failed to validate container" });
+  }
+});
+
+app.post("/api/config/generate-env/:name", async (req, res) => {
+  try {
+    const result = await writeContainerEnv(req.params.name);
+    res.json(result);
+  } catch (err) {
+    console.error("Error generating env:", err);
+    res.status(500).json({ error: "Failed to generate .env file" });
+  }
+});
+
+app.post("/api/config/generate-all-envs", async (req, res) => {
+  try {
+    const results = await writeAllContainerEnvs();
+    res.json(results);
+  } catch (err) {
+    console.error("Error generating envs:", err);
+    res.status(500).json({ error: "Failed to generate .env files" });
   }
 });
 
