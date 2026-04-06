@@ -80,14 +80,14 @@ else
   printf "${YELLOW}Creating %s server (%s) in %s...${NC}\n" "$SERVER_TYPE" "$IMAGE" "$LOCATION"
 
   # Cloud-init: just run setup.sh via curl|bash as the ubuntu user
-  CLOUD_INIT=$(cat << 'CLOUDINIT'
+  CLOUD_INIT_FILE=$(mktemp)
+  cat > "$CLOUD_INIT_FILE" << 'CLOUDINIT'
 #cloud-config
 runcmd:
   - |
     su - ubuntu -c 'curl -fsSL https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh | bash' > /home/ubuntu/setup.log 2>&1
     touch /home/ubuntu/.setup-complete
 CLOUDINIT
-)
 
   hcloud server create \
     --name "$SERVER_NAME" \
@@ -95,7 +95,9 @@ CLOUDINIT
     --image "$IMAGE" \
     --location "$LOCATION" \
     --ssh-key "$SSH_KEY" \
-    --user-data "$CLOUD_INIT"
+    --user-data-from-file "$CLOUD_INIT_FILE"
+
+  rm -f "$CLOUD_INIT_FILE"
 
   IP=$(hcloud server ip "$SERVER_NAME")
   printf "${GREEN}Server created at %s${NC}\n" "$IP"
