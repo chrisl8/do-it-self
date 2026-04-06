@@ -107,6 +107,15 @@ for env_file in "${SCRIPT_DIR}"/*/1password_credential_paths.env; do
       continue
     fi
 
+    # Ensure the folder exists (create via API -- CLI doesn't have a folder create command)
+    if [[ "$target_folder" != "/shared" ]]; then
+      folder_name="${target_folder#/}"
+      curl -sf "http://localhost:8085/api/v1/folders" \
+        -H "Authorization: Bearer ${INFISICAL_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"workspaceId\": \"${INFISICAL_PROJECT_ID}\", \"environment\": \"prod\", \"name\": \"${folder_name}\", \"path\": \"/\"}" > /dev/null 2>&1 || true
+    fi
+
     set +e
     infisical secrets set "${var_name}=${value}" \
       --token="${INFISICAL_TOKEN}" \

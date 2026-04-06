@@ -667,7 +667,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           apply_mount_permissions "mount-permissions.yaml"
         fi
 
-        # If Infisical is available, use it to inject secrets at startup.
+        # If Infisical is available, export secrets into the environment before starting.
         # Otherwise fall back to plain .env (non-secret config only).
         set +e
         if [[ -x "$(command -v infisical)" ]] && [[ "$(docker ps --filter "name=infisical" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/infisical.env" ]]; then
@@ -675,13 +675,13 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           # shellcheck disable=SC1091
           source "${HOME}/credentials/infisical.env"
           export INFISICAL_TOKEN INFISICAL_API_URL
-          infisical run \
-            --token="${INFISICAL_TOKEN}" \
-            --projectId="${INFISICAL_PROJECT_ID}" \
-            --path="/shared" --path="/${CONTAINER_DIR}" \
-            --env=prod \
-            --domain="${INFISICAL_API_URL}" \
-            -- docker compose up -d --wait
+          # Export shared secrets + container-specific secrets into environment
+          INFISICAL_ARGS="--token=${INFISICAL_TOKEN} --projectId=${INFISICAL_PROJECT_ID} --env=prod --domain=${INFISICAL_API_URL}"
+          # shellcheck disable=SC2086
+          eval "$(infisical export ${INFISICAL_ARGS} --path="/shared" --format=dotenv-export 2>/dev/null)"
+          # shellcheck disable=SC2086
+          eval "$(infisical export ${INFISICAL_ARGS} --path="/${CONTAINER_DIR}" --format=dotenv-export 2>/dev/null)"
+          docker compose up -d --wait
         else
           docker compose up -d --wait
         fi
