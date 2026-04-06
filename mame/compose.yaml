@@ -8,9 +8,9 @@ services:
       - TZ=America/Chicago
     volumes:
       - ${VOL_MAME_CONFIG:-~/container-data}/container-mounts/mame/config:/config
-      - ${VOL_MAME_SECURE_WEBTOP_DOWNLOADS_MAME_MAME 0.276 EXTRAS:-~/container-data}/container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs:/mame
-      - ${VOL_MAME_SECURE_WEBTOP_DOWNLOADS_MAME_MAME 0.279 ROMS (MERGED):-~/container-data}/container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged):/mame/roms:ro
-      - ${VOL_MAME_SECURE_WEBTOP_DOWNLOADS_MAME_MAME 0.279 CHDS (MERGED):-~/container-data}/container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged):/mame/chds:ro
+      - ${VOL_MAME_EXTRAS:-~/container-data}/container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs:/mame
+      - ${VOL_MAME_ROMS:-~/container-data}/container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged):/mame/roms:ro
+      - ${VOL_MAME_CHDS:-~/container-data}/container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged):/mame/chds:ro
     shm_size: "1gb"
     networks:
       - mame-net
