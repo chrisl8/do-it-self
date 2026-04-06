@@ -447,8 +447,8 @@ RESTART_LIST_TEXT="all containers"
 RESTART_LIST_TEXT_UPPER="All containers"
 
 # Fix any necessary file permissions
-if [[ -e "${HOME}/credentials/1password-credentials.json" ]]; then
-  chmod o+r "${HOME}/credentials/1password-credentials.json"
+if [[ -e "${HOME}/credentials/infisical.env" ]]; then
+  chmod 600 "${HOME}/credentials/infisical.env"
 fi
 
 # If a container list file is provided, read it and filter the container list
@@ -664,22 +664,21 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           apply_mount_permissions "mount-permissions.yaml"
         fi
 
-        # IF the following are true, we will run this via the 1Password CLI
-        # 0. The 1password CLI is installed
-        # 1. The user's home directory contains a credentials/1password-connect.env file
-        # 2. The 1password container is already running (it should start first)
-        # 3. There is a .env file link in the container folder
-        # 4. The .env file contains at least one entry that starts with "op://"
+        # If Infisical is available, use it to inject secrets at startup.
+        # Otherwise fall back to plain .env (non-secret config only).
         set +e
-        if [[ -x "$(command -v op)" ]] && [[ "$(docker ps --filter "name=1password-connect-api" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/1password-connect.env" ]] && [[ -f "${SCRIPT_DIR}/${CONTAINER_DIR}/1password_credential_paths.env" ]] && grep -q "op://" "${SCRIPT_DIR}/${CONTAINER_DIR}/1password_credential_paths.env"; then
-          printf "${YELLOW}  Resolving environment variables via 1Password CLI...${NC}\n"
-          if [[ -d "${HOME}/.config/op" ]];then
-            chmod go-rx "${HOME}/.config/op"
-          fi
-          export OP_CONNECT_HOST="http://127.0.0.1:9980/"
-          OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
-          export OP_CONNECT_TOKEN
-          /usr/bin/op run --env-file 1password_credential_paths.env -- docker compose up -d --wait
+        if [[ -x "$(command -v infisical)" ]] && [[ "$(docker ps --filter "name=infisical" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/infisical.env" ]]; then
+          printf "${YELLOW}  Injecting secrets via Infisical...${NC}\n"
+          # shellcheck disable=SC1091
+          source "${HOME}/credentials/infisical.env"
+          export INFISICAL_TOKEN INFISICAL_API_URL
+          infisical run \
+            --token="${INFISICAL_TOKEN}" \
+            --projectId="${INFISICAL_PROJECT_ID}" \
+            --path="/shared" --path="/${CONTAINER_DIR}" \
+            --env=prod \
+            --domain="${INFISICAL_API_URL}" \
+            -- docker compose up -d --wait
         else
           docker compose up -d --wait
         fi

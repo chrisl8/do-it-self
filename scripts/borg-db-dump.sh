@@ -9,37 +9,37 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=borg-backup.conf
 . "${SCRIPT_DIR}/borg-backup.conf"
 
-# Load credentials from 1Password via Connect API
-# OP_AVAILABLE is exported by borg-backup.sh; set it up if running standalone
-if [ -z "${OP_AVAILABLE}" ]; then
-    OP_AVAILABLE=false
-    if command -v op &>/dev/null && \
-       [ -f "${HOME}/credentials/1password-connect.env" ] && \
-       docker ps --filter "name=1password-connect-api" --filter "status=running" -q | grep -q .; then
-        export OP_CONNECT_HOST="http://127.0.0.1:9980/"
-        OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
-        export OP_CONNECT_TOKEN
-        OP_AVAILABLE=true
+# Load credentials from Infisical
+# SECRETS_AVAILABLE is exported by borg-backup.sh; set it up if running standalone
+if [ -z "${SECRETS_AVAILABLE}" ]; then
+    SECRETS_AVAILABLE=false
+    if command -v infisical &>/dev/null && \
+       [ -f "${HOME}/credentials/infisical.env" ] && \
+       docker ps --filter "name=infisical" --filter "status=running" -q | grep -q .; then
+        # shellcheck disable=SC1091
+        source "${HOME}/credentials/infisical.env"
+        export INFISICAL_TOKEN INFISICAL_API_URL
+        SECRETS_AVAILABLE=true
     fi
 fi
 
-load_op_secret() {
-    local op_path="$1"
-    if [ "${OP_AVAILABLE}" = "true" ]; then
-        # Use --config to avoid config dir ownership conflicts
-        op --config /tmp/op-backup-config read "${op_path}" 2>/dev/null && return 0
+load_secret() {
+    local container="$1"
+    local key="$2"
+    if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+        infisical secrets get "${key}" --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" --path="/${container}" --env=prod --domain="${INFISICAL_API_URL}" --silent --plain 2>/dev/null && return 0
     fi
     return 1
 }
 
-# Resolve database passwords from 1Password (reading from each service's own item)
-if [ "${OP_AVAILABLE}" = "true" ]; then
-    MARIADB_ROOT_PASSWORD=$(load_op_secret "op://Docker/mariadb/MARIADB_ROOT_PASSWORD") || true
-    NEXTCLOUD_MYSQL_ROOT_PASSWORD=$(load_op_secret "op://Docker/nextcloud/MYSQL_ROOT_PASSWORD") || true
+# Resolve database passwords from Infisical
+if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+    MARIADB_ROOT_PASSWORD=$(load_secret "mariadb" "MARIADB_ROOT_PASSWORD") || true
+    NEXTCLOUD_MYSQL_ROOT_PASSWORD=$(load_secret "nextcloud" "MYSQL_ROOT_PASSWORD") || true
     echo "Credential status: MariaDB=$([ -n "${MARIADB_ROOT_PASSWORD}" ] && echo ok || echo MISSING)" \
          "Nextcloud=$([ -n "${NEXTCLOUD_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo MISSING)"
 else
-    echo "WARNING: 1Password not available — database credentials will be missing"
+    echo "WARNING: Infisical not available — database credentials will be missing"
 fi
 
 # Clean up Dawarich database

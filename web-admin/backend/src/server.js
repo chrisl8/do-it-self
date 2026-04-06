@@ -19,6 +19,13 @@ import {
   writeAllContainerEnvs,
   maskSecrets,
 } from "./configRegistry.js";
+import {
+  isAvailable as isInfisicalAvailable,
+  getContainerSecrets,
+  setContainerSecrets,
+  setSharedSecrets,
+  listSecrets,
+} from "./infisicalClient.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -482,6 +489,32 @@ app.get("/api/config", async (req, res) => {
 app.get("/api/config/raw", async (req, res) => {
   try {
     const userConfig = await getUserConfig();
+    // Merge secrets from Infisical if available
+    if (await isInfisicalAvailable()) {
+      try {
+        const registry = await getRegistry();
+        // Load shared secrets
+        const sharedSecrets = await listSecrets("/shared").catch(() => []);
+        for (const s of sharedSecrets) {
+          if (!userConfig.shared) userConfig.shared = {};
+          userConfig.shared[s.key] = s.value;
+        }
+        // Load per-container secrets
+        for (const name of Object.keys(registry.containers || {})) {
+          const containerSecrets = await listSecrets(`/${name}`).catch(() => []);
+          if (containerSecrets.length > 0) {
+            if (!userConfig.containers) userConfig.containers = {};
+            if (!userConfig.containers[name]) userConfig.containers[name] = {};
+            if (!userConfig.containers[name].variables) userConfig.containers[name].variables = {};
+            for (const s of containerSecrets) {
+              userConfig.containers[name].variables[s.key] = s.value;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Could not load secrets from Infisical:", e.message);
+      }
+    }
     res.json(userConfig);
   } catch (err) {
     console.error("Error reading raw config:", err);
@@ -489,11 +522,49 @@ app.get("/api/config/raw", async (req, res) => {
   }
 });
 
+app.get("/api/config/infisical-status", async (req, res) => {
+  try {
+    const available = await isInfisicalAvailable();
+    res.json({ available });
+  } catch (err) {
+    res.json({ available: false });
+  }
+});
+
 app.put("/api/config/shared", async (req, res) => {
   try {
+    const registry = await getRegistry();
+    const sharedDefs = registry.shared_variables || {};
     const userConfig = await getUserConfig();
-    userConfig.shared = { ...userConfig.shared, ...req.body };
+
+    // Separate secrets from non-secrets
+    const secrets = {};
+    const nonSecrets = {};
+    for (const [key, value] of Object.entries(req.body)) {
+      if (sharedDefs[key]?.type === "secret") {
+        secrets[key] = value;
+      } else {
+        nonSecrets[key] = value;
+      }
+    }
+
+    // Non-secrets go in user-config.yaml
+    userConfig.shared = { ...userConfig.shared, ...nonSecrets };
+    // Also store non-secret shared vars so they're available for .env generation
+    // (TS_DOMAIN, HOST_NAME, DOCKER_GID are non-secret shared vars)
     await saveUserConfig(userConfig);
+
+    // Secrets go to Infisical if available
+    if (await isInfisicalAvailable()) {
+      // Write ALL shared vars (including non-secrets) to Infisical /shared
+      // so `infisical run --path="/shared"` picks them up
+      await setSharedSecrets({ ...nonSecrets, ...secrets });
+    } else {
+      // Fallback: store secrets in user-config.yaml too
+      userConfig.shared = { ...userConfig.shared, ...secrets };
+      await saveUserConfig(userConfig);
+    }
+
     const envResults = await writeAllContainerEnvs();
     res.json({ success: true, envsGenerated: Object.keys(envResults).length });
   } catch (err) {
@@ -522,14 +593,25 @@ app.put("/api/config/container/:name", async (req, res) => {
     const userConfig = await getUserConfig();
     if (!userConfig.containers) userConfig.containers = {};
     const existing = userConfig.containers[name] || {};
+
+    // Separate variables into secrets (Infisical) and non-secret config (user-config.yaml)
+    const variables = { ...(existing.variables || {}), ...(req.body.variables || {}) };
+
+    // Non-variable config (enabled, volume_mounts) always goes to user-config.yaml
     userConfig.containers[name] = {
       ...existing,
       ...req.body,
-      variables: { ...(existing.variables || {}), ...(req.body.variables || {}) },
       volume_mounts: { ...(existing.volume_mounts || {}), ...(req.body.volume_mounts || {}) },
     };
+    // Don't store variables in user-config.yaml if Infisical is available
+    if (await isInfisicalAvailable()) {
+      delete userConfig.containers[name].variables;
+      await setContainerSecrets(name, variables);
+    } else {
+      userConfig.containers[name].variables = variables;
+    }
+
     await saveUserConfig(userConfig);
-    // Regenerate this container's .env file immediately
     const envResult = await writeContainerEnv(name);
     res.json({ success: true, envWritten: envResult.written, envMissing: envResult.missing });
   } catch (err) {

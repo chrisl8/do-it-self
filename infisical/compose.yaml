@@ -1,0 +1,98 @@
+# https://infisical.com/docs/self-hosting/deployment-options/docker-compose
+# Self-hosted secret manager for injecting credentials into containers.
+# Bootstrap with: scripts/setup-infisical.sh
+services:
+  infisical:
+    container_name: infisical
+    # Pin to a specific version for stability
+    image: infisical/infisical:v0.132.2-postgres
+    depends_on:
+      infisical-db:
+        condition: service_healthy
+      infisical-redis:
+        condition: service_healthy
+    environment:
+      - AUTH_SECRET=${AUTH_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SITE_URL=https://infisical.${TS_DOMAIN}
+      - DB_CONNECTION_URI=postgresql://infisical:${DB_PASSWORD}@infisical-db:5432/infisical
+      - REDIS_URL=redis://infisical-redis:6379
+      # Telemetry opt-out
+      - TELEMETRY_ENABLED=false
+    networks:
+      - infisical-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/status"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: on-failure
+  infisical-db:
+    container_name: infisical-db
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=infisical
+      - POSTGRES_USER=infisical
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ${VOL_INFISICAL_DB:-~/container-data}/container-mounts/infisical/db:/var/lib/postgresql/data
+    networks:
+      - infisical-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infisical"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: on-failure
+  infisical-redis:
+    container_name: infisical-redis
+    image: redis:7-alpine
+    volumes:
+      - ${VOL_INFISICAL_REDIS:-~/container-data}/container-mounts/infisical/redis:/data
+    networks:
+      - infisical-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    restart: on-failure
+  ts:
+    container_name: infisical-ts
+    image: tailscale/tailscale
+    environment:
+      - TS_HOSTNAME=infisical
+      - TS_EXTRA_ARGS=--advertise-tags=tag:container
+      - TS_SERVE_CONFIG=/config/tailscale-config.json
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
+      - TS_AUTHKEY=${TS_AUTHKEY}
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./tailscale-config:/config
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9002/healthz"]
+      start_period: 120s
+      start_interval: 5s
+      interval: 5m
+      timeout: 5s
+      retries: 3
+    networks:
+      - infisical-net
+    depends_on:
+      infisical:
+        condition: service_healthy
+    restart: on-failure
+networks:
+  infisical-net:

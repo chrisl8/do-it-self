@@ -44,14 +44,42 @@ categories:
 
 containers:
   1password:
-    description: "1Password Connect API for credential injection"
+    description: "1Password Connect API for credential injection (legacy)"
     category: uncategorized
     start_order: "000"
+    default_disabled: true
     volumes:
       data:
         var: VOL_1PASSWORD_DATA
         host_subpath: container-mounts/1password/data
         container_path: /home/opuser/.op/data
+  infisical:
+    description: "Self-hosted secret manager for credential injection"
+    category: uncategorized
+    uses_tailscale: true
+    start_order: "000"
+    variables:
+      AUTH_SECRET:
+        type: secret
+        required: true
+        description: "JWT signing secret (auto-generated during setup)"
+      ENCRYPTION_KEY:
+        type: secret
+        required: true
+        description: "Platform encryption key (auto-generated during setup)"
+      DB_PASSWORD:
+        type: secret
+        required: true
+        description: "PostgreSQL database password (auto-generated during setup)"
+    volumes:
+      db:
+        var: VOL_INFISICAL_DB
+        host_subpath: container-mounts/infisical/db
+        container_path: /var/lib/postgresql/data
+      redis:
+        var: VOL_INFISICAL_REDIS
+        host_subpath: container-mounts/infisical/redis
+        container_path: /data
   actual-budget:
     description: "Privacy-focused personal budgeting app"
     category: my-stuff

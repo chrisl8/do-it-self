@@ -37,31 +37,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Ensure log directory exists (redirect happens after credential loading below)
 mkdir -p "$(dirname "${BORG_LOG_FILE}")"
 
-# Load credentials from 1Password via Connect API
-load_op_secret() {
-    local op_path="$1"
-    if [ "${OP_AVAILABLE}" = "true" ]; then
-        # Use /root as HOME so op creates its config dir at /root/.config/op/
-        # instead of polluting the original user's ~/.config/op/ with root-owned files
-        HOME=/root op read "${op_path}" 2>/dev/null && return 0
+# Load credentials from Infisical
+load_secret() {
+    local container="$1"
+    local key="$2"
+    if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+        infisical secrets get "${key}" --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" --path="/${container}" --env=prod --domain="${INFISICAL_API_URL}" --silent --plain 2>/dev/null && return 0
     fi
     return 1
 }
 
-OP_AVAILABLE=false
-if command -v op &>/dev/null && \
-   [ -f "${HOME}/credentials/1password-connect.env" ] && \
-   docker ps --filter "name=1password-connect-api" --filter "status=running" -q | grep -q .; then
-    export OP_CONNECT_HOST="http://127.0.0.1:9980/"
-    OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
-    export OP_CONNECT_TOKEN
-    OP_AVAILABLE=true
+SECRETS_AVAILABLE=false
+if command -v infisical &>/dev/null && \
+   [ -f "${HOME}/credentials/infisical.env" ] && \
+   docker ps --filter "name=infisical" --filter "status=running" -q | grep -q .; then
+    # shellcheck disable=SC1091
+    source "${HOME}/credentials/infisical.env"
+    export INFISICAL_TOKEN INFISICAL_API_URL
+    SECRETS_AVAILABLE=true
 fi
 
-if [ "${OP_AVAILABLE}" = "true" ]; then
-    BORG_PASSPHRASE=$(load_op_secret "op://Docker/borgbackup/BORG_PASSPHRASE") || true
-    BORG_HEALTHCHECK_URL=$(load_op_secret "op://Docker/borgbackup/BORG_HEALTHCHECK_URL") || true
-    TS_DOMAIN=$(load_op_secret "op://Docker/tailscale/TS_DOMAIN") || true
+if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+    BORG_PASSPHRASE=$(load_secret "borgbackup" "BORG_PASSPHRASE") || true
+    BORG_HEALTHCHECK_URL=$(load_secret "borgbackup" "BORG_HEALTHCHECK_URL") || true
+    TS_DOMAIN=$(load_secret "shared" "TS_DOMAIN") || true
 fi
 
 # Build web admin URL from hostname and TS_DOMAIN if available
@@ -70,7 +69,7 @@ if [ -n "${TS_DOMAIN}" ]; then
 fi
 
 if [ -n "${BORG_REMOTE_REPO}" ]; then
-    BORG_REMOTE_PASSPHRASE=$(load_op_secret "op://Docker/borgbackup/BORG_REMOTE_PASSPHRASE") || true
+    BORG_REMOTE_PASSPHRASE=$(load_secret "borgbackup" "BORG_REMOTE_PASSPHRASE") || true
     if [ -z "${BORG_REMOTE_PASSPHRASE}" ]; then
         echo "WARNING: BORG_REMOTE_PASSPHRASE is empty — remote backup will be skipped"
     fi
@@ -78,7 +77,7 @@ fi
 
 if [ -z "${BORG_PASSPHRASE}" ] && [ "${REMOTE_ONLY}" != "true" ]; then
     echo "ERROR: BORG_PASSPHRASE is empty — cannot proceed without borg passphrase"
-    echo "       Ensure 1Password Connect API is running and Docker/borgbackup item exists"
+    echo "       Ensure Infisical is running and borgbackup secrets are configured"
     exit 1
 fi
 
