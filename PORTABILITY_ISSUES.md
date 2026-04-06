@@ -6,11 +6,11 @@ This document catalogs issues that would affect someone cloning this repository 
 
 ## Open Issues
 
-### Tailscale is Mandatory but Opaque (40+ services)
+### Tailscale Setup Needs a Guide
 
 - 40+ services use the Tailscale sidecar pattern requiring `TS_AUTHKEY` and `TS_DOMAIN`
-- No documentation on how to set up the Tailscale OAuth client or ACL tags
-- Each service needs `/dev/net/tun` and `NET_ADMIN`/`SYS_MODULE` capabilities
+- Both are now configurable via the web-admin and stored in Infisical, but there's no documentation on how to *get* them (creating an OAuth client, setting up ACL tags with a "container" tag, etc.)
+- A step-by-step Tailscale setup guide is needed for new users
 
 ### External Backup Infrastructure Assumed
 
@@ -24,15 +24,12 @@ This document catalogs issues that would affect someone cloning this repository 
 - `scripts/system-cron-startup.sh` references `~/Metatron/start-pm2.sh` and `~/Kryten/scripts/start-pm2.sh` (personal projects)
 - These are guarded with `if [[ -e ... ]]` so they won't crash, but they're confusing
 
-### Multiple Host Package Dependencies Not Listed in One Place
+### Some Host Package Dependencies Not Checked by Setup Scripts
 
-Required on the host:
+`setup.sh` checks for docker, node, npm, and pm2. `setup-infisical.sh` checks for the infisical CLI. The following are not checked and not documented in one place:
 
-- Docker + Docker Compose
 - Tailscale CLI (`/usr/bin/tailscale`)
-- Infisical CLI
-- Node.js + PM2 (for web-admin)
-- BorgBackup CLI (`borg`)
+- BorgBackup CLI (`borg`) -- only needed if using backup scripts
 - `yq` (optional, for mount-permissions YAML parsing)
 - NVIDIA Docker runtime (for jellyfin, obsidian, mame, retroarch, secure-browser)
 - Passwordless `sudo` for `/usr/bin/chown` and `/usr/sbin/shutdown`
@@ -92,9 +89,9 @@ Several scripts expect cron entries but none are installed automatically:
 - Either the initial setup should set those
 - Or the scripts that start things should grab them at run-time and inject them as needed
 
-### The Docker GID is "hand coded" in the config right now
+### The Docker GID should be auto-detected by setup scripts
 
-- Same as hostname/ip, should be set by initial setup or at run-time rather than user config.
+- The GID is configurable via the web-admin Global Settings and injected via .env, but the setup scripts don't auto-detect it. `getent group docker | cut -d: -f3` would set it automatically during initial setup.
 
 ### Internal secrets (DB passwords, JWT keys) should be auto-generated
 
