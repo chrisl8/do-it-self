@@ -49,10 +49,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # monitor other disks / partitions by mounting a folder in /extra-filesystems
       # Using the mounts that I set up for homepage
-      - ${MONITOR_ROOT:-/mnt/120}/for-homepage:/extra-filesystems/120:ro
-      - ${CACHE_ROOT:-/mnt/250}/for-homepage:/extra-filesystems/250:ro
-      - ${DATA_ROOT:-/mnt/2000}/for-homepage:/extra-filesystems/2000:ro
-      - ${MEDIA_ROOT:-/mnt/22TB}/for-homepage:/extra-filesystems/22TB:ro
+      # Auto-generated monitoring mounts (one per storage mount)
+      - /mnt/2000/for-homepage:/extra-filesystems/Primary SSD:ro
+      - /mnt/22TB/for-homepage:/extra-filesystems/Large HDD:ro
+      - /mnt/250/for-homepage:/extra-filesystems/Cache SSD:ro
+      - /mnt/120/for-homepage:/extra-filesystems/Monitor:ro
       - ./healthcheck:/healthcheck
     environment:
       PORT: 45876

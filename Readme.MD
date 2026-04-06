@@ -30,6 +30,18 @@ It isn't meant to run on a Pi, so you may need to adjust some things if you are 
 
 ## Setup
 
+### Infisical CLI
+
+This requires the Infisical CLI.  
+Instructions are here: https://infisical.com/docs/cli/overview#debian%2Fubuntu
+
+In short:
+
+```bash
+curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash
+sudo apt-get update && sudo apt-get install -y infisical
+```
+
 ### Git Repos
 
 A few folders require a git repo to be pulled in to build the image.
