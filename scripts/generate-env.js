@@ -70,12 +70,14 @@ function parseYaml(text) {
     const key = content.slice(0, colonIdx).trim();
     let value = content.slice(colonIdx + 1).trim();
 
+    let wasQuoted = false;
     if ((value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
+      wasQuoted = true;
     }
 
-    if (value === "" || value === null) {
+    if (!wasQuoted && (value === "" || value === null)) {
       parent[key] = null;
       let nextContent = "";
       for (let j = i + 1; j < lines.length; j++) {
