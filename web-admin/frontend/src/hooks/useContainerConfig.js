@@ -1,0 +1,108 @@
+import { useState, useCallback, useEffect } from "react";
+
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+
+function useContainerConfig() {
+  const [registry, setRegistry] = useState(null);
+  const [userConfig, setUserConfig] = useState(null);
+  const [validationStatus, setValidationStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchConfig = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [regRes, configRes, validateRes] = await Promise.all([
+        fetch(`${API_BASE}/api/registry`),
+        fetch(`${API_BASE}/api/config/raw`),
+        fetch(`${API_BASE}/api/config/validate`),
+      ]);
+
+      if (!regRes.ok || !configRes.ok || !validateRes.ok) {
+        throw new Error("Failed to fetch configuration data");
+      }
+
+      setRegistry(await regRes.json());
+      setUserConfig(await configRes.json());
+      setValidationStatus(await validateRes.json());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
+
+  const updateSharedVars = useCallback(async (vars) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/config/shared`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vars),
+      });
+      if (!res.ok) throw new Error("Failed to save shared config");
+      await fetchConfig();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }, [fetchConfig]);
+
+  const updateContainer = useCallback(async (name, config) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/config/container/${name}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      if (!res.ok) throw new Error("Failed to save container config");
+      await fetchConfig();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }, [fetchConfig]);
+
+  const generateEnvFiles = useCallback(async (containerName) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const url = containerName
+        ? `${API_BASE}/api/config/generate-env/${containerName}`
+        : `${API_BASE}/api/config/generate-all-envs`;
+      const res = await fetch(url, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to generate .env files");
+      return await res.json();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  return {
+    registry,
+    userConfig,
+    validationStatus,
+    loading,
+    saving,
+    error,
+    fetchConfig,
+    updateSharedVars,
+    updateContainer,
+    generateEnvFiles,
+  };
+}
+
+export default useContainerConfig;

@@ -115,6 +115,8 @@ const buildUnifiedStackList = (running, stacks) => {
         containers: {},
         isRunning: false,
         hasPendingUpdates: info.hasPendingUpdates || false,
+        configReady: info.configReady ?? null,
+        configMissing: info.configMissing || [],
       });
     }
   }
@@ -700,6 +702,14 @@ const DockerStatus = ({
                     color={stateDisplay.color}
                     size="small"
                   />
+                  {stack.configReady === false && !stack.isDisabled && (
+                    <Chip
+                      label="Not Configured"
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                    />
+                  )}
                   {stack.hasPendingUpdates &&
                     !(() => {
                       const status = restartStatus?.[stack.name];

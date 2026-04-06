@@ -12,10 +12,12 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import DockerStatus from "./DockerStatus";
 import BackupStatus from "./BackupStatus";
+import ContainerConfig from "./ContainerConfig";
 import useDockerStatus from "./hooks/useDockerStatus";
 
 const routes = [
   { path: "/docker-status", label: "Docker Status" },
+  { path: "/container-config", label: "Configuration" },
   { path: "/backup-status", label: "Backup Status" },
 ];
 
@@ -88,6 +90,7 @@ const App = () => {
             />
           }
         />
+        <Route path="/container-config" element={<ContainerConfig />} />
         <Route path="/backup-status" element={<BackupStatus />} />
       </Routes>
     </BrowserRouter>
