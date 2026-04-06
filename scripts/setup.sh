@@ -170,6 +170,24 @@ else
   ok "Tailscale already installed"
 fi
 
+# If TS_AUTHKEY env var is set (e.g. from cloud-init for testing), join Tailscale now.
+# Then auto-detect TS_DOMAIN from `tailscale status`.
+if [[ -n "${TS_AUTHKEY:-}" ]]; then
+  if ! tailscale status &>/dev/null || ! tailscale status --json 2>/dev/null | grep -q '"BackendState": "Running"'; then
+    step "Joining Tailscale via provided TS_AUTHKEY"
+    sudo tailscale up --authkey="$TS_AUTHKEY" --hostname="$(hostname)" --ssh --accept-routes 2>&1 | tail -3
+    ok "Joined Tailscale"
+  fi
+  # Auto-detect TS_DOMAIN if not already provided
+  if [[ -z "${TS_DOMAIN:-}" ]]; then
+    DETECTED_DOMAIN=$(tailscale status --json 2>/dev/null | grep -oP '"MagicDNSSuffix":\s*"\K[^"]+' | head -1)
+    if [[ -n "$DETECTED_DOMAIN" ]]; then
+      TS_DOMAIN="$DETECTED_DOMAIN"
+      ok "Detected Tailscale domain: ${TS_DOMAIN}"
+    fi
+  fi
+fi
+
 # ── Step 7: User configuration ──────────────────────────────────────────
 
 CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
@@ -192,8 +210,8 @@ mounts:
     label: "Default"
 
 shared:
-  TS_AUTHKEY: ""
-  TS_DOMAIN: ""
+  TS_AUTHKEY: "${TS_AUTHKEY:-}"
+  TS_DOMAIN: "${TS_DOMAIN:-}"
   HOST_NAME: "${DETECTED_HOSTNAME}"
   DOCKER_GID: "${DETECTED_DOCKER_GID}"
 
@@ -235,6 +253,29 @@ ok "Web-admin started"
 
 step "Setting up Infisical"
 "${SCRIPT_DIR}/scripts/setup-infisical.sh"
+
+# If we joined Tailscale earlier, write the credentials to Infisical so that
+# `infisical run` can inject them into containers that need them.
+if [[ -n "${TS_AUTHKEY:-}" ]] && [[ -f "${HOME}/credentials/infisical.env" ]]; then
+  step "Writing Tailscale credentials to Infisical"
+  # shellcheck disable=SC1091
+  source "${HOME}/credentials/infisical.env"
+  infisical secrets set "TS_AUTHKEY=${TS_AUTHKEY}" \
+    --token="${INFISICAL_TOKEN}" \
+    --projectId="${INFISICAL_PROJECT_ID}" \
+    --path="/shared" \
+    --env=prod \
+    --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
+  if [[ -n "${TS_DOMAIN:-}" ]]; then
+    infisical secrets set "TS_DOMAIN=${TS_DOMAIN}" \
+      --token="${INFISICAL_TOKEN}" \
+      --projectId="${INFISICAL_PROJECT_ID}" \
+      --path="/shared" \
+      --env=prod \
+      --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
+  fi
+  ok "Tailscale credentials saved to Infisical"
+fi
 
 # ── Done ─────────────────────────────────────────────────────────────────
 

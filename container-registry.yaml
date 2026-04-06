@@ -74,6 +74,7 @@ containers:
         var: VOL_ACTUAL_BUDGET_DATA
         host_subpath: container-mounts/actual-budget/data
         container_path: /data
+    default_disabled: true
   actual-budget-api:
     description: Actual Budget API server
     category: uncategorized
@@ -92,9 +93,11 @@ containers:
         var: VOL_ACTUAL_BUDGET_API_ACTUAL_API_DATA
         host_subpath: container-mounts/actual-api/data
         container_path: /data
+    default_disabled: true
   adminer:
     description: Lightweight database management web UI
     category: uncategorized
+    default_disabled: true
   beszel:
     description: Server monitoring dashboard
     category: system-monitoring
@@ -123,6 +126,7 @@ containers:
         var: VOL_BESZEL_DATA
         host_subpath: container-mounts/beszel/data
         container_path: /beszel_data
+    default_disabled: true
   borgitory:
     description: Web UI for browsing BorgBackup repositories
     category: tools
@@ -136,6 +140,7 @@ containers:
         var: VOL_BORGITORY_BORG_REPO
         host_subpath: borg-repo
         container_path: /mnt/repos/local
+    default_disabled: true
   caddy:
     description: Reverse proxy and web server with automatic HTTPS
     category: uncategorized
@@ -191,6 +196,7 @@ containers:
         var: VOL_CADDY_LOGS
         host_subpath: container-mounts/caddy/logs
         container_path: /var/log/caddy
+    default_disabled: true
   changedetection:
     description: Website change detection and notification
     category: reading
@@ -205,6 +211,7 @@ containers:
         var: VOL_CHANGEDETECTION_DATA
         host_subpath: container-mounts/changedetection/data
         container_path: /datastore
+    default_disabled: true
   cloudflared:
     description: Cloudflare Tunnel for external access without port forwarding
     category: uncategorized
@@ -219,6 +226,7 @@ containers:
         var: VOL_CLOUDFLARED_CONFIG
         host_subpath: container-mounts/cloudflared/config
         container_path: /home/nonroot/.cloudflared
+    default_disabled: true
   code:
     description: VS Code Server in the browser
     category: my-stuff
@@ -228,6 +236,7 @@ containers:
         var: VOL_CODE_HOME
         host_subpath: container-mounts/code/home
         container_path: /home/coder
+    default_disabled: true
   crater-manipulator:
     description: Crater Manipulator game server component
     category: uncategorized
@@ -237,6 +246,7 @@ containers:
         var: VOL_CRATER_MANIPULATOR_CADDY_CRATER_MANIPULATOR
         host_subpath: container-mounts/caddy/crater-manipulator
         container_path: /crater-manipulator
+    default_disabled: true
   dawarich:
     description: Self-hosted location history and tracking
     category: favorites
@@ -286,6 +296,7 @@ containers:
         var: VOL_DAWARICH_STORAGE
         host_subpath: container-mounts/dawarich/storage
         container_path: /var/app/storage
+    default_disabled: true
   diun:
     description: Docker Image Update Notifier
     category: uncategorized
@@ -299,6 +310,7 @@ containers:
         var: VOL_DIUN_SCRIPT
         host_subpath: container-mounts/diun/script
         container_path: /script
+    default_disabled: true
   factorio:
     description: Factorio dedicated game server
     category: uncategorized
@@ -308,6 +320,7 @@ containers:
         var: VOL_FACTORIO_DATA
         host_subpath: container-mounts/factorio/data
         container_path: /factorio
+    default_disabled: true
   filez:
     description: Simple file browser and manager
     category: my-stuff
@@ -321,6 +334,7 @@ containers:
         var: VOL_FILEZ_SECURE_WEBTOP_DOWNLOADS
         host_subpath: container-mounts/secure-webtop/downloads
         container_path: /data/downloads
+    default_disabled: true
   forgejo:
     description: Self-hosted Git forge (Gitea fork)
     category: my-stuff
@@ -331,6 +345,7 @@ containers:
         var: VOL_FORGEJO_DATA
         host_subpath: container-mounts/forgejo/data
         container_path: /data
+    default_disabled: true
   formbricks:
     description: Open-source survey and feedback platform
     category: uncategorized
@@ -371,6 +386,7 @@ containers:
         var: VOL_FORMBRICKS_SAML_CONNECTION
         host_subpath: container-mounts/formbricks/saml-connection
         container_path: /home/nextjs/apps/web/saml-connection
+    default_disabled: true
   freshrss:
     description: Self-hosted RSS feed reader
     category: reading
@@ -393,6 +409,7 @@ containers:
         var: VOL_FRESHRSS_EXTENSIONS
         host_subpath: container-mounts/freshrss/extensions
         container_path: /var/www/FreshRSS/extensions
+    default_disabled: true
   geomyidae:
     description: Gopher protocol server
     category: uncategorized
@@ -402,6 +419,7 @@ containers:
         var: VOL_GEOMYIDAE_CADDY_GEOMYIDAE
         host_subpath: container-mounts/caddy/geomyidae
         container_path: /geomyidae
+    default_disabled: true
   homarr:
     description: Customizable dashboard for self-hosted services
     category: tools
@@ -425,6 +443,7 @@ containers:
         var: VOL_HOMARR_APPDATA
         host_subpath: container-mounts/homarr/appdata
         container_path: /appdata
+    default_disabled: true
   homepage:
     description: Application dashboard with service widgets
     category: uncategorized
@@ -456,6 +475,7 @@ containers:
         var: VOL_IMMICH_DB
         host_subpath: container-mounts/immich/db
         container_path: /var/lib/postgresql/data
+    default_disabled: true
   jellyfin:
     description: Media server for movies, TV, music, and audiobooks
     category: my-stuff
@@ -499,6 +519,7 @@ containers:
         var: VOL_JELLYFIN_RECON_DATA_MEDIA
         host_subpath: container-mounts/recon/data/media
         container_path: /media/recon
+    default_disabled: true
   kanboard:
     description: Kanban project management board
     category: kanboard
@@ -516,6 +537,7 @@ containers:
         var: VOL_KANBOARD_NGINX_SSL
         host_subpath: container-mounts/kanboard/nginx_ssl
         container_path: /etc/nginx/ssl
+    default_disabled: true
   karakeep:
     description: Bookmark and read-it-later manager
     category: reading
@@ -549,6 +571,7 @@ containers:
         var: VOL_KARAKEEP_MEILISEARCH
         host_subpath: container-mounts/karakeep/meilisearch
         container_path: /meili_data
+    default_disabled: true
   kopia:
     description: Backup repository server with web UI
     category: favorites
@@ -595,6 +618,7 @@ containers:
         var: VOL_KOPIA_TMP
         host_subpath: container-mounts/kopia/tmp
         container_path: /tmp:shared
+    default_disabled: true
   kopia-tr0n:
     description: Secondary Kopia backup instance
     category: uncategorized
@@ -673,6 +697,7 @@ containers:
         var: VOL_MARIADB_DB
         host_subpath: container-mounts/mariadb/db
         container_path: /var/lib/mysql
+    default_disabled: true
   meshtastic:
     description: Meshtastic mesh networking web client
     category: uncategorized
@@ -701,6 +726,7 @@ containers:
         var: VOL_MINECRAFT_DATA
         host_subpath: container-mounts/minecraft/data
         container_path: /data
+    default_disabled: true
   netdata:
     description: Real-time server performance monitoring
     category: system-monitoring
@@ -720,6 +746,7 @@ containers:
         var: VOL_NETDATA_NETDATACACHE
         host_subpath: container-mounts/netdata/netdatacache
         container_path: /var/cache/netdata
+    default_disabled: true
   nextcloud:
     description: Self-hosted cloud storage, calendar, and contacts
     category: my-stuff
@@ -778,6 +805,7 @@ containers:
         var: VOL_NEXTCLOUD_ELASTICSEARCH_DATA
         host_subpath: container-mounts/nextcloud/elasticsearch_data
         container_path: /usr/share/elasticsearch/data
+    default_disabled: true
   nextcloud-whiteboard:
     description: Collaborative whiteboard for Nextcloud
     category: uncategorized
@@ -800,6 +828,7 @@ containers:
         var: VOL_OBSIDIAN_CONFIG
         host_subpath: container-mounts/obsidian/config
         container_path: /config
+    default_disabled: true
   obsidian-babel-livesync:
     description: CouchDB sync server for Obsidian LiveSync plugin
     category: uncategorized
@@ -819,6 +848,7 @@ containers:
         var: VOL_OBSIDIAN_BABEL_LIVESYNC_DATA
         host_subpath: container-mounts/obsidian-babel-livesync/data
         container_path: /opt/couchdb/data
+    default_disabled: true
   onlyoffice:
     description: Online office suite for document editing
     category: uncategorized
@@ -855,6 +885,7 @@ containers:
         var: VOL_ONLYOFFICE_DB_DATA
         host_subpath: container-mounts/onlyoffice/db_data
         container_path: /var/lib/postgresql/data
+    default_disabled: true
   paperless:
     description: Document management system with OCR
     category: my-stuff
@@ -890,6 +921,7 @@ containers:
         var: VOL_PAPERLESS_PAPERLESS_NGX_DATABASE
         host_subpath: container-mounts/paperless-ngx/database
         container_path: /var/lib/postgresql/data
+    default_disabled: true
   paste:
     description: Self-hosted pastebin and code sharing
     category: tools
@@ -910,6 +942,7 @@ containers:
         var: VOL_PASTE_DATA
         host_subpath: container-mounts/paste/data
         container_path: /var/lib/mysql
+    default_disabled: true
   pihole:
     description: Network-wide ad blocking via DNS
     category: uncategorized
@@ -933,6 +966,7 @@ containers:
         var: VOL_PORTAINER_DATA
         host_subpath: container-mounts/portainer/data
         container_path: /data
+    default_disabled: true
   pure-ftpd:
     description: FTP server for scanner file uploads
     category: uncategorized
@@ -954,6 +988,7 @@ containers:
         var: VOL_PURE_FTPD_FTP
         host_subpath: container-mounts/pure-ftpd/ftp
         container_path: /etc/ssl/private
+    default_disabled: true
   quicken:
     description: Quicken Classic web companion
     category: my-stuff
@@ -963,6 +998,7 @@ containers:
         var: VOL_QUICKEN_DATA
         host_subpath: container-mounts/quicken/data
         container_path: /data
+    default_disabled: true
   recon:
     description: Media acquisition stack (Sonarr, Radarr, SABnzbd, etc.)
     category: recon
@@ -1050,6 +1086,7 @@ containers:
         var: VOL_RECON_SABNZBD_CONFIG
         host_subpath: container-mounts/recon/sabnzbd/config
         container_path: /config
+    default_disabled: true
   retroarch:
     description: RetroArch game emulator in the browser
     category: desktop-apps
@@ -1088,6 +1125,7 @@ containers:
         var: VOL_SEARXNG_ETC
         host_subpath: container-mounts/searxng/etc
         container_path: /etc/searxng:rw
+    default_disabled: true
   secure-browser:
     description: Isolated browser via KasmVNC with VPN
     category: desktop-apps
@@ -1114,6 +1152,7 @@ containers:
         type: string
         required: true
         description: WireGuard client IP address (e.g. 10.x.x.x/32)
+    default_disabled: true
   seerr:
     description: Media request management for Jellyfin
     category: my-stuff
@@ -1123,6 +1162,7 @@ containers:
         var: VOL_SEERR_CONFIG
         host_subpath: container-mounts/seerr/config
         container_path: /app/config
+    default_disabled: true
   space-game:
     description: Space game web application
     category: uncategorized
@@ -1132,10 +1172,12 @@ containers:
         var: VOL_SPACE_GAME_CADDY_SPACE_GAME
         host_subpath: container-mounts/caddy/space-game
         container_path: /space-game
+    default_disabled: true
   spacymote:
     description: SpacyMote remote control web app
     category: uncategorized
     start_order: "031"
+    default_disabled: true
   speedtest:
     description: Self-hosted internet speed test tracker
     category: system-monitoring
@@ -1150,6 +1192,7 @@ containers:
         var: VOL_SPEEDTEST_CONFIG
         host_subpath: container-mounts/speedtest/config
         container_path: /config
+    default_disabled: true
   starbound:
     description: Starbound dedicated game server
     category: uncategorized
@@ -1163,6 +1206,7 @@ containers:
         var: VOL_STARBOUND_STARBOUND
         host_subpath: container-mounts/starbound/starbound
         container_path: /starbound
+    default_disabled: true
   stirling-pdf:
     description: PDF manipulation toolkit
     category: tools
@@ -1176,10 +1220,12 @@ containers:
         var: VOL_STIRLING_PDF_CONFIGS
         host_subpath: container-mounts/stirling-pdf/configs
         container_path: /configs
+    default_disabled: true
   the-lounge:
     description: Self-hosted IRC web client
     category: home
     uses_tailscale: true
+    default_disabled: true
   trilium:
     description: Hierarchical note-taking application
     category: my-stuff
@@ -1189,6 +1235,7 @@ containers:
         var: VOL_TRILIUM_DATA
         host_subpath: container-mounts/trilium/data
         container_path: /home/node/trilium-data
+    default_disabled: true
   tsidp:
     description: Tailscale Identity Provider
     category: tools
@@ -1198,6 +1245,7 @@ containers:
         var: VOL_TSIDP_TSIDP
         host_subpath: container-mounts/tsidp/tsidp
         container_path: /data
+    default_disabled: true
   uptime:
     description: Uptime Kuma service monitoring
     category: system-monitoring
@@ -1208,6 +1256,7 @@ containers:
         var: VOL_UPTIME_DATA
         host_subpath: container-mounts/uptime/data
         container_path: /app/data
+    default_disabled: true
   valheim:
     description: Valheim dedicated game server
     category: home
@@ -1239,6 +1288,7 @@ containers:
         var: VOL_VALHEIM_DATA
         host_subpath: container-mounts/valheim/data
         container_path: /opt/valheim
+    default_disabled: true
   vaultwarden:
     description: Bitwarden-compatible password manager server
     category: tools
@@ -1252,6 +1302,7 @@ containers:
   voidship-ephemeral:
     description: Voidship Ephemeral web application
     category: uncategorized
+    default_disabled: true
   wallabag:
     description: Self-hosted read-it-later and article archiver
     category: reading
@@ -1274,6 +1325,7 @@ containers:
         var: VOL_WALLABAG_DATA
         host_subpath: container-mounts/wallabag/data
         container_path: /var/www/wallabag/data
+    default_disabled: true
   witchazzan:
     description: Witchazzan multiplayer web game
     category: uncategorized
@@ -1283,6 +1335,7 @@ containers:
         var: VOL_WITCHAZZAN_CADDY_WITCHAZZAN_PERSISTENTDATA
         host_subpath: container-mounts/caddy/witchazzan/persistentData
         container_path: /app/persistentData
+    default_disabled: true
   your-spotify:
     description: Personal Spotify listening statistics
     category: favorites
@@ -1301,6 +1354,7 @@ containers:
         var: VOL_YOUR_SPOTIFY_DB
         host_subpath: container-mounts/your-spotify/db
         container_path: /data/db
+    default_disabled: true
   zipline:
     description: File and image hosting with ShareX support
     category: tools
@@ -1333,3 +1387,4 @@ containers:
         var: VOL_ZIPLINE_THEMES
         host_subpath: container-mounts/zipline/themes
         container_path: /themes
+    default_disabled: true

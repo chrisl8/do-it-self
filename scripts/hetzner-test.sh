@@ -28,6 +28,8 @@ KEEP_IF_FAILS=true
 DESTROY_ONLY=false
 RETEST=false
 TS_KEY=""
+TS_API_TOKEN=""
+TS_TAILNET="-"
 LOG_DIR="/tmp/hetzner-test-logs"
 
 while [[ $# -gt 0 ]]; do
@@ -38,6 +40,8 @@ while [[ $# -gt 0 ]]; do
     --retest) RETEST=true ;;
     --type) shift; SERVER_TYPE="$1" ;;
     --ts-key) shift; TS_KEY="$1" ;;
+    --ts-api-token) shift; TS_API_TOKEN="$1" ;;
+    --ts-tailnet) shift; TS_TAILNET="$1" ;;
     --location) shift; LOCATION="$1" ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -86,8 +90,15 @@ else
   # Cloud-init: create an ubuntu user (Hetzner image only has root by default),
   # then run setup.sh via curl|bash as that user. This matches a realistic
   # install where the user is a regular user with sudo, not root.
+  # If --ts-key was provided, pass it through as an env var so setup.sh can
+  # join Tailscale automatically.
   CLOUD_INIT_FILE=$(mktemp)
-  cat > "$CLOUD_INIT_FILE" << 'CLOUDINIT'
+  if [[ -n "$TS_KEY" ]]; then
+    TS_ENV_LINE="TS_AUTHKEY='${TS_KEY}'"
+  else
+    TS_ENV_LINE=""
+  fi
+  cat > "$CLOUD_INIT_FILE" << CLOUDINIT
 #cloud-config
 users:
   - name: ubuntu
@@ -101,7 +112,7 @@ runcmd:
   - chown -R ubuntu:ubuntu /home/ubuntu/.ssh
   - chmod 700 /home/ubuntu/.ssh
   - chmod 600 /home/ubuntu/.ssh/authorized_keys
-  - su - ubuntu -c 'curl -fsSL https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh | bash' > /home/ubuntu/setup.log 2>&1
+  - su - ubuntu -c "${TS_ENV_LINE} curl -fsSL https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh | bash" > /home/ubuntu/setup.log 2>&1
   - chown ubuntu:ubuntu /home/ubuntu/setup.log
   - touch /home/ubuntu/.setup-complete
   - chown ubuntu:ubuntu /home/ubuntu/.setup-complete
@@ -238,6 +249,25 @@ else
   printf "${YELLOW}Destroying server...${NC}\n"
   hcloud server delete "$SERVER_NAME"
   printf "${GREEN}Server destroyed.${NC}\n"
+
+  # Clean up the Tailscale node from the test tailnet
+  if [[ -n "$TS_API_TOKEN" ]]; then
+    printf "${YELLOW}Removing Tailscale node...${NC}\n"
+    NODE_ID=$(curl -sf -H "Authorization: Bearer ${TS_API_TOKEN}" \
+      "https://api.tailscale.com/api/v2/tailnet/${TS_TAILNET}/devices" 2>/dev/null \
+      | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);const dev=(j.devices||[]).find(x=>x.hostname==='${SERVER_NAME}'||x.name.startsWith('${SERVER_NAME}.'));console.log(dev?dev.id:'');}catch(e){}});" 2>/dev/null)
+    if [[ -n "$NODE_ID" ]]; then
+      if curl -sf -X DELETE \
+        -H "Authorization: Bearer ${TS_API_TOKEN}" \
+        "https://api.tailscale.com/api/v2/device/${NODE_ID}" > /dev/null 2>&1; then
+        printf "${GREEN}Tailscale node removed.${NC}\n"
+      else
+        printf "${YELLOW}Failed to remove Tailscale node (id=%s).${NC}\n" "$NODE_ID"
+      fi
+    else
+      printf "${YELLOW}No Tailscale node found for ${SERVER_NAME}.${NC}\n"
+    fi
+  fi
 fi
 
 exit $TEST_EXIT
