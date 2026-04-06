@@ -81,13 +81,14 @@ else
   ok "Docker already installed"
 fi
 
-# Add current user to docker group if needed
-if ! groups | grep -q docker; then
+# Add current user to docker group if needed.
+# Re-exec under `sg docker` so the new group membership applies to the rest
+# of this script (group changes don't normally take effect mid-session).
+if ! groups | grep -q '\bdocker\b'; then
   step "Adding $USER to docker group"
   sudo usermod -aG docker "$USER"
-  ok "Added to docker group (you may need to log out and back in)"
-  # Use newgrp to pick up the group in this session
-  # This is a best-effort -- in curl|bash mode, newgrp won't persist
+  ok "Added to docker group; re-executing with new group membership..."
+  exec sg docker "$0 $*"
 fi
 
 # ── Step 3: Node.js (via fnm) ───────────────────────────────────────────
@@ -109,6 +110,23 @@ if ! command -v node &>/dev/null; then
     printf "${RED}node still not in PATH after fnm install.${NC}\n"
     exit 1
   fi
+
+  # The fnm installer adds itself to ~/.bashrc, but that only loads for
+  # interactive shells. Add it to ~/.profile too so login shells (like
+  # ssh sessions and PM2 child processes) pick up node.
+  PROFILE_FILE="${HOME}/.profile"
+  if ! grep -q 'fnm env' "$PROFILE_FILE" 2>/dev/null; then
+    cat >> "$PROFILE_FILE" << 'PROFILE'
+
+# fnm
+FNM_PATH="$HOME/.local/share/fnm"
+if [ -d "$FNM_PATH" ]; then
+  export PATH="$FNM_PATH:$PATH"
+  eval "$(fnm env)"
+fi
+PROFILE
+  fi
+
   ok "Node.js $(node --version) installed"
 else
   ok "Node.js $(node --version) already installed"
