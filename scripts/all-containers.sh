@@ -29,6 +29,7 @@ QUIET=false
 TEST_FAIL=false
 
 LIST_MOUNTS=false
+VALIDATE_ONLY=false
 
 FAILED_CONTAINERS=()
 
@@ -86,6 +87,10 @@ do
                 --list-mounts)
                   LIST_MOUNTS=true
                   ;;
+                --validate-only)
+                  VALIDATE_ONLY=true
+                  START_ACTION=true
+                  ;;
         esac
         shift
 done
@@ -137,6 +142,10 @@ if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} 
   echo "Mount permissions can be configured per-container using mount-permissions.yaml"
   echo "Files must be placed alongside compose.yaml in each container directory."
   echo "See example format in scripts/mount-permissions-example.yaml"
+  echo ""
+  echo "You can validate container configuration without starting anything:"
+  echo "all-containers.sh --validate-only"
+  echo "all-containers.sh --validate-only --container <container-name>"
   exit
 fi
 
@@ -621,6 +630,33 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           printf "${YELLOW}  Pulling updates and rebuilding...${NC}\n"
           docker --log-level ERROR compose pull
           docker --log-level ERROR compose build
+        fi
+
+        # Validate container configuration and generate .env file
+        REGISTRY_FILE="${SCRIPT_DIR}/container-registry.yaml"
+        USER_CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
+        GENERATE_ENV_SCRIPT="${SCRIPT_DIR}/scripts/generate-env.js"
+        if [[ -f "${REGISTRY_FILE}" ]] && [[ -f "${USER_CONFIG_FILE}" ]] && [[ -x "$(command -v node)" ]] && [[ -f "${GENERATE_ENV_SCRIPT}" ]]; then
+          # Validate that required variables are configured
+          set +e
+          node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --validate-only --quiet
+          VALIDATE_EXIT=$?
+          set -e
+          if [[ ${VALIDATE_EXIT} -ne 0 ]]; then
+            printf "${RED}  SKIPPING ${CONTAINER_DIR}: missing required configuration.${NC}\n"
+            printf "${RED}  Run 'node scripts/generate-env.js ${CONTAINER_DIR} --validate-only' for details.${NC}\n"
+            FAILED_CONTAINERS+=("${CONTAINER_DIR}")
+            continue
+          fi
+          # Generate .env file from registry + user config
+          set +e
+          node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --quiet
+          set -e
+        fi
+
+        if [[ ${VALIDATE_ONLY} = true ]]; then
+          printf "${YELLOW}  ${CONTAINER_DIR}: configuration valid${NC}\n"
+          continue
         fi
 
         # Apply mount permissions before starting containers
