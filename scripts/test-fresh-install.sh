@@ -176,6 +176,65 @@ else
   fail "GET /api/config/validate failed"
 fi
 
+# ── Phase 7: Container startup (only if Tailscale was set up) ───────────
+
+# Check if TS_AUTHKEY is in Infisical -- if so, we have Tailscale and can
+# actually start containers that need it.
+TS_READY=false
+if [[ -f "${HOME}/credentials/infisical.env" ]]; then
+  source "${HOME}/credentials/infisical.env"
+  TS_KEY_VALUE=$(infisical secrets get TS_AUTHKEY \
+    --token="${INFISICAL_TOKEN}" \
+    --projectId="${INFISICAL_PROJECT_ID}" \
+    --path="/shared" \
+    --env=prod \
+    --domain="${INFISICAL_API_URL}" \
+    --silent --plain 2>/dev/null)
+  if [[ -n "$TS_KEY_VALUE" ]]; then
+    TS_READY=true
+  fi
+fi
+
+if [[ "$TS_READY" == true ]]; then
+  section "Container Startup (with Tailscale)"
+
+  TEST_CONTAINERS="searxng freshrss the-lounge uptime kanboard paste"
+
+  # Enable each container via the web admin API
+  for c in $TEST_CONTAINERS; do
+    if curl -sf -X PUT "http://localhost:3333/api/config/container/$c" \
+      -H 'Content-Type: application/json' \
+      -d '{"enabled": true}' > /dev/null 2>&1; then
+      pass "enabled $c via API"
+    else
+      fail "could not enable $c via API"
+    fi
+  done
+
+  # Start them all
+  printf "${YELLOW}  Starting containers (this may take several minutes)...${NC}\n"
+  cd "${CONTAINERS_DIR}"
+  if scripts/all-containers.sh --start --no-wait > /tmp/start.log 2>&1; then
+    pass "all-containers.sh --start completed"
+  else
+    fail "all-containers.sh --start failed (see /tmp/start.log)"
+  fi
+
+  # Verify each container has a running container in its compose project
+  sleep 5
+  for c in $TEST_CONTAINERS; do
+    if docker ps --filter "label=com.docker.compose.project=$c" --filter "status=running" -q 2>/dev/null | grep -q .; then
+      pass "$c is running"
+    else
+      fail "$c is not running"
+    fi
+  done
+else
+  section "Container Startup (skipped -- no Tailscale)"
+  printf "${YELLOW}  Skipping container startup test: TS_AUTHKEY not configured.${NC}\n"
+  printf "${YELLOW}  Pass --ts-key to hetzner-test.sh to enable this phase.${NC}\n"
+fi
+
 # ── Report ───────────────────────────────────────────────────────────────
 
 END_TIME=$(date +%s)
