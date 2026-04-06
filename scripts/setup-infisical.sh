@@ -200,17 +200,4 @@ EOF
   printf "${GREEN}Saved credentials to %s${NC}\n" "$CRED_FILE"
 fi
 
-echo ""
-echo "============================================"
-printf "${GREEN}Infisical Setup Complete!${NC}\n"
-echo "============================================"
-echo ""
-echo "Credentials: ${CRED_FILE}"
-echo ""
-echo "Next steps:"
-echo "  1. Open the Infisical web UI to verify it's running"
-echo "  2. Use the web-admin Configuration tab to set secrets"
-echo "     (they'll be stored in Infisical automatically)"
-echo "  3. Or run scripts/migrate-1password-to-infisical.sh to"
-echo "     import existing secrets from 1Password"
-echo ""
+printf "${GREEN}Infisical secret manager ready.${NC}\n"
