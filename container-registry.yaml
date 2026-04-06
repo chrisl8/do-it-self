@@ -56,7 +56,7 @@ containers:
   infisical:
     description: "Self-hosted secret manager for credential injection"
     category: uncategorized
-    uses_tailscale: true
+    uses_tailscale: false
     start_order: "000"
     variables:
       AUTH_SECRET:
