@@ -242,6 +242,34 @@ export function validateContainer(registry, userConfig, containerName) {
 export async function getConfigStatus() {
   const registry = await getRegistry();
   const userConfig = await getUserConfig();
+
+  // Merge Infisical secrets so validation accounts for them
+  let infisicalMerged = false;
+  try {
+    const { isAvailable, listSecrets } = await import("./infisicalClient.js");
+    if (await isAvailable()) {
+      const sharedSecrets = await listSecrets("/shared").catch(() => []);
+      for (const s of sharedSecrets) {
+        if (!userConfig.shared) userConfig.shared = {};
+        userConfig.shared[s.key] = s.value;
+      }
+      for (const name of Object.keys(registry.containers || {})) {
+        const containerSecrets = await listSecrets(`/${name}`).catch(() => []);
+        if (containerSecrets.length > 0) {
+          if (!userConfig.containers) userConfig.containers = {};
+          if (!userConfig.containers[name]) userConfig.containers[name] = {};
+          if (!userConfig.containers[name].variables) userConfig.containers[name].variables = {};
+          for (const s of containerSecrets) {
+            userConfig.containers[name].variables[s.key] = s.value;
+          }
+        }
+      }
+      infisicalMerged = true;
+    }
+  } catch {
+    // Infisical not available, validate with what we have
+  }
+
   const containers = {};
 
   for (const [name, def] of Object.entries(registry.containers || {})) {
