@@ -70,32 +70,21 @@ create_dir "/mnt/2000/container-mounts/borgbackup/db-dumps"
 create_dir "${HOME}/logs"
 echo ""
 
-# ── 1Password integration ────────────────────────────────────────
+# ── Infisical integration ────────────────────────────────────────
 
-echo "── 1Password ──"
+echo "── Secret Manager ──"
 
-OP_AVAILABLE=false
-if command -v op &>/dev/null && \
-   [ -f "${HOME}/credentials/1password-connect.env" ] && \
-   docker ps --filter "name=1password-connect-api" --filter "status=running" -q 2>/dev/null | grep -q .; then
-    export OP_CONNECT_HOST="http://127.0.0.1:9980/"
-    OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
-    export OP_CONNECT_TOKEN
-    OP_AVAILABLE=true
-    done_msg "1Password Connect API available"
+SECRETS_AVAILABLE=false
+if command -v infisical &>/dev/null && \
+   [ -f "${HOME}/credentials/infisical.env" ] && \
+   docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+    # shellcheck disable=SC1091
+    source "${HOME}/credentials/infisical.env"
+    export INFISICAL_TOKEN INFISICAL_API_URL
+    SECRETS_AVAILABLE=true
+    done_msg "Infisical secret manager available"
 else
-    printf "${YELLOW}[WARN]${NC} 1Password Connect API not available\n"
-fi
-
-# Check if the borgbackup item exists in 1Password
-if [ "${OP_AVAILABLE}" = "true" ]; then
-    if op read "op://Docker/borgbackup/BORG_PASSPHRASE" &>/dev/null; then
-        skip_msg "1Password item Docker/borgbackup"
-    else
-        printf "${YELLOW}[ACTION]${NC} Create a 1Password item in the Docker vault named 'borgbackup' with these fields:\n"
-        printf "         - BORG_PASSPHRASE: a strong passphrase for the borg repo\n"
-        printf "         - BORG_HEALTHCHECK_URL: healthchecks.io ping URL (add later)\n"
-    fi
+    printf "${YELLOW}[WARN]${NC} Infisical not available — secrets must be set manually\n"
 fi
 
 echo ""
@@ -104,9 +93,9 @@ echo ""
 
 echo "── Borg repository ──"
 
-# Load BORG_PASSPHRASE from 1Password
-if [ "${OP_AVAILABLE}" = "true" ]; then
-    BORG_PASSPHRASE=$(op read "op://Docker/borgbackup/BORG_PASSPHRASE" 2>/dev/null) || true
+# Load BORG_PASSPHRASE from Infisical
+if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+    BORG_PASSPHRASE=$(infisical secrets get BORG_PASSPHRASE --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" --path="/borgbackup" --env=prod --domain="${INFISICAL_API_URL}" --silent --plain 2>/dev/null) || true
 fi
 export BORG_PASSPHRASE
 
