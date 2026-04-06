@@ -241,18 +241,24 @@ step "Setting up Infisical"
 WEB_ADMIN_PORT=$(grep "^PORT=" "${SCRIPT_DIR}/web-admin/backend/.env" 2>/dev/null | cut -d= -f2)
 WEB_ADMIN_PORT=${WEB_ADMIN_PORT:-3333}
 
+# Detect the primary network IP for a usable URL when ssh'd into a remote box
+NETWORK_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+
 echo ""
 echo "============================================"
 printf "${GREEN}Setup Complete!${NC}\n"
 echo "============================================"
 echo ""
-echo "Web admin: http://localhost:${WEB_ADMIN_PORT}"
+echo "Web admin:"
+echo "  Local:   http://localhost:${WEB_ADMIN_PORT}"
+if [[ -n "$NETWORK_IP" && "$NETWORK_IP" != "127.0.0.1" ]]; then
+  echo "  Network: http://${NETWORK_IP}:${WEB_ADMIN_PORT}"
+fi
 echo ""
 echo "Next steps:"
 echo "  1. Open the web admin in your browser"
 echo "  2. Go to the Configuration tab"
 echo "  3. Set your storage mount paths"
 echo "  4. Enter your Tailscale auth key (TS_AUTHKEY) and domain (TS_DOMAIN)"
-echo "  5. Enable the containers you want"
-echo "  6. Run: ~/containers/scripts/all-containers.sh --start"
+echo "  5. Enable the containers you want and start them"
 echo ""
