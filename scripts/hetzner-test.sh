@@ -80,14 +80,28 @@ else
 
   printf "${YELLOW}Creating %s server (%s) in %s...${NC}\n" "$SERVER_TYPE" "$IMAGE" "$LOCATION"
 
-  # Cloud-init: just run setup.sh via curl|bash as the ubuntu user
+  # Cloud-init: create an ubuntu user (Hetzner image only has root by default),
+  # then run setup.sh via curl|bash as that user. This matches a realistic
+  # install where the user is a regular user with sudo, not root.
   CLOUD_INIT_FILE=$(mktemp)
   cat > "$CLOUD_INIT_FILE" << 'CLOUDINIT'
 #cloud-config
+users:
+  - name: ubuntu
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
 runcmd:
-  - |
-    su - ubuntu -c 'curl -fsSL https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh | bash' > /home/ubuntu/setup.log 2>&1
-    touch /home/ubuntu/.setup-complete
+  - mkdir -p /home/ubuntu/.ssh
+  - cp /root/.ssh/authorized_keys /home/ubuntu/.ssh/authorized_keys
+  - chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+  - chmod 700 /home/ubuntu/.ssh
+  - chmod 600 /home/ubuntu/.ssh/authorized_keys
+  - su - ubuntu -c 'curl -fsSL https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh | bash' > /home/ubuntu/setup.log 2>&1
+  - chown ubuntu:ubuntu /home/ubuntu/setup.log
+  - touch /home/ubuntu/.setup-complete
+  - chown ubuntu:ubuntu /home/ubuntu/.setup-complete
 CLOUDINIT
 
   hcloud server create \
@@ -120,31 +134,47 @@ CLOUDINIT
   done
   printf "${GREEN}SSH ready${NC}\n"
 
-  # Wait for cloud-init setup to complete
-  printf "${YELLOW}Waiting for setup.sh to complete (this may take several minutes)...${NC}\n"
-  for i in $(seq 1 120); do
-    if ssh "root@${IP}" "test -f /home/ubuntu/.setup-complete" 2>/dev/null; then
-      break
-    fi
-    if [[ $i -eq 120 ]]; then
-      printf "${RED}Setup did not complete in time.${NC}\n"
-      echo "Check logs: ssh root@${IP} cat /home/ubuntu/setup.log"
-      exit 1
-    fi
-    sleep 10
-  done
+  # Wait for cloud-init to finish and fail fast on errors.
+  # `cloud-init status --wait` blocks until done and exits with the status code.
+  printf "${YELLOW}Waiting for cloud-init to finish setup.sh (this may take 10-15 minutes)...${NC}\n"
+  set +e
+  ssh "root@${IP}" "cloud-init status --wait" 2>&1 | tail -3
+  CLOUD_INIT_EXIT=${PIPESTATUS[0]}
+  set -e
+
+  if [[ $CLOUD_INIT_EXIT -ne 0 ]]; then
+    printf "${RED}Cloud-init failed (exit code %d).${NC}\n" "$CLOUD_INIT_EXIT"
+    echo ""
+    printf "${RED}=== Last 30 lines of /home/ubuntu/setup.log ===${NC}\n"
+    ssh "root@${IP}" "test -f /home/ubuntu/setup.log && tail -30 /home/ubuntu/setup.log || echo '(setup.log does not exist)'"
+    echo ""
+    printf "${RED}=== Last 30 lines of /var/log/cloud-init-output.log ===${NC}\n"
+    ssh "root@${IP}" "tail -30 /var/log/cloud-init-output.log"
+    echo ""
+    echo "Debug:   ssh root@${IP}"
+    echo "Destroy: scripts/hetzner-test.sh --destroy"
+    exit 1
+  fi
+
+  # Verify the setup-complete marker exists
+  if ! ssh "root@${IP}" "test -f /home/ubuntu/.setup-complete" 2>/dev/null; then
+    printf "${RED}Cloud-init succeeded but setup-complete marker is missing.${NC}\n"
+    ssh "root@${IP}" "tail -20 /home/ubuntu/setup.log 2>&1 || echo '(no setup.log)'"
+    exit 1
+  fi
   printf "${GREEN}Setup completed.${NC}\n"
 fi
 
 IP=${IP:-$(hcloud server ip "$SERVER_NAME")}
 
-# Run the test suite
+# Run the test suite as the ubuntu user (since the SSH key was copied during cloud-init)
 printf "${YELLOW}Running test suite...${NC}\n"
 
-# Copy the test script to the server and run it
-scp "${BASH_SOURCE[0]%/*}/test-fresh-install.sh" "root@${IP}:/home/ubuntu/test-fresh-install.sh"
-ssh "root@${IP}" "chmod +x /home/ubuntu/test-fresh-install.sh && su - ubuntu -c '/home/ubuntu/test-fresh-install.sh'"
+scp "${BASH_SOURCE[0]%/*}/test-fresh-install.sh" "ubuntu@${IP}:/home/ubuntu/test-fresh-install.sh"
+set +e
+ssh "ubuntu@${IP}" "chmod +x /home/ubuntu/test-fresh-install.sh && /home/ubuntu/test-fresh-install.sh"
 TEST_EXIT=$?
+set -e
 
 if [[ $TEST_EXIT -eq 0 ]]; then
   printf "\n${GREEN}All tests passed!${NC}\n"
