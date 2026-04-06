@@ -185,7 +185,8 @@ function formatEnvFile(env) {
   let content = "# Auto-generated from container-registry + user-config.\n";
   content += `# Generated: ${new Date().toISOString()}\n`;
   content += "# Do not edit manually — changes will be overwritten.\n\n";
-  for (const [key, value] of Object.entries(env)) {
+  for (const [key, rawValue] of Object.entries(env)) {
+    const value = String(rawValue ?? "");
     if (/[\s#"'\\$]/.test(value)) {
       content += `${key}="${value.replace(/"/g, '\\"')}"\n`;
     } else {
