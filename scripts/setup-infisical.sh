@@ -78,22 +78,24 @@ fi
 # 3. Start the core Infisical services (skip Tailscale -- credentials aren't set yet)
 printf "${YELLOW}Starting Infisical core services...${NC}\n"
 cd "$INFISICAL_DIR"
-docker compose up -d --wait infisical infisical-db infisical-redis
-printf "${GREEN}Infisical is running on http://localhost:8085${NC}\n"
+# Don't use --wait here -- Infisical takes time for DB migrations on first boot.
+# We poll the API directly below.
+docker compose up -d infisical infisical-db infisical-redis
 
-# 4. Wait for the API to be ready
-printf "${YELLOW}Waiting for Infisical API...${NC}\n"
-for i in $(seq 1 30); do
+# 4. Wait for the API to be ready (may take a few minutes on first boot due to migrations)
+printf "${YELLOW}Waiting for Infisical API (first boot may take a few minutes)...${NC}\n"
+for i in $(seq 1 90); do
   if curl -sf http://localhost:8085/api/status > /dev/null 2>&1; then
     break
   fi
-  if [[ $i -eq 30 ]]; then
+  if [[ $i -eq 90 ]]; then
     printf "${RED}Infisical API did not become ready in time.${NC}\n"
+    printf "${RED}Check logs with: docker logs infisical${NC}\n"
     exit 1
   fi
   sleep 2
 done
-printf "${GREEN}Infisical API is ready.${NC}\n"
+printf "${GREEN}Infisical API is ready on http://localhost:8085${NC}\n"
 
 # 5. Bootstrap admin + machine identity
 mkdir -p "${HOME}/credentials"
