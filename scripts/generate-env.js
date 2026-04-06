@@ -236,9 +236,11 @@ async function main() {
   let hasErrors = false;
 
   if (all) {
-    for (const name of Object.keys(registry.containers || {})) {
+    for (const [name, def] of Object.entries(registry.containers || {})) {
       const cc = userConfig.containers?.[name];
-      if (cc?.enabled === false) continue;
+      // Respect user config if set, otherwise check registry default_disabled
+      const enabled = cc?.enabled !== undefined ? cc.enabled : !def.default_disabled;
+      if (!enabled) continue;
       const r = await generateForContainer(registry, userConfig, name, { validateOnly, quiet });
       if (!r.valid) hasErrors = true;
     }
