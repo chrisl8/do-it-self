@@ -20,7 +20,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 SERVER_NAME="do-it-self-test"
-SERVER_TYPE="cpx22"
+SERVER_TYPE="cx23"
 IMAGE="ubuntu-24.04"
 LOCATION="nbg1"
 KEEP=false
@@ -103,10 +103,13 @@ CLOUDINIT
   IP=$(hcloud server ip "$SERVER_NAME")
   printf "${GREEN}Server created at %s${NC}\n" "$IP"
 
+  # Remove any stale host key for this IP (Hetzner reuses IPs across test runs)
+  ssh-keygen -f "${HOME}/.ssh/known_hosts" -R "$IP" 2>/dev/null || true
+
   # Wait for SSH to be ready
   printf "${YELLOW}Waiting for SSH...${NC}\n"
   for i in $(seq 1 60); do
-    if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 "root@${IP}" true 2>/dev/null; then
+    if ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o ConnectTimeout=5 "root@${IP}" true 2>/dev/null; then
       break
     fi
     if [[ $i -eq 60 ]]; then
