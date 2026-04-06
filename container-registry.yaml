@@ -637,6 +637,18 @@ containers:
         var: VOL_MAME_CONFIG
         host_subpath: container-mounts/mame/config
         container_path: /config
+      extras:
+        var: VOL_MAME_EXTRAS
+        host_subpath: "container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs"
+        container_path: /mame
+      roms:
+        var: VOL_MAME_ROMS
+        host_subpath: "container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged)"
+        container_path: /mame/roms
+      chds:
+        var: VOL_MAME_CHDS
+        host_subpath: "container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged)"
+        container_path: /mame/chds
   mariadb:
     description: "Shared MariaDB database server"
     category: uncategorized
