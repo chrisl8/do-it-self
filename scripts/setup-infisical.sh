@@ -75,11 +75,11 @@ else
   cp "$SECRETS_FILE" "${INFISICAL_DIR}/.env"
 fi
 
-# 3. Start the Infisical stack
-printf "${YELLOW}Starting Infisical stack...${NC}\n"
+# 3. Start the core Infisical services (skip Tailscale -- credentials aren't set yet)
+printf "${YELLOW}Starting Infisical core services...${NC}\n"
 cd "$INFISICAL_DIR"
-docker compose up -d --wait
-printf "${GREEN}Infisical stack is running.${NC}\n"
+docker compose up -d --wait infisical infisical-db infisical-redis
+printf "${GREEN}Infisical is running on http://localhost:8080${NC}\n"
 
 # 4. Wait for the API to be ready
 printf "${YELLOW}Waiting for Infisical API...${NC}\n"

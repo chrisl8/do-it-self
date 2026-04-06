@@ -11,10 +11,14 @@ services:
         condition: service_healthy
       infisical-redis:
         condition: service_healthy
+    # Localhost-only so the web-admin and setup script can reach the API.
+    # The Tailscale sidecar provides remote HTTPS access when available.
+    ports:
+      - 127.0.0.1:8080:8080
     environment:
       - AUTH_SECRET=${AUTH_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - SITE_URL=https://infisical.${TS_DOMAIN}
+      - SITE_URL=${INFISICAL_SITE_URL:-http://localhost:8080}
       - DB_CONNECTION_URI=postgresql://infisical:${DB_PASSWORD}@infisical-db:5432/infisical
       - REDIS_URL=redis://infisical-redis:6379
       # Telemetry opt-out
