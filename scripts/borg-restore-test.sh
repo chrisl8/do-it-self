@@ -127,7 +127,7 @@ else
     # Extract just the credentials directory as a test (small, critical)
     echo "  Extracting ~/credentials/ ..."
     cd "${TEST_DIR}"
-    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" home/chrisl8/credentials/ 2>/dev/null; then
+    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" "home/${USER}/credentials/" 2>/dev/null; then
         FILE_COUNT=$(find "${TEST_DIR}" -type f | wc -l)
         echo "  Extracted ${FILE_COUNT} files successfully"
         if [ "${FILE_COUNT}" -eq 0 ]; then

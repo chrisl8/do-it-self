@@ -6,6 +6,7 @@
 import { readdir, readFile, access } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { homedir } from "os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
@@ -77,8 +78,9 @@ async function parseComposeYaml(containerName) {
     mountRoots.add(m[1]);
   }
 
-  // Check for /home/chrisl8 paths in volumes
-  const hasHomePaths = /\/home\/chrisl8\//.test(content);
+  // Check for hardcoded home directory paths in volumes
+  const homeDir = homedir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const hasHomePaths = new RegExp(homeDir).test(content);
 
   // Extract docker group_add
   const gidMatch = content.match(/group_add:\s*\n\s*-\s*(\d+)/);

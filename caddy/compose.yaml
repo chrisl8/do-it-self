@@ -11,7 +11,7 @@ services:
       - ${VOL_CADDY_DATA:-~/container-data}/container-mounts/caddy/data:/data
       - ${VOL_CADDY_CONFIG:-~/container-data}/container-mounts/caddy/config:/config
       - ${VOL_CADDY_LOGS:-~/container-data}/container-mounts/caddy/logs:/var/log/caddy
-      - /home/chrisl8/voidship_ephemeral/dist/admin:/srv/voidship-admin:ro
+      - ${HOME}/voidship_ephemeral/dist/admin:/srv/voidship-admin:ro
     networks:
       - caddy-net
     healthcheck:
