@@ -239,6 +239,36 @@ export function validateContainer(registry, userConfig, containerName) {
   return { ready: errors.length === 0, missing: errors };
 }
 
+export async function generateMissingSecrets(containerName) {
+  const { randomBytes } = await import("crypto");
+  const { isAvailable, getSecret, setSecret, createFolder } =
+    await import("./infisicalClient.js");
+
+  if (!(await isAvailable())) return { generated: 0 };
+
+  const registry = await getRegistry();
+  const containerDef = registry.containers?.[containerName];
+  if (!containerDef?.variables) return { generated: 0 };
+
+  await createFolder(containerName, "/");
+
+  let generated = 0;
+  for (const [varName, varDef] of Object.entries(containerDef.variables)) {
+    if (!varDef.auto_generate) continue;
+
+    // Check if it already has a value in Infisical
+    const existing = await getSecret(varName, `/${containerName}`);
+    if (existing) continue;
+
+    // Generate a random 32-char hex string
+    const value = randomBytes(16).toString("hex");
+    await setSecret(varName, value, `/${containerName}`);
+    generated++;
+  }
+
+  return { generated };
+}
+
 export async function getConfigStatus() {
   const registry = await getRegistry();
   const userConfig = await getUserConfig();

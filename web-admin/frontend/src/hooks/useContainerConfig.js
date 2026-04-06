@@ -66,9 +66,12 @@ function useContainerConfig() {
         body: JSON.stringify(config),
       });
       if (!res.ok) throw new Error("Failed to save container config");
+      const result = await res.json();
       await fetchConfig();
+      return result;
     } catch (err) {
       setError(err.message);
+      return null;
     } finally {
       setSaving(false);
     }

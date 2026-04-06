@@ -168,6 +168,22 @@ else
       -H "Content-Type: application/json" \
       -d "{\"workspaceId\": \"${PROJECT_ID}\", \"environment\": \"prod\", \"name\": \"shared\", \"path\": \"/\"}" > /dev/null 2>&1 || true
     printf "${GREEN}Created /shared folder.${NC}\n"
+
+    # Auto-detect and write HOST_NAME and DOCKER_GID to /shared
+    DETECTED_HOSTNAME=$(hostname)
+    DETECTED_DOCKER_GID=$(getent group docker 2>/dev/null | cut -d: -f3)
+    DETECTED_DOCKER_GID=${DETECTED_DOCKER_GID:-985}
+    printf "${YELLOW}Writing auto-detected HOST_NAME=%s and DOCKER_GID=%s to Infisical...${NC}\n" "$DETECTED_HOSTNAME" "$DETECTED_DOCKER_GID"
+    curl -sf "http://localhost:8085/api/v3/secrets/raw/HOST_NAME" \
+      -X POST \
+      -H "Authorization: Bearer ${IDENTITY_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "{\"workspaceId\": \"${PROJECT_ID}\", \"environment\": \"prod\", \"secretPath\": \"/shared\", \"secretValue\": \"${DETECTED_HOSTNAME}\", \"type\": \"shared\"}" > /dev/null 2>&1 || true
+    curl -sf "http://localhost:8085/api/v3/secrets/raw/DOCKER_GID" \
+      -X POST \
+      -H "Authorization: Bearer ${IDENTITY_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "{\"workspaceId\": \"${PROJECT_ID}\", \"environment\": \"prod\", \"secretPath\": \"/shared\", \"secretValue\": \"${DETECTED_DOCKER_GID}\", \"type\": \"shared\"}" > /dev/null 2>&1 || true
   fi
 
   # Save credentials
