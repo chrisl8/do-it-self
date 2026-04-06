@@ -207,6 +207,22 @@ fi
 # ── Step 8: Web-admin ───────────────────────────────────────────────────
 
 step "Setting up web-admin"
+
+# Create the backend .env file if missing (PM2 ecosystem config requires it)
+WEB_ADMIN_ENV="${SCRIPT_DIR}/web-admin/backend/.env"
+if [[ ! -f "$WEB_ADMIN_ENV" ]]; then
+  cat > "$WEB_ADMIN_ENV" << 'WEBENV'
+# Server configuration
+PORT=3333
+
+# Docker configuration
+DOCKER_SOCKET_PATH=/var/run/docker.sock
+CONTAINERS_DIR=~/containers
+ICONS_BASE_DIR=~/containers/homepage/dashboard-icons
+WEBENV
+  ok "Created ${WEB_ADMIN_ENV}"
+fi
+
 cd "${SCRIPT_DIR}/web-admin"
 npm run install:all 2>&1 | tail -1
 npm run build 2>&1 | tail -1

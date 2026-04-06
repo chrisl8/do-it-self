@@ -129,14 +129,18 @@ section "Environment Generation"
 
 cd "${CONTAINERS_DIR}"
 
-# Generate .env for a simple container
-if node scripts/generate-env.js searxng --quiet 2>/dev/null; then
-  pass "generate-env.js runs without error"
+# Generate .env for a simple container.
+# Note: searxng requires TS_AUTHKEY which is empty on a fresh install,
+# so generate-env.js will exit non-zero with "missing required variables".
+# That's expected behavior -- it still WRITES the .env file (just with
+# missing vars omitted). We check that the file was written, not the
+# exit code.
+node scripts/generate-env.js searxng --quiet 2>/dev/null || true
+if [[ -f "${CONTAINERS_DIR}/searxng/.env" ]]; then
+  pass "generate-env.js wrote .env file"
 else
-  fail "generate-env.js failed"
+  fail "generate-env.js did not write .env file"
 fi
-
-check ".env file created for searxng" test -f "${CONTAINERS_DIR}/searxng/.env"
 
 # Verify docker compose config parses
 cd "${CONTAINERS_DIR}/searxng"
