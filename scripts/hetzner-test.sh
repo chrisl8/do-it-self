@@ -22,7 +22,7 @@ NC='\033[0m'
 SERVER_NAME="do-it-self-test"
 SERVER_TYPE="cpx22"
 IMAGE="ubuntu-24.04"
-LOCATION="ash"
+LOCATION="nbg1"
 KEEP=false
 DESTROY_ONLY=false
 RETEST=false
@@ -115,7 +115,7 @@ CLOUDINIT
     fi
     sleep 5
   done
-  ok "SSH ready"
+  printf "${GREEN}SSH ready${NC}\n"
 
   # Wait for cloud-init setup to complete
   printf "${YELLOW}Waiting for setup.sh to complete (this may take several minutes)...${NC}\n"
