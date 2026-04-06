@@ -29,11 +29,11 @@ services:
     stdin_open: true
     stop_grace_period: 60s
     volumes:
-      - /mnt/250/container-mounts/onlyoffice/data:/var/www/onlyoffice/Data
-      - /mnt/250/container-mounts/onlyoffice/log:/var/log/onlyoffice
-      - /mnt/250/container-mounts/onlyoffice/cache:/var/lib/onlyoffice/documentserver/App_Data/cache/files
-      - /mnt/250/container-mounts/onlyoffice/www:/var/www/onlyoffice/documentserver-example/public/files
-      - /mnt/250/container-mounts/onlyoffice/fonts:/usr/share/fonts
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/onlyoffice/data:/var/www/onlyoffice/Data
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/onlyoffice/log:/var/log/onlyoffice
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/onlyoffice/cache:/var/lib/onlyoffice/documentserver/App_Data/cache/files
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/onlyoffice/www:/var/www/onlyoffice/documentserver-example/public/files
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/onlyoffice/fonts:/usr/share/fonts
     networks:
       - onlyoffice-net
     restart: on-failure
@@ -57,7 +57,7 @@ services:
       - POSTGRES_USER=onlyoffice
       - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
-      - /mnt/250/container-mounts/onlyoffice/db_data:/var/lib/postgresql/data
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/onlyoffice/db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U onlyoffice"]
       interval: 10s

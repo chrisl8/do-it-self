@@ -3,8 +3,8 @@ services:
     container_name: pure-ftpd
     image: stilliard/pure-ftpd
     volumes:
-      - /mnt/2000/container-mounts/pure-ftpd/data:/data
-      - /mnt/2000/container-mounts/pure-ftpd/ftp:/etc/ssl/private
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/pure-ftpd/data:/data
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/pure-ftpd/ftp:/etc/ssl/private
     # network_mode: service:ts
     environment:
       FTP_USER_NAME: ${FTP_USER_NAME}

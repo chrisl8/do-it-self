@@ -6,7 +6,7 @@ services:
     # https://learn.netdata.cloud/docs/netdata-agent/installation/docker
     # This must be the ID of the Docker group.
     group_add:
-      - 985
+      - ${DOCKER_GID:-985}
     image: netdata/netdata
     pid: host
     cap_add:
@@ -15,9 +15,9 @@ services:
     security_opt:
       - apparmor:unconfined
     volumes:
-      - /mnt/250/container-mounts/netdata/netdataconfig:/etc/netdata
-      - /mnt/250/container-mounts/netdata/netdatalib:/var/lib/netdata
-      - /mnt/250/container-mounts/netdata/netdatacache:/var/cache/netdata
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/netdata/netdataconfig:/etc/netdata
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/netdata/netdatalib:/var/lib/netdata
+      - ${CACHE_ROOT:-/mnt/250}/container-mounts/netdata/netdatacache:/var/cache/netdata
       - /:/host/root:ro,rslave
       - /etc/passwd:/host/etc/passwd:ro
       - /etc/group:/host/etc/group:ro

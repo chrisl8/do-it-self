@@ -4,7 +4,7 @@ services:
     container_name: cloudflared
     command: tunnel --config /home/nonroot/.cloudflared/config.yml --metrics 127.0.0.1:20241 run
     volumes:
-      - /mnt/2000/container-mounts/cloudflared/config:/home/nonroot/.cloudflared
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/cloudflared/config:/home/nonroot/.cloudflared
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     network_mode: host

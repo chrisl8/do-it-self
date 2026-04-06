@@ -9,7 +9,7 @@ services:
       - PGID=1000
       - TZ=America/Chicago
     volumes:
-      - /mnt/2000/container-mounts/obsidian/config:/config
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/obsidian/config:/config
     shm_size: "1gb"
     network_mode: service:ts
     labels:

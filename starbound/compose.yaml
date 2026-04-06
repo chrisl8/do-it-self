@@ -6,7 +6,7 @@ services:
     environment:
       STEAM_USER: ${STEAM_USER}
     volumes:
-      - /mnt/2000/container-mounts/starbound/starbound:/starbound
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/starbound/starbound:/starbound
     ports:
       - 21025:21025
     healthcheck:

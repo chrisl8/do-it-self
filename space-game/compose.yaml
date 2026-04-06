@@ -6,7 +6,7 @@ services:
       context: ./space-game
       dockerfile: Dockerfile
     volumes:
-      - /mnt/2000/container-mounts/caddy/space-game:/space-game
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/caddy/space-game:/space-game
       - ./healthcheck:/healthcheck
     environment:
       - HOME=/space-game

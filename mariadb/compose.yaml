@@ -7,7 +7,7 @@ services:
       - MARIADB_AUTO_UPGRADE=1
       - TZ=America/Chicago
     volumes:
-      - /mnt/2000/container-mounts/mariadb/db:/var/lib/mysql
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/mariadb/db:/var/lib/mysql
     # Exposed locally so that my personal apps that use it don't have to traverse tailscale to use it.
     # This also means remote access is via the host's tailscale connection.
     ports:

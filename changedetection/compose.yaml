@@ -6,7 +6,7 @@ services:
     user: 1000:1000
     hostname: changedetection
     volumes:
-      - /mnt/2000/container-mounts/changedetection/data:/datastore
+      - ${DATA_ROOT:-/mnt/2000}/container-mounts/changedetection/data:/datastore
     environment:
       - PLAYWRIGHT_DRIVER_URL=ws://sockpuppetbrowser:3000
       #        Hides the `Referer` header so that monitored websites can't see the changedetection.io hostname.
