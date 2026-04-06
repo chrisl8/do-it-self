@@ -7,12 +7,16 @@
 // Usage: node scripts/update-registry-volumes.js > new-registry.yaml
 
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CONTAINERS_DIR = join(__dirname, "..");
 const require = createRequire(import.meta.url);
-const YAML = require("/home/chrisl8/containers/web-admin/backend/node_modules/yaml");
+const YAML = require(join(CONTAINERS_DIR, "web-admin/backend/node_modules/yaml"));
 
-const REGISTRY_PATH = "/home/chrisl8/containers/container-registry.yaml";
+const REGISTRY_PATH = join(CONTAINERS_DIR, "container-registry.yaml");
 const VOLUMES_PATH = "/tmp/registry-volumes.json";
 
 const SHARED_VARS_TO_REMOVE = new Set([

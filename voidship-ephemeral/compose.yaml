@@ -4,7 +4,7 @@ services:
     user: 1000:1000
     build: .
     volumes:
-      - /home/chrisl8/voidship_ephemeral/dist:/app/dist:ro
+      - ${HOME}/voidship_ephemeral/dist:/app/dist:ro
     networks:
       - caddy-net
     healthcheck:

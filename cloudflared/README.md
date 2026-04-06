@@ -29,7 +29,7 @@ External Users → Cloudflare → cloudflared (Docker) → Caddy (localhost:80)
 Create the credentials file:
 
 ```bash
-cat > /home/chrisl8/containers/cloudflared/<TUNNEL-UUID>.json << 'EOF'
+cat > ~/containers/cloudflared/<TUNNEL-UUID>.json << 'EOF'
 {
   "AccountTag": "<YOUR-ACCOUNT-TAG>",
   "TunnelSecret": "<SECRET-FROM-STEP-ABOVE>",
@@ -46,7 +46,7 @@ Edit `config.yml` and replace `<TUNNEL-UUID>` with the UUID from Step 1:
 
 ```yaml
 tunnel: a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-credentials-file: /home/chrisl8/containers/cloudflared/a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx.json
+credentials-file: ~/containers/cloudflared/a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx.json
 ```
 
 ### 4. Configure DNS Records (Web UI)
@@ -148,12 +148,12 @@ docker exec cloudflared cloudflared tunnel ingress validate
 2. Verify credentials file exists:
 
    ```bash
-   ls -la /home/chrisl8/containers/cloudflared/*.json
+   ls -la ~/containers/cloudflared/*.json
    ```
 
 3. Verify config.yml has correct UUID:
    ```bash
-   grep "tunnel:" /home/chrisl8/containers/cloudflared/config.yml
+   grep "tunnel:" ~/containers/cloudflared/config.yml
    ```
 
 ### Connection Refused

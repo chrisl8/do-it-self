@@ -27,7 +27,7 @@ This script is used to start up the containers when the system boots.
 **You need to edit it to remove stuff that you don't have, like my "Metatron" script.**
 
 You should add it to crontab by running `crontab -e` and adding a line like this:
-`@reboot /home/chrisl8/containers/scripts/system-cron-startup.sh`
+`@reboot $HOME/containers/scripts/system-cron-startup.sh`
 
 ## system-health-check.sh
 

@@ -36,14 +36,14 @@ Credentials are needed before anything else can work.
 ```bash
 mkdir -p ~/credentials
 cd /
-borg extract "$BORG_REPO::archive-name" home/chrisl8/credentials/
+borg extract "$BORG_REPO::archive-name" home/$USER/credentials/
 ```
 
 ## Step 3: Restore the Containers Repository
 
 ```bash
 cd /
-borg extract "$BORG_REPO::archive-name" home/chrisl8/containers/
+borg extract "$BORG_REPO::archive-name" home/$USER/containers/
 ```
 
 After extraction, re-symlink `.env` files:
@@ -171,8 +171,8 @@ cd /
 borg extract "$BORG_REPO::archive-name" mnt/2000/container-mounts/trilium/
 
 # Restore its compose file and credentials if needed
-borg extract "$BORG_REPO::archive-name" home/chrisl8/containers/trilium/
-borg extract "$BORG_REPO::archive-name" home/chrisl8/credentials/trilium.env
+borg extract "$BORG_REPO::archive-name" home/$USER/containers/trilium/
+borg extract "$BORG_REPO::archive-name" home/$USER/credentials/trilium.env
 
 # Re-symlink .env
 ln -sf ~/credentials/trilium.env ~/containers/trilium/.env
@@ -215,7 +215,7 @@ borg list "$BORG_REPO"
 
 # Restore credentials
 cd /
-borg extract "$BORG_REPO::archive-name" home/chrisl8/credentials/
+borg extract "$BORG_REPO::archive-name" home/$USER/credentials/
 
 # Restore containers repo, data, etc. — same commands as local recovery
 ```

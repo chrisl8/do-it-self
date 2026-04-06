@@ -114,7 +114,7 @@ docker compose pull       # Update images
 ## Repository Structure
 
 ```
-/home/chrisl8/containers
+~/containers
 ├── web-admin/           # Docker status monitoring UI (Node.js)
 │   ├── backend/         # Express server
 │   └── frontend/        # React/Vite app

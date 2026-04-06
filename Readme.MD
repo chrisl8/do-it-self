@@ -77,7 +77,7 @@ My experience is that many many users on Reddit think running anything in a cont
 You can run the script `all-containers.sh` to start and stop all of the containers.
 
 I have this in my crontab:
-`@reboot /mnt/chrisl8/containers/scripts/all-containers.sh --start`
+`@reboot $HOME/containers/scripts/all-containers.sh --start`
 
 # My Layout Explanation
 
@@ -967,16 +967,16 @@ My personal crontab at the moment as an example.
 
 ```
 # Start Stuff
-@reboot /home/chrisl8/containers/scripts/system-cron-startup.sh
+@reboot $HOME/containers/scripts/system-cron-startup.sh
 
 # Check System app health
-*/15 * * * * /home/chrisl8/containers/scripts/system-health-check.sh
+*/15 * * * * $HOME/containers/scripts/system-health-check.sh
 
 # Help Nextcloud perform its duties
-*/5 * * * * /home/chrisl8/containers/scripts/nextcloud-cron-job.sh
+*/5 * * * * $HOME/containers/scripts/nextcloud-cron-job.sh
 
 # Check for and notify about container updates available (provided by diun)
-0 8 * * 1 /home/chrisl8/containers/scripts/container-update-reminder.sh
+0 8 * * 1 $HOME/containers/scripts/container-update-reminder.sh
 
 # Check for and notify about OS updates available
 0 8 1 * * apt list --upgradable
@@ -1079,7 +1079,7 @@ Password for 'https://your-user-name@forgejo.your-tailscale-domain.ts.net':
 ```
 
 The credentials for this example will be here:  
-`~/.gcm/store/git/https/forgejo.your-tailscale-domain.ts.net/chrisl8.credential`
+`~/.gcm/store/git/https/forgejo.your-tailscale-domain.ts.net/<your-username>.credential`
 
 Note that this means the password is in plain text and accessible by root and in backups.
 I'm not worried about it as this git instance is locked in my VPN, but be aware.
