@@ -48,7 +48,7 @@ function SecretField({ label, value, onChange, description }) {
   );
 }
 
-function SharedVariablesSection({ registry, userConfig, onSave }) {
+function SharedVariablesSection({ registry, userConfig, onSave, saving }) {
   const sharedDefs = registry?.shared_variables || {};
   const [values, setValues] = useState(userConfig?.shared || {});
   const [dirty, setDirty] = useState(false);
@@ -70,22 +70,23 @@ function SharedVariablesSection({ registry, userConfig, onSave }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          mb: 2,
+          mb: 1,
         }}
       >
         <Typography variant="h6">Shared Variables</Typography>
         <Button
           variant="contained"
           size="small"
-          startIcon={<SaveIcon />}
-          disabled={!dirty}
+          startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+          disabled={!dirty || saving}
           onClick={handleSave}
         >
           Save
         </Button>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        These variables are shared across all containers that need them.
+        These apply to every container that needs them. Saving updates all
+        container .env files automatically.
       </Typography>
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
         {Object.entries(sharedDefs).map(([name, def]) => {
@@ -156,6 +157,7 @@ function ContainerCard({
   containerConfig,
   validation,
   onUpdate,
+  saving,
 }) {
   const [vars, setVars] = useState(containerConfig?.variables || {});
   const [enabled, setEnabled] = useState(containerConfig?.enabled !== false);
@@ -186,9 +188,7 @@ function ContainerCard({
   if (def.uses_docker_gid) features.push("Docker Socket");
 
   return (
-    <Accordion
-      slotProps={{ transition: { unmountOnExit: true } }}
-    >
+    <Accordion slotProps={{ transition: { unmountOnExit: true } }}>
       <AccordionSummary expandIcon={hasVars ? <ExpandMoreIcon /> : null}>
         <Box
           sx={{
@@ -250,8 +250,8 @@ function ContainerCard({
             <Button
               variant="contained"
               size="small"
-              startIcon={<SaveIcon />}
-              disabled={!dirty}
+              startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+              disabled={!dirty || saving}
               onClick={handleSave}
             >
               Save
@@ -273,11 +273,9 @@ function ContainerConfig() {
     error,
     updateSharedVars,
     updateContainer,
-    generateEnvFiles,
   } = useContainerConfig();
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
-  const [generating, setGenerating] = useState(false);
 
   const containersByCategory = useMemo(() => {
     if (!registry?.containers) return {};
@@ -287,7 +285,6 @@ function ContainerConfig() {
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push({ name, def });
     }
-    // Sort containers within each category
     for (const cat of Object.keys(grouped)) {
       grouped[cat].sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -305,25 +302,18 @@ function ContainerConfig() {
 
   const handleSaveShared = async (vars) => {
     await updateSharedVars(vars);
-    setSnackbar({ open: true, message: "Shared variables saved" });
+    setSnackbar({
+      open: true,
+      message: "Shared variables saved and all .env files updated",
+    });
   };
 
   const handleUpdateContainer = async (name, config) => {
     await updateContainer(name, config);
-    setSnackbar({ open: true, message: `${name} configuration saved` });
-  };
-
-  const handleGenerateAll = async () => {
-    setGenerating(true);
-    const results = await generateEnvFiles();
-    setGenerating(false);
-    if (results) {
-      const count = Object.keys(results).length;
-      setSnackbar({
-        open: true,
-        message: `Generated .env files for ${count} containers`,
-      });
-    }
+    setSnackbar({
+      open: true,
+      message: `${name} saved and .env updated`,
+    });
   };
 
   if (loading) {
@@ -350,31 +340,24 @@ function ContainerConfig() {
 
   return (
     <Box sx={{ p: 2, maxWidth: 1200, margin: "0 auto" }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 2,
-        }}
-      >
-        <Typography variant="h5">Container Configuration</Typography>
-        <Button
-          variant="contained"
-          onClick={handleGenerateAll}
-          disabled={generating || saving}
-          startIcon={
-            generating ? <CircularProgress size={16} /> : <SaveIcon />
-          }
-        >
-          Generate All .env Files
-        </Button>
-      </Box>
+      <Typography variant="h5" sx={{ mb: 1 }}>
+        Container Configuration
+      </Typography>
+
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <strong>How this works:</strong> Set your shared variables first (storage
+        paths, Tailscale credentials), then enable the containers you want and
+        fill in their settings. Each time you click Save, the container's .env
+        file is automatically updated. Then
+        run <code>scripts/all-containers.sh --start</code> to bring everything
+        up.
+      </Alert>
 
       <SharedVariablesSection
         registry={registry}
         userConfig={userConfig}
         onSave={handleSaveShared}
+        saving={saving}
       />
 
       <Typography variant="h6" sx={{ mb: 1, mt: 3 }}>
@@ -397,6 +380,7 @@ function ContainerConfig() {
               containerConfig={userConfig?.containers?.[name]}
               validation={validationStatus?.containers?.[name]}
               onUpdate={handleUpdateContainer}
+              saving={saving}
             />
           ))}
         </Box>

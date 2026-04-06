@@ -494,7 +494,9 @@ app.put("/api/config/shared", async (req, res) => {
     const userConfig = await getUserConfig();
     userConfig.shared = { ...userConfig.shared, ...req.body };
     await saveUserConfig(userConfig);
-    res.json({ success: true });
+    // Shared vars affect all containers, so regenerate all .env files
+    const envResults = await writeAllContainerEnvs();
+    res.json({ success: true, envsGenerated: Object.keys(envResults).length });
   } catch (err) {
     console.error("Error saving shared config:", err);
     res.status(500).json({ error: "Failed to save shared config" });
@@ -513,7 +515,9 @@ app.put("/api/config/container/:name", async (req, res) => {
       variables: { ...(existing.variables || {}), ...(req.body.variables || {}) },
     };
     await saveUserConfig(userConfig);
-    res.json({ success: true });
+    // Regenerate this container's .env file immediately
+    const envResult = await writeContainerEnv(name);
+    res.json({ success: true, envWritten: envResult.written, envMissing: envResult.missing });
   } catch (err) {
     console.error("Error saving container config:", err);
     res.status(500).json({ error: "Failed to save container config" });

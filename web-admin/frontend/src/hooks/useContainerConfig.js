@@ -74,23 +74,6 @@ function useContainerConfig() {
     }
   }, [fetchConfig]);
 
-  const generateEnvFiles = useCallback(async (containerName) => {
-    setSaving(true);
-    setError(null);
-    try {
-      const url = containerName
-        ? `${API_BASE}/api/config/generate-env/${containerName}`
-        : `${API_BASE}/api/config/generate-all-envs`;
-      const res = await fetch(url, { method: "POST" });
-      if (!res.ok) throw new Error("Failed to generate .env files");
-      return await res.json();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }, []);
-
   return {
     registry,
     userConfig,
@@ -101,7 +84,6 @@ function useContainerConfig() {
     fetchConfig,
     updateSharedVars,
     updateContainer,
-    generateEnvFiles,
   };
 }
 
