@@ -1,5 +1,9 @@
 // Infisical API client for reading/writing secrets.
 // Uses the machine identity token from ~/credentials/infisical.env.
+//
+// API versions for self-hosted Infisical:
+//   Folders: POST /api/v1/folders
+//   Secrets: GET/POST/PATCH/DELETE /api/v3/secrets/raw
 
 import { readFile } from "fs/promises";
 import { join } from "path";
@@ -28,7 +32,6 @@ async function loadCredentials() {
   }
 }
 
-// Clear cached credentials (useful if token is refreshed)
 export function clearCache() {
   cachedCreds = null;
 }
@@ -60,15 +63,14 @@ async function apiRequest(method, path, body) {
   return res.json();
 }
 
-// List all secrets at a given path
 export async function listSecrets(folderPath = "/") {
   const creds = await loadCredentials();
   const params = new URLSearchParams({
     environment: "prod",
-    projectId: creds.INFISICAL_PROJECT_ID,
+    workspaceId: creds.INFISICAL_PROJECT_ID,
     secretPath: folderPath,
   });
-  const data = await apiRequest("GET", `/api/v4/secrets?${params}`);
+  const data = await apiRequest("GET", `/api/v3/secrets/raw?${params}`);
   return (data.secrets || []).map((s) => ({
     key: s.secretKey,
     value: s.secretValue,
@@ -76,65 +78,78 @@ export async function listSecrets(folderPath = "/") {
   }));
 }
 
-// Get a single secret
 export async function getSecret(key, folderPath = "/") {
   const creds = await loadCredentials();
   const params = new URLSearchParams({
     environment: "prod",
-    projectId: creds.INFISICAL_PROJECT_ID,
+    workspaceId: creds.INFISICAL_PROJECT_ID,
     secretPath: folderPath,
   });
   try {
-    const data = await apiRequest("GET", `/api/v4/secrets/${encodeURIComponent(key)}?${params}`);
+    const data = await apiRequest(
+      "GET",
+      `/api/v3/secrets/raw/${encodeURIComponent(key)}?${params}`,
+    );
     return data.secret?.secretValue ?? null;
   } catch {
     return null;
   }
 }
 
-// Create or update a secret
 export async function setSecret(key, value, folderPath = "/") {
   const creds = await loadCredentials();
 
-  // Try to create first; if it already exists, update it
+  // Try to create first; if it exists, update it
   try {
-    await apiRequest("POST", `/api/v4/secrets/${encodeURIComponent(key)}`, {
-      projectId: creds.INFISICAL_PROJECT_ID,
+    await apiRequest("POST", `/api/v3/secrets/raw/${encodeURIComponent(key)}`, {
+      workspaceId: creds.INFISICAL_PROJECT_ID,
       environment: "prod",
       secretPath: folderPath,
       secretValue: value,
+      type: "shared",
     });
   } catch (e) {
-    // If creation fails (secret exists), try PATCH to update
-    if (e.message.includes("400") || e.message.includes("409") || e.message.includes("already exist")) {
-      await apiRequest("PATCH", `/api/v4/secrets/${encodeURIComponent(key)}`, {
-        projectId: creds.INFISICAL_PROJECT_ID,
-        environment: "prod",
-        secretPath: folderPath,
-        secretValue: value,
-      });
+    if (
+      e.message.includes("400") ||
+      e.message.includes("409") ||
+      e.message.includes("already exist")
+    ) {
+      await apiRequest(
+        "PATCH",
+        `/api/v3/secrets/raw/${encodeURIComponent(key)}`,
+        {
+          workspaceId: creds.INFISICAL_PROJECT_ID,
+          environment: "prod",
+          secretPath: folderPath,
+          secretValue: value,
+          type: "shared",
+        },
+      );
     } else {
       throw e;
     }
   }
 }
 
-// Delete a secret
 export async function deleteSecret(key, folderPath = "/") {
   const creds = await loadCredentials();
-  await apiRequest("DELETE", `/api/v4/secrets/${encodeURIComponent(key)}`, {
-    projectId: creds.INFISICAL_PROJECT_ID,
-    environment: "prod",
-    secretPath: folderPath,
-  });
+  await apiRequest(
+    "DELETE",
+    `/api/v3/secrets/raw/${encodeURIComponent(key)}`,
+    {
+      workspaceId: creds.INFISICAL_PROJECT_ID,
+      environment: "prod",
+      secretPath: folderPath,
+      type: "shared",
+    },
+  );
 }
 
-// Create a folder (idempotent -- ignores if it already exists)
 export async function createFolder(name, parentPath = "/") {
   const creds = await loadCredentials();
   try {
-    await apiRequest("POST", "/api/v2/folders", {
-      projectId: creds.INFISICAL_PROJECT_ID,
+    await apiRequest("POST", "/api/v1/folders", {
+      workspaceId: creds.INFISICAL_PROJECT_ID,
       environment: "prod",
       name,
       path: parentPath,
@@ -147,7 +162,6 @@ export async function createFolder(name, parentPath = "/") {
   }
 }
 
-// Get all secrets for a container (from /shared + /container-name)
 export async function getContainerSecrets(containerName) {
   const [shared, container] = await Promise.all([
     listSecrets("/shared").catch(() => []),
@@ -160,12 +174,8 @@ export async function getContainerSecrets(containerName) {
   return result;
 }
 
-// Set secrets for a container (writes to /container-name folder)
 export async function setContainerSecrets(containerName, secrets) {
-  // Ensure folder exists
   await createFolder(containerName, "/");
-
-  // Set each secret
   for (const [key, value] of Object.entries(secrets)) {
     if (value !== undefined && value !== null && value !== "") {
       await setSecret(key, String(value), `/${containerName}`);
@@ -173,7 +183,6 @@ export async function setContainerSecrets(containerName, secrets) {
   }
 }
 
-// Set shared secrets (writes to /shared folder)
 export async function setSharedSecrets(secrets) {
   await createFolder("shared", "/");
   for (const [key, value] of Object.entries(secrets)) {

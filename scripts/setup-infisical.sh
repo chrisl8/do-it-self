@@ -106,7 +106,7 @@ if [[ -f "$CRED_FILE" ]]; then
 else
   printf "${YELLOW}Bootstrapping Infisical...${NC}\n"
 
-  ADMIN_EMAIL="admin@localhost"
+  ADMIN_EMAIL="admin@infisical.local"
   ADMIN_PASSWORD=$(openssl rand -hex 16)
 
   BOOTSTRAP_OUTPUT=$(infisical bootstrap \
@@ -163,10 +163,10 @@ else
     printf "${GREEN}Created project: %s${NC}\n" "$PROJECT_ID"
 
     # Create /shared folder
-    curl -sf "http://localhost:8085/api/v2/folders" \
+    curl -sf "http://localhost:8085/api/v1/folders" \
       -H "Authorization: Bearer ${IDENTITY_TOKEN}" \
       -H "Content-Type: application/json" \
-      -d "{\"projectId\": \"${PROJECT_ID}\", \"environment\": \"prod\", \"name\": \"shared\"}" > /dev/null 2>&1 || true
+      -d "{\"workspaceId\": \"${PROJECT_ID}\", \"environment\": \"prod\", \"name\": \"shared\", \"path\": \"/\"}" > /dev/null 2>&1 || true
     printf "${GREEN}Created /shared folder.${NC}\n"
   fi
 
