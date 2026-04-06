@@ -52,10 +52,9 @@ credentials-file: ~/containers/cloudflared/a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
 ### 4. Configure DNS Records (Web UI)
 
 1. Go to **DNS** → **Records** for each domain:
-   - lofland.com
-   - lofland.net
-   - ekpyroticfrood.net
-   - voidshipephemeral.space
+   - example.com
+   - example.net
+   - (add each domain you want to route through the tunnel)
 
 2. For each domain, add CNAME records:
    - Type: CNAME
