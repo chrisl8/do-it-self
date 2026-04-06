@@ -252,7 +252,11 @@ function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
 function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdate, saving }) {
   const [vars, setVars] = useState(containerConfig?.variables || {});
   const [volMounts, setVolMounts] = useState(containerConfig?.volume_mounts || {});
-  const [enabled, setEnabled] = useState(containerConfig?.enabled !== false);
+  const [enabled, setEnabled] = useState(() => {
+    if (containerConfig?.enabled !== undefined) return containerConfig.enabled;
+    if (def.default_disabled) return false;
+    return true;
+  });
   const [dirty, setDirty] = useState(false);
 
   const handleVarChange = (varName, value) => {

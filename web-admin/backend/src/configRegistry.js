@@ -53,6 +53,14 @@ function getMountPath(mounts, index) {
   return mount ? resolveHomePath(mount.path) : DEFAULT_MOUNT_PATH;
 }
 
+function isContainerEnabled(containerDef, containerConfig) {
+  // User config takes precedence if explicitly set
+  if (containerConfig?.enabled !== undefined) return containerConfig.enabled;
+  // Otherwise check registry default
+  if (containerDef?.default_disabled) return false;
+  return true;
+}
+
 export function buildEnvForContainer(registry, userConfig, containerName) {
   const containerDef = registry.containers?.[containerName];
   if (!containerDef) return { env: {}, errors: [], warnings: [] };
@@ -148,8 +156,9 @@ export async function writeAllContainerEnvs() {
   const results = {};
 
   for (const name of Object.keys(registry.containers || {})) {
+    const containerDef = registry.containers[name];
     const containerConfig = userConfig.containers?.[name];
-    if (containerConfig?.enabled === false) continue;
+    if (!isContainerEnabled(containerDef, containerConfig)) continue;
 
     const containerDir = join(CONTAINERS_DIR, name);
     if (!(await fileExists(join(containerDir, "compose.yaml")))) continue;
@@ -237,7 +246,7 @@ export async function getConfigStatus() {
 
   for (const [name, def] of Object.entries(registry.containers || {})) {
     const containerConfig = userConfig.containers?.[name];
-    const enabled = containerConfig?.enabled !== false;
+    const enabled = isContainerEnabled(def, containerConfig);
     const { errors } = buildEnvForContainer(registry, userConfig, name);
 
     containers[name] = {
