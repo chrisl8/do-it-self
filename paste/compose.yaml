@@ -4,7 +4,7 @@ services:
     image: mariadb:10
     container_name: paste-db
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/paste/data:/var/lib/mysql
+      - ${VOL_PASTE_DATA:-~/container-data}/container-mounts/paste/data:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: pastefy
       MYSQL_DATABASE: pastefy

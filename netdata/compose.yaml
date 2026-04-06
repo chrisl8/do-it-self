@@ -15,9 +15,9 @@ services:
     security_opt:
       - apparmor:unconfined
     volumes:
-      - ${CACHE_ROOT:-/mnt/250}/container-mounts/netdata/netdataconfig:/etc/netdata
-      - ${CACHE_ROOT:-/mnt/250}/container-mounts/netdata/netdatalib:/var/lib/netdata
-      - ${CACHE_ROOT:-/mnt/250}/container-mounts/netdata/netdatacache:/var/cache/netdata
+      - ${VOL_NETDATA_NETDATACONFIG:-~/container-data}/container-mounts/netdata/netdataconfig:/etc/netdata
+      - ${VOL_NETDATA_NETDATALIB:-~/container-data}/container-mounts/netdata/netdatalib:/var/lib/netdata
+      - ${VOL_NETDATA_NETDATACACHE:-~/container-data}/container-mounts/netdata/netdatacache:/var/cache/netdata
       - /:/host/root:ro,rslave
       - /etc/passwd:/host/etc/passwd:ro
       - /etc/group:/host/etc/group:ro

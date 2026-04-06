@@ -20,6 +20,13 @@ import IconButton from "@mui/material/IconButton";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import SaveIcon from "@mui/icons-material/Save";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Divider from "@mui/material/Divider";
 import useContainerConfig from "./hooks/useContainerConfig";
 
 function SecretField({ label, value, onChange, description }) {
@@ -48,7 +55,95 @@ function SecretField({ label, value, onChange, description }) {
   );
 }
 
-function SharedVariablesSection({ registry, userConfig, onSave, saving }) {
+function MountsSection({ mounts, onSave, saving }) {
+  const [localMounts, setLocalMounts] = useState(
+    mounts?.length > 0 ? mounts : [{ path: "", label: "" }],
+  );
+  const [dirty, setDirty] = useState(false);
+
+  const handleChange = (index, field, value) => {
+    setLocalMounts((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const handleAdd = () => {
+    setLocalMounts((prev) => [...prev, { path: "", label: "" }]);
+    setDirty(true);
+  };
+
+  const handleRemove = (index) => {
+    if (localMounts.length <= 1) return;
+    setLocalMounts((prev) => prev.filter((_, i) => i !== index));
+    setDirty(true);
+  };
+
+  const handleSave = () => {
+    const valid = localMounts.filter((m) => m.path.trim());
+    if (valid.length === 0) return;
+    onSave(valid);
+    setDirty(false);
+  };
+
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+        <Typography variant="h6">Storage Mounts</Typography>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button size="small" startIcon={<AddIcon />} onClick={handleAdd}>
+            Add Mount
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+            disabled={!dirty || saving}
+            onClick={handleSave}
+          >
+            Save
+          </Button>
+        </Box>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Define where container data is stored. Each volume in each container
+        can be assigned to any mount. The first mount is the default.
+      </Typography>
+      {localMounts.map((mount, i) => (
+        <Box key={i} sx={{ display: "flex", gap: 1, mb: 1, alignItems: "center" }}>
+          <Chip label={i} size="small" variant="outlined" sx={{ minWidth: 32 }} />
+          <TextField
+            size="small"
+            label="Label"
+            value={mount.label || ""}
+            onChange={(e) => handleChange(i, "label", e.target.value)}
+            sx={{ width: 160 }}
+            placeholder={i === 0 ? "e.g. Fast SSD" : "e.g. Big HDD"}
+          />
+          <TextField
+            size="small"
+            label="Path"
+            value={mount.path || ""}
+            onChange={(e) => handleChange(i, "path", e.target.value)}
+            sx={{ flex: 1 }}
+            placeholder="/mnt/my-drive"
+          />
+          <IconButton
+            size="small"
+            onClick={() => handleRemove(i)}
+            disabled={localMounts.length <= 1}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+function SharedVarsSection({ registry, userConfig, onSave, saving }) {
   const sharedDefs = registry?.shared_variables || {};
   const [values, setValues] = useState(userConfig?.shared || {});
   const [dirty, setDirty] = useState(false);
@@ -65,15 +160,8 @@ function SharedVariablesSection({ registry, userConfig, onSave, saving }) {
 
   return (
     <Box sx={{ mb: 3 }}>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          mb: 1,
-        }}
-      >
-        <Typography variant="h6">Shared Variables</Typography>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+        <Typography variant="h6">Global Settings</Typography>
         <Button
           variant="contained"
           size="small"
@@ -84,10 +172,6 @@ function SharedVariablesSection({ registry, userConfig, onSave, saving }) {
           Save
         </Button>
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        These apply to every container that needs them. Saving updates all
-        container .env files automatically.
-      </Typography>
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
         {Object.entries(sharedDefs).map(([name, def]) => {
           if (def.type === "secret") {
@@ -122,44 +206,52 @@ function SharedVariablesSection({ registry, userConfig, onSave, saving }) {
 function ReadinessBadge({ status }) {
   if (!status) return null;
   if (!status.enabled) {
-    return (
-      <Chip
-        icon={<RemoveCircleOutlineIcon />}
-        label="Disabled"
-        size="small"
-        color="default"
-      />
-    );
+    return <Chip icon={<RemoveCircleOutlineIcon />} label="Disabled" size="small" color="default" />;
   }
   if (status.ready) {
-    return (
-      <Chip
-        icon={<CheckCircleIcon />}
-        label="Ready"
-        size="small"
-        color="success"
-      />
-    );
+    return <Chip icon={<CheckCircleIcon />} label="Ready" size="small" color="success" />;
   }
+  return <Chip icon={<ErrorIcon />} label={`Missing ${status.missing.length}`} size="small" color="warning" />;
+}
+
+function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
+  if (!volumes || Object.keys(volumes).length === 0) return null;
+
   return (
-    <Chip
-      icon={<ErrorIcon />}
-      label={`Missing ${status.missing.length}`}
-      size="small"
-      color="warning"
-    />
+    <Box sx={{ mt: 1 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
+        Storage assignments
+      </Typography>
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+        {Object.entries(volumes).map(([volName, volDef]) => (
+          <Box key={volName} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <FormControl size="small" sx={{ minWidth: 100 }}>
+              <InputLabel>{volName}</InputLabel>
+              <Select
+                label={volName}
+                value={volumeMounts[volName] ?? 0}
+                onChange={(e) => onChange(volName, e.target.value)}
+              >
+                {mounts.map((m, i) => (
+                  <MenuItem key={i} value={i}>
+                    {m.label || m.path || `Mount ${i}`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+              {volDef.host_subpath}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
   );
 }
 
-function ContainerCard({
-  name,
-  def,
-  containerConfig,
-  validation,
-  onUpdate,
-  saving,
-}) {
+function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdate, saving }) {
   const [vars, setVars] = useState(containerConfig?.variables || {});
+  const [volMounts, setVolMounts] = useState(containerConfig?.volume_mounts || {});
   const [enabled, setEnabled] = useState(containerConfig?.enabled !== false);
   const [dirty, setDirty] = useState(false);
 
@@ -168,45 +260,45 @@ function ContainerCard({
     setDirty(true);
   };
 
+  const handleVolMountChange = (volName, mountIndex) => {
+    setVolMounts((prev) => ({ ...prev, [volName]: mountIndex }));
+    setDirty(true);
+  };
+
   const handleToggle = () => {
     const next = !enabled;
     setEnabled(next);
-    onUpdate(name, { enabled: next, variables: vars });
+    onUpdate(name, { enabled: next, variables: vars, volume_mounts: volMounts });
   };
 
   const handleSave = () => {
-    onUpdate(name, { enabled, variables: vars });
+    onUpdate(name, { enabled, variables: vars, volume_mounts: volMounts });
     setDirty(false);
   };
 
   const varDefs = def.variables || {};
+  const volumes = def.volumes || {};
   const hasVars = Object.keys(varDefs).length > 0;
+  const hasVolumes = Object.keys(volumes).length > 0;
+  const hasDetails = hasVars || hasVolumes;
 
   const features = [];
   if (def.uses_tailscale) features.push("Tailscale");
   if (def.requires_gpu) features.push("GPU");
   if (def.uses_docker_gid) features.push("Docker Socket");
+  if (def.monitor_all_mounts) features.push("Disk Monitor");
 
   return (
     <Accordion slotProps={{ transition: { unmountOnExit: true } }}>
-      <AccordionSummary expandIcon={hasVars ? <ExpandMoreIcon /> : null}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            width: "100%",
-            gap: 1,
-          }}
-        >
+      <AccordionSummary expandIcon={hasDetails ? <ExpandMoreIcon /> : null}>
+        <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
           <Switch
             size="small"
             checked={enabled}
             onChange={handleToggle}
             onClick={(e) => e.stopPropagation()}
           />
-          <Typography sx={{ fontWeight: 500, minWidth: 180 }}>
-            {name}
-          </Typography>
+          <Typography sx={{ fontWeight: 500, minWidth: 180 }}>{name}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
             {def.description}
           </Typography>
@@ -216,36 +308,50 @@ function ContainerCard({
           <ReadinessBadge status={validation} />
         </Box>
       </AccordionSummary>
-      {hasVars && (
+      {hasDetails && (
         <AccordionDetails>
-          <Box
-            sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
-          >
-            {Object.entries(varDefs).map(([varName, varDef]) => {
-              if (varDef.type === "secret") {
-                return (
-                  <SecretField
-                    key={varName}
-                    label={`${varName}${varDef.required ? " *" : ""}`}
-                    description={varDef.description}
-                    value={vars[varName]}
-                    onChange={(val) => handleVarChange(varName, val)}
-                  />
-                );
-              }
-              return (
-                <TextField
-                  key={varName}
-                  fullWidth
-                  size="small"
-                  label={`${varName}${varDef.required ? " *" : ""}`}
-                  helperText={varDef.description}
-                  value={vars[varName] || ""}
-                  onChange={(e) => handleVarChange(varName, e.target.value)}
-                />
-              );
-            })}
-          </Box>
+          {hasVolumes && (
+            <VolumeMountSelector
+              volumes={volumes}
+              volumeMounts={volMounts}
+              mounts={mounts}
+              onChange={handleVolMountChange}
+            />
+          )}
+          {hasVars && hasVolumes && <Divider sx={{ my: 2 }} />}
+          {hasVars && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
+                Variables
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                {Object.entries(varDefs).map(([varName, varDef]) => {
+                  if (varDef.type === "secret") {
+                    return (
+                      <SecretField
+                        key={varName}
+                        label={`${varName}${varDef.required ? " *" : ""}`}
+                        description={varDef.description}
+                        value={vars[varName]}
+                        onChange={(val) => handleVarChange(varName, val)}
+                      />
+                    );
+                  }
+                  return (
+                    <TextField
+                      key={varName}
+                      fullWidth
+                      size="small"
+                      label={`${varName}${varDef.required ? " *" : ""}`}
+                      helperText={varDef.description}
+                      value={vars[varName] || ""}
+                      onChange={(e) => handleVarChange(varName, e.target.value)}
+                    />
+                  );
+                })}
+              </Box>
+            </>
+          )}
           <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
             <Button
               variant="contained"
@@ -273,9 +379,12 @@ function ContainerConfig() {
     error,
     updateSharedVars,
     updateContainer,
+    updateMounts,
   } = useContainerConfig();
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
+
+  const mounts = userConfig?.mounts || [{ path: "", label: "Default" }];
 
   const containersByCategory = useMemo(() => {
     if (!registry?.containers) return {};
@@ -300,20 +409,19 @@ function ContainerConfig() {
     return labels;
   }, [registry]);
 
+  const handleSaveMounts = async (newMounts) => {
+    await updateMounts(newMounts);
+    setSnackbar({ open: true, message: "Storage mounts saved and all .env files updated" });
+  };
+
   const handleSaveShared = async (vars) => {
     await updateSharedVars(vars);
-    setSnackbar({
-      open: true,
-      message: "Shared variables saved and all .env files updated",
-    });
+    setSnackbar({ open: true, message: "Global settings saved and all .env files updated" });
   };
 
   const handleUpdateContainer = async (name, config) => {
     await updateContainer(name, config);
-    setSnackbar({
-      open: true,
-      message: `${name} saved and .env updated`,
-    });
+    setSnackbar({ open: true, message: `${name} saved and .env updated` });
   };
 
   if (loading) {
@@ -345,15 +453,16 @@ function ContainerConfig() {
       </Typography>
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        <strong>How this works:</strong> Set your shared variables first (storage
-        paths, Tailscale credentials), then enable the containers you want and
-        fill in their settings. Each time you click Save, the container's .env
-        file is automatically updated. Then
-        run <code>scripts/all-containers.sh --start</code> to bring everything
-        up.
+        <strong>How this works:</strong> First, define your storage mounts (one per
+        disk or directory). Then set Tailscale credentials in Global Settings.
+        Finally, enable containers and assign their volumes to your mounts.
+        Each Save updates the container's .env file automatically. Then
+        run <code>scripts/all-containers.sh --start</code> to bring everything up.
       </Alert>
 
-      <SharedVariablesSection
+      <MountsSection mounts={mounts} onSave={handleSaveMounts} saving={saving} />
+
+      <SharedVarsSection
         registry={registry}
         userConfig={userConfig}
         onSave={handleSaveShared}
@@ -366,10 +475,7 @@ function ContainerConfig() {
 
       {sortedCategories.map((cat) => (
         <Box key={cat} sx={{ mb: 2 }}>
-          <Typography
-            variant="subtitle1"
-            sx={{ fontWeight: 600, mb: 0.5, color: "text.secondary" }}
-          >
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "text.secondary" }}>
             {categoryLabels[cat] || cat}
           </Typography>
           {containersByCategory[cat].map(({ name, def }) => (
@@ -379,6 +485,7 @@ function ContainerConfig() {
               def={def}
               containerConfig={userConfig?.containers?.[name]}
               validation={validationStatus?.containers?.[name]}
+              mounts={mounts}
               onUpdate={handleUpdateContainer}
               saving={saving}
             />

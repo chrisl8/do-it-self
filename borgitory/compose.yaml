@@ -11,9 +11,9 @@ services:
       - /dev/fuse
     volumes:
       # Persistent app data (SQLite DB, config, encryption keys)
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/borgitory/data:/app/data
+      - ${VOL_BORGITORY_DATA:-~/container-data}/container-mounts/borgitory/data:/app/data
       # Borg repository (read-only — browsing only, no modifications)
-      - ${MEDIA_ROOT:-/mnt/22TB}/borg-repo:/mnt/repos/local
+      - ${VOL_BORGITORY_BORG_REPO:-~/container-data}/borg-repo:/mnt/repos/local
     networks:
       - borgitory-net
     healthcheck:

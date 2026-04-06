@@ -4,7 +4,7 @@ services:
     container_name: actual_api
     image: jhonderson/actual-http-api
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/actual-api/data:/data
+      - ${VOL_ACTUAL_BUDGET_API_ACTUAL_API_DATA:-~/container-data}/container-mounts/actual-api/data:/data
     environment:
       - ACTUAL_SERVER_URL=https://actual.${TS_DOMAIN}
       - ACTUAL_SERVER_PASSWORD=${ACTUAL_SERVER_PASSWORD}

@@ -6,7 +6,7 @@ services:
     container_name: code
     image: codercom/code-server
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/code/home:/home/coder
+      - ${VOL_CODE_HOME:-~/container-data}/container-mounts/code/home:/home/coder
     environment:
       # Executable scripts placed in this folder will run when the container starts.
       # They can be used for setting up dependencies and such that cannot "just live in $HOME"

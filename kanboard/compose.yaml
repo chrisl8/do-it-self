@@ -3,9 +3,9 @@ services:
     container_name: kanboard
     image: kanboard/kanboard
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/kanboard/data:/var/www/app/data
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/kanboard/plugins:/var/www/app/plugins
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/kanboard/nginx_ssl:/etc/nginx/ssl
+      - ${VOL_KANBOARD_DATA:-~/container-data}/container-mounts/kanboard/data:/var/www/app/data
+      - ${VOL_KANBOARD_PLUGINS:-~/container-data}/container-mounts/kanboard/plugins:/var/www/app/plugins
+      - ${VOL_KANBOARD_NGINX_SSL:-~/container-data}/container-mounts/kanboard/nginx_ssl:/etc/nginx/ssl
     healthcheck:
       test: curl --fail http://localhost/login | grep "Username" || exit 1
       start_period: 120s

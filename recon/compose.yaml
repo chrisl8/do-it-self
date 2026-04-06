@@ -4,7 +4,7 @@ services:
     image: qmcgaw/gluetun
     container_name: recon-gluetun
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/gluetun:/gluetun
+      - ${VOL_RECON_GLUETUN:-~/container-data}/container-mounts/recon/gluetun:/gluetun
     cap_add:
       - NET_ADMIN
     devices:
@@ -95,7 +95,7 @@ services:
     image: lscr.io/linuxserver/prowlarr
     container_name: recon-prowlarr
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/prowlarr/config:/config
+      - ${VOL_RECON_PROWLARR_CONFIG:-~/container-data}/container-mounts/recon/prowlarr/config:/config
     environment:
       - TZ=America/Chicago
       - UMASK=022
@@ -132,8 +132,8 @@ services:
       - WEBUI_PORT=8085
       - TORRENTING_PORT=6881
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/qbittorrent/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_QBITTORRENT_CONFIG:-~/container-data}/container-mounts/recon/qbittorrent/config:/config
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     labels:
       - homepage.group=Recon
       - homepage.name=qBittorrent
@@ -162,9 +162,9 @@ services:
   sonarr:
     image: lscr.io/linuxserver/sonarr
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/sonarr/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media/series:/tv
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_SONARR_CONFIG:-~/container-data}/container-mounts/recon/sonarr/config:/config
+      - ${VOL_RECON_DATA_MEDIA_SERIES:-~/container-data}/container-mounts/recon/data/media/series:/tv
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     container_name: recon-sonarr
     environment:
       - TZ=America/Chicago
@@ -199,9 +199,9 @@ services:
     image: lscr.io/linuxserver/radarr
     container_name: recon-radarr
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/radarr/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media/movies:/data
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_RADARR_CONFIG:-~/container-data}/container-mounts/recon/radarr/config:/config
+      - ${VOL_RECON_DATA_MEDIA_MOVIES:-~/container-data}/container-mounts/recon/data/media/movies:/data
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     environment:
       - TZ=America/Chicago
       - UMASK=022
@@ -235,8 +235,8 @@ services:
     image: lscr.io/linuxserver/lidarr
     container_name: recon-lidarr
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/lidarr/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_LIDARR_CONFIG:-~/container-data}/container-mounts/recon/lidarr/config:/config
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     environment:
       - TZ=America/Chicago
       - UMASK=022
@@ -270,8 +270,8 @@ services:
     image: lscr.io/linuxserver/bazarr
     container_name: recon-bazarr
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/bazarr/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_BAZARR_CONFIG:-~/container-data}/container-mounts/recon/bazarr/config:/config
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     environment:
       - TZ=America/Chicago
       - UMASK=022
@@ -303,8 +303,8 @@ services:
     image: lscr.io/linuxserver/mylar3
     container_name: recon-mylar3
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/mylar3/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_MYLAR3_CONFIG:-~/container-data}/container-mounts/recon/mylar3/config:/config
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     environment:
       - TZ=America/Chicago
       - UMASK=022
@@ -343,8 +343,8 @@ services:
       - PGID=1000
       - DOCKER_MODS=linuxserver/mods:universal-calibre|linuxserver/mods:lazylibrarian-ffmpeg #optional
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/lazylibrarian/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_LAZYLIBRARIAN_CONFIG:-~/container-data}/container-mounts/recon/lazylibrarian/config:/config
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     labels:
       - homepage.group=Recon
       - homepage.name=LazyLibrarian
@@ -374,7 +374,7 @@ services:
     image: ghcr.io/manimatter/decluttarr
     container_name: recon-decluttarr
     volumes:
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     environment:
       TZ: America/Chicago
       PUID: 1000
@@ -453,8 +453,8 @@ services:
       - PUID=1000
       - PGID=1000
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/recon/sabnzbd/config:/config
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/recon/data/media:/media/arr
+      - ${VOL_RECON_SABNZBD_CONFIG:-~/container-data}/container-mounts/recon/sabnzbd/config:/config
+      - ${VOL_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/arr
     labels:
       - homepage.group=Recon
       - homepage.name=SABnzbd

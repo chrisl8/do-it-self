@@ -74,6 +74,24 @@ function useContainerConfig() {
     }
   }, [fetchConfig]);
 
+  const updateMounts = useCallback(async (mounts) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/config/mounts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mounts }),
+      });
+      if (!res.ok) throw new Error("Failed to save mounts");
+      await fetchConfig();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }, [fetchConfig]);
+
   return {
     registry,
     userConfig,
@@ -84,6 +102,7 @@ function useContainerConfig() {
     fetchConfig,
     updateSharedVars,
     updateContainer,
+    updateMounts,
   };
 }
 

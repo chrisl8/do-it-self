@@ -54,15 +54,14 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 # Container Configuration
 # Edit these values here or use the web-admin UI.
 #
-# By default, all container data goes under DATA_ROOT.
-# To spread across multiple disks, set MEDIA_ROOT, CACHE_ROOT,
-# and MONITOR_ROOT to different paths.
+# Storage mounts: define one per disk or directory.
+# All container volumes default to the first mount.
+
+mounts:
+  - path: "~/container-data"
+    label: "Default"
 
 shared:
-  DATA_ROOT: "~/container-data"
-  MEDIA_ROOT: ""
-  CACHE_ROOT: ""
-  MONITOR_ROOT: ""
   TS_AUTHKEY: ""
   TS_DOMAIN: ""
   HOST_NAME: ""

@@ -7,7 +7,7 @@ services:
       - 9980:8080
     volumes:
       # You must to give world-write to this as the user ID is hard coded in the container :(
-      - ${CACHE_ROOT:-/mnt/250}/container-mounts/1password/data:/home/opuser/.op/data
+      - ${VOL_1PASSWORD_DATA:-~/container-data}/container-mounts/1password/data:/home/opuser/.op/data
       # You must to give world-read to this as the user ID is hard coded in the container :(
       - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json
     healthcheck:
@@ -25,7 +25,7 @@ services:
       - 9981:8080
     volumes:
       # You must to give world-write to this as the user ID is hard coded in the container :(
-      - ${CACHE_ROOT:-/mnt/250}/container-mounts/1password/data:/home/opuser/.op/data
+      - ${VOL_1PASSWORD_DATA:-~/container-data}/container-mounts/1password/data:/home/opuser/.op/data
       # You must to give world-read to this as the user ID is hard coded in the container :(
       - ./1password-credentials.json:/home/opuser/.op/1password-credentials.json
     healthcheck:

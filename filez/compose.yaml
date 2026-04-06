@@ -5,8 +5,8 @@ services:
     image: copyparty/ac
     user: 1000:1000
     volumes:
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/filez/data:/data/root
-      - ${MEDIA_ROOT:-/mnt/22TB}/container-mounts/secure-webtop/downloads:/data/downloads
+      - ${VOL_FILEZ_DATA:-~/container-data}/container-mounts/filez/data:/data/root
+      - ${VOL_FILEZ_SECURE_WEBTOP_DOWNLOADS:-~/container-data}/container-mounts/secure-webtop/downloads:/data/downloads
       - ./copyparty.conf:/cfg/copyparty.conf:ro
     #environment:
     #LD_PRELOAD: /usr/lib/libmimalloc-secure.so.NOPE

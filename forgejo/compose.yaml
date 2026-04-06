@@ -6,7 +6,7 @@ services:
       - USER_UID=1000
       - USER_GID=1000
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/forgejo/data:/data
+      - ${VOL_FORGEJO_DATA:-~/container-data}/container-mounts/forgejo/data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     networks:

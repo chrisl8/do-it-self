@@ -8,8 +8,8 @@ services:
       - SYMFONY__ENV__FROM_EMAIL=${SYMFONY__ENV__FROM_EMAIL}
       - SYMFONY__ENV__DOMAIN_NAME=https://wallabag.${TS_DOMAIN}
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/wallabag/images:/var/www/wallabag/web/assets/images
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/wallabag/data:/var/www/wallabag/data
+      - ${VOL_WALLABAG_IMAGES:-~/container-data}/container-mounts/wallabag/images:/var/www/wallabag/web/assets/images
+      - ${VOL_WALLABAG_DATA:-~/container-data}/container-mounts/wallabag/data:/var/www/wallabag/data
     healthcheck:
       test:
         [

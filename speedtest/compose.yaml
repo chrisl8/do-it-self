@@ -6,7 +6,7 @@ services:
     ports:
       - 8765:80
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/speedtest/config:/config
+      - ${VOL_SPEEDTEST_CONFIG:-~/container-data}/container-mounts/speedtest/config:/config
     environment:
       - DISPLAY_TIMEZONE=America/Chicago
       - PUID=1000

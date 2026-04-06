@@ -4,7 +4,7 @@ services:
     restart: on-failure
     image: pgvector/pgvector:pg17
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/formbricks/data:/var/lib/postgresql/data
+      - ${VOL_FORMBRICKS_DATA:-~/container-data}/container-mounts/formbricks/data:/var/lib/postgresql/data
     environment:
       - POSTGRES_PASSWORD=postgres
     healthcheck:
@@ -22,7 +22,7 @@ services:
     image: valkey/valkey
     command: valkey-server --appendonly yes
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/formbricks/redis:/data
+      - ${VOL_FORMBRICKS_REDIS:-~/container-data}/container-mounts/formbricks/redis:/data
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       start_period: 120s
@@ -42,7 +42,7 @@ services:
       formbricks_redis:
         condition: service_healthy
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/formbricks/saml-connection:/home/nextjs/apps/web/saml-connection
+      - ${VOL_FORMBRICKS_SAML_CONNECTION:-~/container-data}/container-mounts/formbricks/saml-connection:/home/nextjs/apps/web/saml-connection
     networks:
       - caddy-net
     healthcheck:

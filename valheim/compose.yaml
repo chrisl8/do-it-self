@@ -11,8 +11,8 @@ services:
       - sys_nice
       - SYS_PTRACE
     volumes:
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/valheim/config:/config
-      - ${DATA_ROOT:-/mnt/2000}/container-mounts/valheim/data:/opt/valheim
+      - ${VOL_VALHEIM_CONFIG:-~/container-data}/container-mounts/valheim/config:/config
+      - ${VOL_VALHEIM_DATA:-~/container-data}/container-mounts/valheim/data:/opt/valheim
     stop_grace_period: 2m
     environment:
       - TZ=America/Chicago
