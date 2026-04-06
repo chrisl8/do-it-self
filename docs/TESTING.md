@@ -35,24 +35,42 @@ scripts/hetzner-test.sh --destroy
 
 ## Options
 
-| Flag             | Description                                  |
-| ---------------- | -------------------------------------------- |
-| `--keep`         | Don't destroy server after test              |
-| `--destroy`      | Just destroy the test server                 |
-| `--retest`       | Run tests on existing server                 |
-| `--type cx32`    | Server type (default: cx22)                  |
-| `--location ash` | Location (default: ash / Ashburn VA)         |
-| `--ts-key KEY`   | Tailscale auth key for full integration test |
+| Flag                | Description                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| `--keep`            | Always keep the server (don't destroy even on success)       |
+| `--no-keep-if-fails`| Destroy server even if tests fail (default: keep on failure) |
+| `--destroy`         | Just destroy the test server                                 |
+| `--retest`          | Run tests on existing server                                 |
+| `--type cx33`       | Server type (default: cx23)                                  |
+| `--location ash`    | Location (default: nbg1 / Nuremberg, Germany)                |
+| `--ts-key KEY`      | Tailscale auth key for full integration test                 |
+
+## Logs
+
+After each run, logs are saved to `/tmp/hetzner-test-logs/hetzner-test-<timestamp>/`:
+- `setup.log` -- output from setup.sh on the server
+- `cloud-init-output.log` -- last 200 lines of cloud-init's own log
+- `cloud-init-status.txt` -- cloud-init status report
+- `docker-state.log` -- containers and images on the server
+- `file-state.log` -- key directories listing
+
+If a test fails, the server is kept running by default so you can SSH in and investigate. Use `--no-keep-if-fails` to override.
 
 ## Server Types
 
-| Type | vCPU | RAM  | Disk  | ~Cost/hour |
-| ---- | ---- | ---- | ----- | ---------- |
-| cx22 | 2    | 4GB  | 40GB  | €0.005     |
-| cx32 | 4    | 8GB  | 80GB  | €0.007     |
-| cx42 | 8    | 16GB | 160GB | €0.019     |
+`hcloud server-type list`
 
-A typical test run takes 10-15 minutes and costs less than €0.01.
+See the Hetzner site for costs.
+
+- "cx" are the "Cost Optimized" options.
+- "cpx" are the "General usage" options.
+  There are others.
+
+Note that not all types exist in all locations.
+
+## Location List
+
+`hcloud location list`
 
 ## What Gets Tested
 
