@@ -24,13 +24,16 @@ SERVER_TYPE="cx23"
 IMAGE="ubuntu-24.04"
 LOCATION="nbg1"
 KEEP=false
+KEEP_IF_FAILS=true
 DESTROY_ONLY=false
 RETEST=false
 TS_KEY=""
+LOG_DIR="/tmp/hetzner-test-logs"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --keep) KEEP=true ;;
+    --no-keep-if-fails) KEEP_IF_FAILS=false ;;
     --destroy) DESTROY_ONLY=true ;;
     --retest) RETEST=true ;;
     --type) shift; SERVER_TYPE="$1" ;;
@@ -151,8 +154,25 @@ CLOUDINIT
     printf "${RED}=== Last 30 lines of /var/log/cloud-init-output.log ===${NC}\n"
     ssh "root@${IP}" "tail -30 /var/log/cloud-init-output.log"
     echo ""
-    echo "Debug:   ssh root@${IP}"
-    echo "Destroy: scripts/hetzner-test.sh --destroy"
+
+    # Fetch full logs to local disk for analysis
+    mkdir -p "$LOG_DIR"
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    LOG_BUNDLE="${LOG_DIR}/hetzner-test-${TIMESTAMP}-cloudinit-fail"
+    mkdir -p "$LOG_BUNDLE"
+    scp "root@${IP}:/home/ubuntu/setup.log" "${LOG_BUNDLE}/setup.log" 2>/dev/null || true
+    ssh "root@${IP}" "cat /var/log/cloud-init-output.log" > "${LOG_BUNDLE}/cloud-init-output.log" 2>/dev/null || true
+    ssh "root@${IP}" "cloud-init status --long" > "${LOG_BUNDLE}/cloud-init-status.txt" 2>/dev/null || true
+    printf "${YELLOW}Full logs saved to %s${NC}\n" "$LOG_BUNDLE"
+
+    if [[ "$KEEP_IF_FAILS" == true ]]; then
+      echo ""
+      echo "Server left running for debugging."
+      echo "SSH:     ssh root@${IP}"
+      echo "Destroy: scripts/hetzner-test.sh --destroy"
+    else
+      hcloud server delete "$SERVER_NAME"
+    fi
     exit 1
   fi
 
@@ -180,16 +200,39 @@ if [[ $TEST_EXIT -eq 0 ]]; then
   printf "\n${GREEN}All tests passed!${NC}\n"
 else
   printf "\n${RED}Some tests failed (exit code %d).${NC}\n" "$TEST_EXIT"
-  echo "Debug: ssh root@${IP}"
-  echo "Logs:  ssh root@${IP} cat /home/ubuntu/setup.log"
 fi
 
-# Tear down unless --keep
+# Always fetch logs from the server (success or failure)
+mkdir -p "$LOG_DIR"
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_BUNDLE="${LOG_DIR}/hetzner-test-${TIMESTAMP}"
+mkdir -p "$LOG_BUNDLE"
+
+printf "${YELLOW}Fetching logs to %s...${NC}\n" "$LOG_BUNDLE"
+scp "ubuntu@${IP}:/home/ubuntu/setup.log" "${LOG_BUNDLE}/setup.log" 2>/dev/null || echo "  (no setup.log)"
+ssh "root@${IP}" "tail -200 /var/log/cloud-init-output.log" > "${LOG_BUNDLE}/cloud-init-output.log" 2>/dev/null || true
+ssh "root@${IP}" "cloud-init status --long" > "${LOG_BUNDLE}/cloud-init-status.txt" 2>/dev/null || true
+ssh "ubuntu@${IP}" "docker ps -a 2>&1; echo '---'; docker images 2>&1" > "${LOG_BUNDLE}/docker-state.log" 2>/dev/null || true
+ssh "ubuntu@${IP}" "ls -la ~/containers ~/credentials 2>&1" > "${LOG_BUNDLE}/file-state.log" 2>/dev/null || true
+printf "${GREEN}Logs saved to %s${NC}\n" "$LOG_BUNDLE"
+
+# Tear down logic:
+# - --keep:        always keep
+# - --no-keep-if-fails: destroy even on failure
+# - default:       destroy on success, keep on failure
+SHOULD_DESTROY=true
 if [[ "$KEEP" == true ]]; then
+  SHOULD_DESTROY=false
+elif [[ $TEST_EXIT -ne 0 && "$KEEP_IF_FAILS" == true ]]; then
+  SHOULD_DESTROY=false
+fi
+
+if [[ "$SHOULD_DESTROY" == false ]]; then
   echo ""
   echo "Server left running at: ${IP}"
-  echo "SSH: ssh root@${IP}"
-  echo "Destroy when done: scripts/hetzner-test.sh --destroy"
+  echo "SSH:     ssh ubuntu@${IP}"
+  echo "Setup:   ssh ubuntu@${IP} cat /home/ubuntu/setup.log"
+  echo "Destroy: scripts/hetzner-test.sh --destroy"
 else
   printf "${YELLOW}Destroying server...${NC}\n"
   hcloud server delete "$SERVER_NAME"
