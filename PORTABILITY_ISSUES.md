@@ -52,10 +52,6 @@ Most cron entries are still manual. `scripts/setup-borg-backup.sh` installs its 
 - `.gitignore` excludes `tsidp/tsidp/`, `valheim/valheim-server-docker/`, `dawarich/dawarich/`, `minecraft/docker-minecraft-bedrock-server/`
 - `scripts/all-containers.sh --update-git-repos` clones them, but `setup.sh` does not call it on first run, so a fresh install can't start any of these containers without a manual extra step.
 
-### Some `my-stuff` category containers are still default-enabled
-
-`immich`, `jellyfin`, `nextcloud`, and `paperless` live under `category: my-stuff` in `container-registry.yaml` but lack `default_disabled: true`. A fresh install would attempt to enable them and immediately hit missing-config / hardcoded-mount failures (e.g. nextcloud's `/mnt/2000` mount-permissions). They should be flipped to `default_disabled: true` until each one is verified to start cleanly on a fresh install.
-
 ### `AGENTS.md` and `CLAUDE.md` Are Developer-Facing, Not User-Facing
 
 - These files help AI tools work with the repo but don't help human newcomers
