@@ -12,6 +12,14 @@
 #   scripts/hetzner-test.sh --retest           # Re-run tests on existing server
 #   scripts/hetzner-test.sh --type cx32        # Use a different server type
 #   scripts/hetzner-test.sh --ts-key KEY       # Provide Tailscale auth key
+#
+# IMPORTANT: --ts-key requires an auth key created with the `tag:container`
+# ACL tag. Every container sidecar in this repo advertises that tag, and the
+# Tailscale control plane will reject registration without it. Create the key
+# in the Tailscale admin console (Settings → Keys → Generate auth key), check
+# `tag:container` under tags before generating, and ensure `tag:container`
+# is defined in your tailnet ACL policy. The key SHOULD be reusable so all 40+
+# container sidecars can register with it.
 set -e
 
 YELLOW='\033[1;33m'

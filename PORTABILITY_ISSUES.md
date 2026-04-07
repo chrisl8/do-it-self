@@ -11,6 +11,7 @@ This document catalogs issues that would affect someone cloning this repository 
 - 40+ services use the Tailscale sidecar pattern requiring `TS_AUTHKEY` and `TS_DOMAIN`
 - Both are now configurable via the web-admin and stored in Infisical, but there's no documentation on how to _get_ them (creating an OAuth client, setting up ACL tags with a "container" tag, etc.)
 - A step-by-step Tailscale setup guide is needed for new users
+- **The auth key MUST be created with the `tag:container` ACL tag.** Every container sidecar in this repo runs `--advertise-tags=tag:container`, and the Tailscale control plane rejects registration with `requested tags [tag:container] are invalid or not permitted` if the key isn't authorized for that tag. The user's tailnet ACL policy must also define `tag:container`. The key should be reusable so all 40+ sidecars can use the same one.
 
 ### External Backup Infrastructure Assumed
 
