@@ -1,4 +1,4 @@
 mounts:
-  /mnt/2000/container-mounts/cloudflared:
+  "${VOL_CLOUDFLARED_CONFIG:-~/container-data}/container-mounts/cloudflared/config":
     mode: "775"
     recursive: true
