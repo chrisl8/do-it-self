@@ -1,0 +1,10 @@
+{
+  "name": "do-it-self-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Helper scripts for the do-it-self container repo. Only includes deps that the bash scripts (setup.sh, all-containers.sh) need to invoke directly. The web-admin has its own node_modules.",
+  "dependencies": {
+    "yaml": "^2.8.0"
+  }
+}
