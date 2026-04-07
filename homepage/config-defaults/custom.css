@@ -1,0 +1,23 @@
+.widget-container,
+.bookmark-icon {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.bookmark-icon {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.bookmark-text,
+.service-card {
+    background-color: rgba(255, 255, 255, 1) !important;
+}
+
+.service-group-name,
+.bookmark-group-name {
+    color: white !important;
+    text-align: center !important;
+}
+
+.header-title {
+    text-align: center !important;
+}

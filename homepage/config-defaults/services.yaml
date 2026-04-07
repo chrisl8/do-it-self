@@ -1,0 +1,24 @@
+---
+# Default services group shipped with the do-it-self repo. Everything in
+# this file is visible to every user. User-specific or private groups
+# live in homepage/config-personal/services.yaml (gitignored).
+#
+# Most containers in this repo declare homepage.group / homepage.name /
+# homepage.icon / homepage.href labels in their compose.yaml, and homepage
+# auto-discovers them via the docker integration (see config-defaults/docker.yaml).
+# That means you don't need to define most service tiles here — they
+# appear automatically when their container is running.
+
+- Top:
+    - Web Admin:
+        href: http://${HOST_NAME}.${TS_DOMAIN}:3333
+        description: Configure containers, secrets, and mounts
+        icon: /icons/do-it-self.svg
+    - Tailscale Admin:
+        href: https://login.tailscale.com/admin
+        description: Manage your tailnet, ACLs, and auth keys
+        icon: tailscale.svg
+    - do-it-self on GitHub:
+        href: https://github.com/chrisl8/do-it-self
+        description: Source, docs, issues
+        icon: github.svg

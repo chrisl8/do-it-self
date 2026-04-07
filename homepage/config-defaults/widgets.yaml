@@ -1,0 +1,21 @@
+---
+# Default widgets shipped with the do-it-self repo.
+#
+# Note: a Storage widget is injected automatically by
+# scripts/merge-homepage-config.js based on user-config.yaml's mounts list —
+# don't add one here or in config-personal/widgets.yaml.
+
+- greeting:
+    text_size: xl
+    text: ${HOST_NAME}.${TS_DOMAIN}
+
+- resources:
+    label: System
+    refresh: 10000
+    cpu: true
+    memory: true
+    uptime: true
+
+- search:
+    provider: duckduckgo
+    target: _self

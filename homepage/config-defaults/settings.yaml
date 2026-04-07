@@ -1,0 +1,10 @@
+---
+# Default homepage settings shipped with the do-it-self repo.
+# Override any key by setting it in homepage/config-personal/settings.yaml.
+# The merge is a deep merge — nested maps (layout, background, providers)
+# merge key-by-key, with personal values winning on conflicts.
+#
+# For all available options see:
+# https://gethomepage.dev/latest/configs/settings/
+
+title: Console

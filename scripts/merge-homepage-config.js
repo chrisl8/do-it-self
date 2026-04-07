@@ -22,7 +22,7 @@
 // directly is futile -- edit homepage/config-personal/ (or, for changes that
 // should ship to all users, homepage/config-defaults/).
 
-import { readFile, writeFile, readdir, mkdir, copyFile, rm } from "fs/promises";
+import { readFile, writeFile, readdir, mkdir, copyFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -99,13 +99,19 @@ function substituteTemplateVars(text, shared) {
 }
 
 // Build the dynamic storage widget from user-config mounts.
-// Always includes "/" as the first disk; appends each mount path after.
+// Always includes "/" as the root filesystem; appends one disk per
+// user-config mount using the IN-CONTAINER path (`/mnt/${label}`),
+// because homepage's resources widget reads df stats from inside the
+// container. The bind mounts in compose.override.yaml map each host
+// `${path}/for-homepage` to `/mnt/${label}`, so querying `/mnt/${label}`
+// returns stats for the underlying host filesystem.
 function buildStorageWidget(mounts) {
   const disks = ["/"];
-  for (const m of mounts) {
-    if (m && typeof m.path === "string" && m.path !== "/" && !disks.includes(m.path)) {
-      disks.push(m.path);
-    }
+  for (const [i, m] of mounts.entries()) {
+    if (!m) continue;
+    const label = m.label || `mount_${i}`;
+    const containerPath = `/mnt/${label}`;
+    if (!disks.includes(containerPath)) disks.push(containerPath);
   }
   return {
     resources: {
@@ -149,6 +155,19 @@ async function readMapFile(name) {
   return deepMerge(defaults, personal);
 }
 
+// For YAML files where neither defaults nor personal has any actual keys
+// (typically comment-only templates like kubernetes.yaml), copying the raw
+// defaults text preserves the helpful example comments. Otherwise the
+// deep-merge path serializes `{}` and the comments are lost.
+async function isEffectivelyEmptyMap(name) {
+  const defaults = await readYaml(join(DEFAULTS_DIR, name));
+  const personal = await readYaml(join(PERSONAL_DIR, name));
+  const empty = (v) =>
+    v === null || v === undefined ||
+    (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
+  return empty(defaults) && empty(personal);
+}
+
 async function copyTextFile(name) {
   const personalPath = join(PERSONAL_DIR, name);
   const defaultsPath = join(DEFAULTS_DIR, name);
@@ -156,6 +175,15 @@ async function copyTextFile(name) {
   if (!existsSync(sourcePath)) return false;
   await copyFile(sourcePath, join(OUTPUT_DIR, name));
   return true;
+}
+
+// File extensions the merge script manages. Anything else in OUTPUT_DIR
+// (notably homepage's runtime logs/ subdirectory, or an `images/` dir
+// the user put there) is left alone.
+const MANAGED_EXTENSIONS = [".yaml", ".yml", ".css", ".js"];
+
+function isManaged(name) {
+  return MANAGED_EXTENSIONS.some((ext) => name.endsWith(ext));
 }
 
 async function main() {
@@ -168,21 +196,34 @@ async function main() {
   const shared = userConfig.shared;
   const mounts = userConfig.mounts;
 
-  // Wipe output dir and recreate. Done so stale files removed from defaults
-  // (or renamed in personal) don't linger in config/.
-  if (existsSync(OUTPUT_DIR)) {
-    await rm(OUTPUT_DIR, { recursive: true, force: true });
-  }
   await mkdir(OUTPUT_DIR, { recursive: true });
 
-  // Discover all files in either directory
+  // Discover all files in either source directory
   const defaultsFiles = existsSync(DEFAULTS_DIR) ? await readdir(DEFAULTS_DIR) : [];
   const personalFiles = existsSync(PERSONAL_DIR) ? await readdir(PERSONAL_DIR) : [];
-  const allFiles = new Set([...defaultsFiles, ...personalFiles]);
+  const sourceFiles = new Set(
+    [...defaultsFiles, ...personalFiles].filter(isManaged),
+  );
 
-  for (const name of allFiles) {
-    const isYaml = name.endsWith(".yaml") || name.endsWith(".yml");
+  // Delete any managed files in OUTPUT_DIR that are NOT in sourceFiles (i.e.
+  // they used to be in defaults or personal but have been removed). Leaves
+  // non-managed files (like homepage's logs/ dir) untouched.
+  const existingOutput = existsSync(OUTPUT_DIR) ? await readdir(OUTPUT_DIR) : [];
+  for (const name of existingOutput) {
+    if (!isManaged(name)) continue;
+    if (!sourceFiles.has(name)) {
+      try {
+        await unlink(join(OUTPUT_DIR, name));
+        log(`  removed stale ${name}`);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  for (const name of sourceFiles) {
     const outPath = join(OUTPUT_DIR, name);
+    const isYaml = name.endsWith(".yaml") || name.endsWith(".yml");
 
     if (!isYaml) {
       // text file (custom.css, custom.js) -- personal wins, else defaults
@@ -202,8 +243,13 @@ async function main() {
       const out = yaml.stringify(list);
       await writeFile(outPath, out, "utf8");
       log(`  merged ${name} (${list.length} item${list.length === 1 ? "" : "s"})`);
+    } else if (await isEffectivelyEmptyMap(name)) {
+      // comment-only template (kubernetes.yaml, proxmox.yaml, etc.) --
+      // copy the defaults file verbatim so the example comments survive.
+      const copied = await copyTextFile(name);
+      if (copied) log(`  copied ${name} (comments preserved)`);
     } else {
-      // map file -- deep merge
+      // map file with actual content -- deep merge
       const merged = await readMapFile(name);
       const out = yaml.stringify(merged);
       await writeFile(outPath, out, "utf8");
