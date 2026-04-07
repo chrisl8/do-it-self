@@ -78,14 +78,44 @@ Don't pollute your real Tailscale network with ephemeral test machines. Create a
 1. Create a free Tailscale account at https://tailscale.com using a different SSO provider (e.g. a different Google account) than your production Tailscale account
 2. Free tier supports 100 devices and 3 users -- plenty for testing
 
+### Declare `tag:container` in the tailnet ACL
+
+Every container sidecar in this repo runs `--advertise-tags=tag:container`. A
+brand-new test tailnet has no tags defined, so before you can create an auth
+key with that tag you must first declare it in the access control policy:
+
+1. Go to https://login.tailscale.com/admin/acls/file
+2. Find (or add) the `tagOwners` section and declare `tag:container` with an
+   owner. The minimum diff is:
+   ```json
+   {
+     "tagOwners": {
+       "tag:container": ["autogroup:admin"]
+     }
+   }
+   ```
+   If a `tagOwners` block already exists, just add the `"tag:container"` line
+   to it. `autogroup:admin` means "anyone in the tailnet who can administer
+   it" — for a personal test tailnet, that's you.
+3. Click **Save**
+
+Without this, the next step (generating an auth key with `tag:container`)
+will fail with "tag:container is invalid" and every container sidecar in the
+test will crashloop with `requested tags [tag:container] are invalid or not
+permitted`.
+
 ### Generate the auth key
 
 1. Go to https://login.tailscale.com/admin/settings/keys (in your test account)
 2. Click "Generate auth key"
 3. Settings:
-   - **Reusable:** ON (lets you use the same key across multiple test runs)
-   - **Ephemeral:** OFF (we want to test the same flow real users do, not the ephemeral one)
-   - **Tags:** optional
+   - **Reusable:** ON (lets you use the same key across multiple test runs —
+     all 6 container sidecars need to register with it)
+   - **Ephemeral:** OFF (we want to test the same flow real users do, not the
+     ephemeral one)
+   - **Tags:** check **`tag:container`** — REQUIRED. Every container sidecar
+     advertises this tag and the control plane will reject registration
+     without it. You must have completed the ACL step above first.
    - **Expiration:** up to 90 days
 4. Copy the key (starts with `tskey-auth-`)
 
