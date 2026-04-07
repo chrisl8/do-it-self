@@ -101,14 +101,9 @@ The blocker is now mostly removed: `homepage/config/` is seeded in the repo (`bo
 - If green, flip `homepage` to `default_disabled: false` in `container-registry.yaml`.
 - Goal: a fresh install should have infisical AND homepage running by default, so the user has both a secret manager and a dashboard with zero configuration.
 
-### `mount-permissions.yaml` files have hardcoded `/mnt/2000` paths
+### Audit remaining containers for hardcoded mount paths
 
-The `apply_mount_permissions` resolver in `scripts/all-containers.sh` now supports `${VOL_*}` variable expansion and `mkdir -p`s missing paths (commit `cf101e1`). What's left is to update the existing files to use the new syntax:
-
-- `nextcloud/mount-permissions.yaml` — still hardcodes `/mnt/2000/container-mounts/nextcloud/html`
-- `wallabag/mount-permissions.yaml` — still hardcodes `/mnt/2000/container-mounts/wallabag/data`
-
-Quick fix: rewrite each path to `"${VOL_NEXTCLOUD_HTML:-~/container-data}/container-mounts/nextcloud/html"` style and add the corresponding `VOL_*` entry to `container-registry.yaml`'s volumes section.
+The `apply_mount_permissions` resolver in `scripts/all-containers.sh` now supports `${VOL_*}` variable expansion and `mkdir -p`s missing paths (commit `cf101e1`). The known offenders (`searxng`, `nextcloud`, `wallabag`) have all been converted. Other containers should be audited for any remaining hardcoded `/mnt/...` paths in `mount-permissions.yaml`, `compose.yaml` `volumes:`, or scripts.
 
 ### Directing user to CLI instead of web admin
 
