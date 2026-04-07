@@ -1,4 +1,4 @@
-import { readFile, writeFile, access } from "fs/promises";
+import { readFile, writeFile, appendFile, access } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -138,6 +138,22 @@ function formatEnvFile(env) {
   return content;
 }
 
+// Infisical is a chicken-and-egg case: every other container can pull its secrets
+// from Infisical at start time, but Infisical itself cannot. Its bootstrap secrets
+// (AUTH_SECRET, ENCRYPTION_KEY, DB_PASSWORD) live in infisical/infisical-secrets.env
+// and must be appended to .env after generation, or Infisical will refuse to boot.
+async function appendInfisicalBootstrapSecrets(envPath, containerName) {
+  if (containerName !== "infisical") return;
+  const secretsPath = join(CONTAINERS_DIR, "infisical", "infisical-secrets.env");
+  if (!(await fileExists(secretsPath))) return;
+  const raw = await readFile(secretsPath, "utf8");
+  const lines = raw
+    .split("\n")
+    .filter((line) => line.trim() && !line.trim().startsWith("#"));
+  if (lines.length === 0) return;
+  await appendFile(envPath, `\n# Infisical internal secrets\n${lines.join("\n")}\n`, "utf8");
+}
+
 export async function writeContainerEnv(containerName) {
   const registry = await getRegistry();
   const userConfig = await getUserConfig();
@@ -146,6 +162,7 @@ export async function writeContainerEnv(containerName) {
   const envPath = join(CONTAINERS_DIR, containerName, ".env");
   const content = formatEnvFile(env);
   await writeFile(envPath, content, "utf8");
+  await appendInfisicalBootstrapSecrets(envPath, containerName);
 
   return { written: Object.keys(env).length, missing: errors };
 }
@@ -167,6 +184,7 @@ export async function writeAllContainerEnvs() {
     const envPath = join(containerDir, ".env");
     const content = formatEnvFile(env);
     await writeFile(envPath, content, "utf8");
+    await appendInfisicalBootstrapSecrets(envPath, name);
     results[name] = { written: Object.keys(env).length, missing: errors };
   }
 
