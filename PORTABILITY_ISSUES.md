@@ -13,6 +13,24 @@ This document catalogs issues that would affect someone cloning this repository 
 - A step-by-step Tailscale setup guide is needed for new users
 - **The auth key MUST be created with the `tag:container` ACL tag.** Every container sidecar in this repo runs `--advertise-tags=tag:container`, and the Tailscale control plane rejects registration with `requested tags [tag:container] are invalid or not permitted` if the key isn't authorized for that tag. The user's tailnet ACL policy must also define `tag:container`. The key should be reusable so all 40+ sidecars can use the same one.
 
+### Pre-flight checks for Tailscale prerequisites
+
+Several Tailscale-side configuration mistakes currently fail silently or surface only in deeply-buried sidecar logs. The user only finds out by either reading `docs/TESTING.md` cover-to-cover or by debugging "the URL doesn't work, why?" from scratch. We should add pre-flight checks (in `setup.sh`, `scripts/all-containers.sh --start`, and the web admin's pre-start UI) that detect these conditions up front and tell the user clearly. Known cases:
+
+- **`tag:container` not declared in the tailnet ACL** — auth key creation succeeds but sidecars fail with `requested tags [tag:container] are invalid or not permitted`. Already partially surfaced by the test's tag-hint banner; should also be checked at setup time, ideally by querying the Tailscale API with the user's API token.
+- **HTTPS Certificates not enabled in the tailnet** — sidecars register and report healthy, but Tailscale Serve can't provision Let's Encrypt certs and the URL `https://<name>.<tailnet>.ts.net` returns nothing. The only signal is a `serve proxy: ... not able to issue TLS certs ...` line buried in `docker logs <container>-ts`.
+- **Auth key not marked Reusable** — first sidecar registers, the rest fail because the key was consumed. Today only visible in sidecar logs.
+- **Auth key expired** — every sidecar fails to register. Today only visible in sidecar logs.
+- **Free-tier 100-device limit reached** — registrations rejected with a quota message.
+
+Approaches worth considering:
+
+1. **`setup.sh` check** — if the user provides `TS_API_TOKEN` (the cleanup token already used by hetzner-test.sh), `setup.sh` could query the Tailscale API to verify the ACL has `tag:container`, HTTPS is enabled, the auth key has the right tag and is reusable, and the device count is under quota. Print clear errors before proceeding.
+2. **`all-containers.sh --start` check** — before starting any container with `uses_tailscale: true`, run `tailscale status --json` and verify the host node is registered, then sample one sidecar's logs for known failure phrases after the first start attempt.
+3. **Web admin health panel** — surface the same checks as live status indicators on the dashboard, with links to the relevant Tailscale admin page for each fix.
+
+Not urgent — `docs/TESTING.md` documents all of the above and the test's tag-hint banner catches the most common one — but a proactive pre-flight would prevent every "ran setup, now my dashboard URL doesn't work" support question.
+
 ### External Backup Infrastructure Assumed
 
 - BorgBackup assumes a remote server `backup-pi` accessible via SSH
