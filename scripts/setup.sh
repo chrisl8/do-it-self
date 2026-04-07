@@ -226,12 +226,18 @@ fi
 
 step "Setting up web-admin"
 
-# Create the backend .env file if missing (PM2 ecosystem config requires it)
+# Create the backend .env file if missing (PM2 ecosystem config requires it).
+# WEB_ADMIN_BIND_HOST is an optional env var passed in by hetzner-test.sh's
+# cloud-init to lock the test VM down to localhost-only. When unset, the
+# .env omits HOST and server.js falls back to 0.0.0.0 (current default for
+# real installs -- see PORTABILITY_ISSUES.md "Security" for the broader
+# discussion of what the default should be for new installs).
 WEB_ADMIN_ENV="${SCRIPT_DIR}/web-admin/backend/.env"
 if [[ ! -f "$WEB_ADMIN_ENV" ]]; then
-  cat > "$WEB_ADMIN_ENV" << 'WEBENV'
+  cat > "$WEB_ADMIN_ENV" << WEBENV
 # Server configuration
 PORT=3333
+${WEB_ADMIN_BIND_HOST:+HOST=${WEB_ADMIN_BIND_HOST}}
 
 # Docker configuration
 DOCKER_SOCKET_PATH=/var/run/docker.sock
@@ -239,6 +245,9 @@ CONTAINERS_DIR=~/containers
 ICONS_BASE_DIR=~/containers/homepage/dashboard-icons
 WEBENV
   ok "Created ${WEB_ADMIN_ENV}"
+  if [[ -n "${WEB_ADMIN_BIND_HOST:-}" ]]; then
+    ok "Web admin bound to ${WEB_ADMIN_BIND_HOST} (test mode)"
+  fi
 fi
 
 cd "${SCRIPT_DIR}/web-admin"

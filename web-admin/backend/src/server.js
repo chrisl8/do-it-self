@@ -686,9 +686,16 @@ app.use((req, res, next) => {
 });
 
 const port = process.env.PORT || 3333;
+// Bind address. Defaults to 0.0.0.0 (current behavior, reachable from
+// LAN/Tailscale) so existing deployments are unaffected. The Hetzner
+// test sets HOST=127.0.0.1 via the generated .env so the test VM never
+// exposes the web admin (and the Tailscale auth key it holds) to the
+// public internet. The broader question of what the default should be
+// for new installs is tracked in PORTABILITY_ISSUES.md "Security".
+const host = process.env.HOST || "0.0.0.0";
 
 async function webserver() {
-  const server = app.listen(port);
+  const server = app.listen(port, host);
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
