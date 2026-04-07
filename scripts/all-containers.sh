@@ -231,13 +231,49 @@ list_local_mounts() {
   done
 }
 
+resolve_mount_path() {
+  # Expand ~ / $HOME / ${VOL_*} variables in a mount path so the same
+  # mount-permissions.yaml works on every host. Sources the local .env
+  # if present so ${VOL_*} from generate-env.js are in scope. Trusted-input:
+  # the path comes from a YAML file checked into the repo.
+  local raw_path="$1"
+
+  # Strip surrounding quotes (yq returns paths without quotes; the fallback
+  # parser may include them).
+  raw_path="${raw_path#\"}"
+  raw_path="${raw_path%\"}"
+  raw_path="${raw_path#\'}"
+  raw_path="${raw_path%\'}"
+
+  # Source .env (in pwd) so ${VOL_*} variables defined by generate-env.js
+  # are in scope for the eval below. Ignore failures. Note: must use "./.env"
+  # — bash's `source` searches PATH (not pwd) when the filename has no slash.
+  if [[ -f "./.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "./.env" 2>/dev/null || true
+    set +a
+  fi
+
+  # Replace literal ~ with $HOME up front so we don't depend on tilde
+  # expansion inside parameter-expansion defaults like ${X:-~/foo}.
+  raw_path="${raw_path//\~/$HOME}"
+
+  # Now run through eval to perform ${VAR} and ${VAR:-default} expansion.
+  # Quoted to suppress globbing/word-splitting; safe because the input is
+  # from a repo file, not user input.
+  local expanded
+  expanded=$(eval "echo \"$raw_path\"" 2>/dev/null)
+  echo "$expanded"
+}
+
 apply_mount_permissions() {
   local config_file="$1"
-  
+
   if [[ ! -f "$config_file" ]]; then
     return
   fi
-  
+
   # Test sudo access once at the start - required for chown operations
   # Test specifically for /usr/bin/chown since sudoers may allow only specific commands
   if ! sudo -n /usr/bin/chown nobody /dev/null 2>/dev/null; then
@@ -248,61 +284,91 @@ apply_mount_permissions() {
     printf "${RED}Aborting.${NC}\n"
     exit 1
   fi
-  
+
   printf "${YELLOW}Applying mount permissions...${NC}\n"
-  
+
   # Check if yq is available for YAML parsing
   if command -v yq &> /dev/null; then
-    # Use yq for proper YAML parsing
-    local mount_paths
-    mount_paths=$(yq e '.mounts | keys' "$config_file" 2>/dev/null)
-    
-    while IFS= read -r mount_path; do
-      if [[ -z "$mount_path" || "$mount_path" == "---" ]]; then
+    # Use yq for proper YAML parsing. Emit all fields together via to_entries
+    # so we don't have to substitute the path back into a yq query (which
+    # would mis-handle paths containing $, : etc).
+    local entries
+    entries=$(yq e '.mounts | to_entries | .[] | (.key + "\t" + (.value.mode // "") + "\t" + (.value.owner // "") + "\t" + ((.value.recursive // false) | tostring))' "$config_file" 2>/dev/null)
+
+    while IFS=$'\t' read -r mount_path mode owner recursive; do
+      [[ -z "$mount_path" ]] && continue
+
+      # Resolve ~/$HOME/${VOL_*} variables in the path
+      local resolved_path
+      resolved_path=$(resolve_mount_path "$mount_path")
+
+      # Apply permissions
+      apply_single_mount_permission "$resolved_path" "$mode" "$owner" "$recursive"
+    done <<< "$entries"
+  else
+    # Fallback: hand-rolled state-machine parser. Handles the limited
+    # mount-permissions.yaml format used in this repo:
+    #   mounts:
+    #     <path>:                                <- 2-space indent, ":" terminator
+    #       mode: "755"                          <- 4-space indent
+    #       owner: "user:group"
+    #       recursive: true
+    #
+    # Paths may be absolute (/mnt/...), tilde-prefixed (~/foo), or
+    # quoted with shell-style variables ("${VOL_X:-~/foo}/bar").
+    local -a entry_paths=()
+    local -a entry_modes=()
+    local -a entry_owners=()
+    local -a entry_recursives=()
+    local idx=-1
+    local in_mounts=0
+    local line key value p
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      # Strip trailing CR (in case of CRLF)
+      line="${line%$'\r'}"
+      # Skip blank lines and comments
+      [[ -z "${line//[[:space:]]/}" ]] && continue
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+      # Top-level "mounts:" key opens the section
+      if [[ "$line" =~ ^mounts: ]]; then
+        in_mounts=1
         continue
       fi
-      
-      # Trim whitespace
-      mount_path=$(echo "$mount_path" | xargs)
-      
-      # Skip if empty after trimming
-      [[ -z "$mount_path" ]] && continue
-      
-      # Get mode, owner, and recursive for this mount
-      local mode owner recursive
-      mode=$(yq e ".mounts[\"$mount_path\"].mode // \"\"" "$config_file" | xargs)
-      owner=$(yq e ".mounts[\"$mount_path\"].owner // \"\"" "$config_file" | xargs)
-      recursive=$(yq e ".mounts[\"$mount_path\"].recursive // \"false\"" "$config_file" | xargs)
-      
-      # Apply permissions
-      apply_single_mount_permission "$mount_path" "$mode" "$owner" "$recursive"
-    done <<< "$mount_paths"
-  else
-    # Fallback: parse YAML with grep/sed
-    # Expected format:
-    # mounts:
-    #   /path/to/mount:
-    #     mode: "755"
-    #     owner: "user:group"
-    #     recursive: true
-    
-    # Extract mount paths
-    local mount_paths
-    mount_paths=$(grep -E "^\s+/" "$config_file" | sed 's/:$//' | xargs)
-    
-    for mount_path in $mount_paths; do
-      local mode owner recursive
-      
-      # Extract mode
-      mode=$(grep -A1 "$mount_path:" "$config_file" | grep "mode:" | sed 's/.*mode:\s*"\?\([^"]*\)"\?.*/\1/' | xargs)
-      
-      # Extract owner
-      owner=$(grep -A2 "$mount_path:" "$config_file" | grep "owner:" | sed 's/.*owner:\s*"\?\([^"]*\)"\?.*/\1/' | xargs)
-      
-      # Extract recursive
-      recursive=$(grep -A3 "$mount_path:" "$config_file" | grep "recursive:" | sed 's/.*recursive:\s*\([a-z]*\)/\1/' | xargs)
-      
-      apply_single_mount_permission "$mount_path" "$mode" "$owner" "$recursive"
+      [[ $in_mounts -eq 0 ]] && continue
+
+      # Mount path entry: exactly 2-space indent, ends with ":"
+      if [[ "$line" =~ ^[[:space:]]{2}[^[:space:]].*:[[:space:]]*$ ]]; then
+        idx=$((idx + 1))
+        p="${line#  }"
+        p="${p%:}"
+        entry_paths[idx]="$p"
+        entry_modes[idx]=""
+        entry_owners[idx]=""
+        entry_recursives[idx]="false"
+        continue
+      fi
+
+      # Attribute line: 4-space indent, "key: value"
+      if [[ $idx -ge 0 ]] && [[ "$line" =~ ^[[:space:]]{4}([a-z]+):[[:space:]]*(.*)$ ]]; then
+        key="${BASH_REMATCH[1]}"
+        value="${BASH_REMATCH[2]}"
+        # Strip surrounding double quotes
+        value="${value%\"}"
+        value="${value#\"}"
+        case "$key" in
+          mode) entry_modes[idx]="$value" ;;
+          owner) entry_owners[idx]="$value" ;;
+          recursive) entry_recursives[idx]="$value" ;;
+        esac
+      fi
+    done < "$config_file"
+
+    local i resolved_path
+    for ((i = 0; i <= idx; i++)); do
+      resolved_path=$(resolve_mount_path "${entry_paths[i]}")
+      apply_single_mount_permission "$resolved_path" "${entry_modes[i]}" "${entry_owners[i]}" "${entry_recursives[i]}"
     done
   fi
 }
@@ -312,13 +378,20 @@ apply_single_mount_permission() {
   local mode="$2"
   local owner="$3"
   local recursive="$4"
-  
-  # Check if mount path exists
+
+  # Create the mount path if missing. Without this, Docker would auto-create
+  # the bind-mount source as root:root on first run, defeating the chown
+  # below. Try without sudo first; fall back to sudo for cases where a
+  # parent dir was previously created as root by Docker.
   if [[ ! -e "$mount_path" ]]; then
-    printf "${RED}ERROR: Mount path $mount_path does not exist.${NC}\n"
-    printf "${RED}Please create this directory before starting the container.${NC}\n"
-    printf "${RED}Aborting.${NC}\n"
-    exit 1
+    printf "  ${YELLOW}mkdir -p $mount_path${NC}\n"
+    if ! mkdir -p "$mount_path" 2>/dev/null; then
+      if ! sudo mkdir -p "$mount_path" 2>/dev/null; then
+        printf "${RED}ERROR: Failed to create mount path $mount_path${NC}\n"
+        printf "${RED}Aborting.${NC}\n"
+        exit 1
+      fi
+    fi
   fi
   
   # Build chmod command
