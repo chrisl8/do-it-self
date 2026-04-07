@@ -133,13 +133,19 @@ else
   # Cloud-init: create an ubuntu user (Hetzner image only has root by default),
   # then run setup.sh via curl|bash as that user. This matches a realistic
   # install where the user is a regular user with sudo, not root.
-  # If --ts-key was provided, pass it through as an env var so setup.sh can
-  # join Tailscale automatically.
+  # Env vars passed through to setup.sh:
+  #   WEB_ADMIN_BIND_HOST=127.0.0.1 -- always, so the web admin is reachable
+  #     ONLY from inside the test VM. Without this, setup.sh writes a .env
+  #     that binds the web admin to 0.0.0.0 and the test VM's public IP
+  #     ends up serving the secrets page (including TS_AUTHKEY) on port 3333.
+  #     test-fresh-install.sh runs ON the VM and uses curl localhost, so
+  #     127.0.0.1 doesn't break anything.
+  #   TS_AUTHKEY='...'             -- only when --ts-key was provided, so
+  #     setup.sh can join Tailscale automatically.
   CLOUD_INIT_FILE=$(mktemp)
+  SETUP_ENV_LINE="WEB_ADMIN_BIND_HOST=127.0.0.1"
   if [[ -n "$TS_KEY" ]]; then
-    TS_ENV_LINE="TS_AUTHKEY='${TS_KEY}'"
-  else
-    TS_ENV_LINE=""
+    SETUP_ENV_LINE="${SETUP_ENV_LINE} TS_AUTHKEY='${TS_KEY}'"
   fi
   cat > "$CLOUD_INIT_FILE" << CLOUDINIT
 #cloud-config
@@ -155,7 +161,7 @@ runcmd:
   - chown -R ubuntu:ubuntu /home/ubuntu/.ssh
   - chmod 700 /home/ubuntu/.ssh
   - chmod 600 /home/ubuntu/.ssh/authorized_keys
-  - su - ubuntu -c "curl -fsSL -o /home/ubuntu/setup.sh https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh && ${TS_ENV_LINE} bash /home/ubuntu/setup.sh" > /home/ubuntu/setup.log 2>&1
+  - su - ubuntu -c "curl -fsSL -o /home/ubuntu/setup.sh https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh && ${SETUP_ENV_LINE} bash /home/ubuntu/setup.sh" > /home/ubuntu/setup.log 2>&1
   - chown ubuntu:ubuntu /home/ubuntu/setup.log
   - touch /home/ubuntu/.setup-complete
   - chown ubuntu:ubuntu /home/ubuntu/.setup-complete
