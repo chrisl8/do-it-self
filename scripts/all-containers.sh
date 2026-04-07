@@ -747,6 +747,23 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           continue
         fi
 
+        # Per-container pre-start hooks.
+        # homepage and beszel get their monitoring mounts regenerated from
+        # user-config.yaml (writes a gitignored compose.override.yaml that
+        # Docker Compose auto-loads).
+        if [[ "${CONTAINER_DIR}" == "homepage" || "${CONTAINER_DIR}" == "beszel" ]]; then
+          set +e
+          node "${SCRIPT_DIR}/scripts/regenerate-monitoring-mounts.js"
+          set -e
+        fi
+        # homepage also gets its config/ dir regenerated from
+        # config-defaults/ + config-personal/.
+        if [[ "${CONTAINER_DIR}" == "homepage" ]]; then
+          set +e
+          node "${SCRIPT_DIR}/scripts/merge-homepage-config.js" --quiet
+          set -e
+        fi
+
         # Apply mount permissions before starting containers
         if [[ -f "mount-permissions.yaml" ]]; then
           apply_mount_permissions "mount-permissions.yaml"

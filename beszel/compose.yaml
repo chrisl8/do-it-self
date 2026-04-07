@@ -47,13 +47,9 @@ services:
     network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # monitor other disks / partitions by mounting a folder in /extra-filesystems
-      # Using the mounts that I set up for homepage
-      # Auto-generated monitoring mounts (one per storage mount)
-      - /mnt/2000/for-homepage:/extra-filesystems/Primary SSD:ro
-      - /mnt/22TB/for-homepage:/extra-filesystems/Large HDD:ro
-      - /mnt/250/for-homepage:/extra-filesystems/Cache SSD:ro
-      - /mnt/120/for-homepage:/extra-filesystems/Monitor:ro
+      # Storage monitoring mounts (one per user-config mount) are added by
+      # scripts/regenerate-monitoring-mounts.js, which writes a gitignored
+      # compose.override.yaml that Docker Compose auto-loads.
       - ./healthcheck:/healthcheck
     environment:
       PORT: 45876
