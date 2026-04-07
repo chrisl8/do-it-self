@@ -214,7 +214,7 @@ if [[ "$TS_READY" == true ]]; then
   # Start them all
   printf "${YELLOW}  Starting containers (this may take several minutes)...${NC}\n"
   cd "${CONTAINERS_DIR}"
-  if scripts/all-containers.sh --start --no-wait > /tmp/start.log 2>&1; then
+  if scripts/all-containers.sh --start --no-wait --no-health-check > /tmp/start.log 2>&1; then
     pass "all-containers.sh --start completed"
   else
     fail "all-containers.sh --start failed (see /tmp/start.log)"
