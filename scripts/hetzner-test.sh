@@ -56,31 +56,35 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-# Delete every Tailscale device whose hostname is $SERVER_NAME (or whose
-# name starts with "$SERVER_NAME."). Used as a pre-build sweep, in --destroy,
-# and on the success path so stale nodes from prior failed runs never
-# accumulate. No-op when --ts-api-token was not provided.
+# Delete every Tailscale device that belongs to a test run: the host VM
+# (matched by hostname == $SERVER_NAME, or name starting with "$SERVER_NAME.")
+# AND every container sidecar (matched by the "tag:container" tag, which
+# every sidecar in this repo advertises and which the host VM also inherits
+# from the tagged auth key). Used as a pre-build sweep, in --destroy, and on
+# the success path so nodes from prior runs never accumulate. No-op when
+# --ts-api-token was not provided. Assumes a dedicated test tailnet — see
+# docs/TESTING.md "Use a separate test tailnet".
 cleanup_tailscale_nodes() {
   if [[ -z "$TS_API_TOKEN" ]]; then
     return 0
   fi
-  printf "${YELLOW}Checking for stale Tailscale node(s) named %s...${NC}\n" "$SERVER_NAME"
+  printf "${YELLOW}Checking for stale Tailscale test nodes...${NC}\n"
   local node_ids
   node_ids=$(curl -sf -H "Authorization: Bearer ${TS_API_TOKEN}" \
-    "https://api.tailscale.com/api/v2/tailnet/${TS_TAILNET}/devices" 2>/dev/null \
-    | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);(j.devices||[]).filter(x=>x.hostname==='${SERVER_NAME}'||x.name.startsWith('${SERVER_NAME}.')).forEach(dev=>console.log(dev.id));}catch(e){}});" 2>/dev/null)
+    "https://api.tailscale.com/api/v2/tailnet/${TS_TAILNET}/devices?fields=all" 2>/dev/null \
+    | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);(j.devices||[]).filter(x=>x.hostname==='${SERVER_NAME}'||(x.name||'').startsWith('${SERVER_NAME}.')||(x.tags||[]).includes('tag:container')).forEach(dev=>console.log(dev.id+'\t'+(dev.hostname||dev.name||'?')));}catch(e){}});" 2>/dev/null)
   if [[ -z "$node_ids" ]]; then
-    printf "${GREEN}No stale Tailscale node found for %s.${NC}\n" "$SERVER_NAME"
+    printf "${GREEN}No stale Tailscale test nodes found.${NC}\n"
     return 0
   fi
-  while IFS= read -r node_id; do
+  while IFS=$'\t' read -r node_id node_label; do
     [[ -z "$node_id" ]] && continue
     if curl -sf -X DELETE \
       -H "Authorization: Bearer ${TS_API_TOKEN}" \
       "https://api.tailscale.com/api/v2/device/${node_id}" > /dev/null 2>&1; then
-      printf "${GREEN}Tailscale node %s removed.${NC}\n" "$node_id"
+      printf "${GREEN}Tailscale node %s (%s) removed.${NC}\n" "$node_id" "$node_label"
     else
-      printf "${YELLOW}Failed to remove Tailscale node (id=%s).${NC}\n" "$node_id"
+      printf "${YELLOW}Failed to remove Tailscale node %s (%s).${NC}\n" "$node_id" "$node_label"
     fi
   done <<< "$node_ids"
 }

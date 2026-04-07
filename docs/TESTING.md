@@ -67,7 +67,7 @@ After each run, logs are saved to `/tmp/hetzner-test-logs/hetzner-test-<timestam
 
 If a test fails, the server is kept running by default so you can SSH in and investigate. Use `--no-keep-if-fails` to override.
 
-When you eventually run `--destroy` (or kick off another test run), pass `--ts-api-token` so the corresponding Tailscale node is reaped at the same time. The next test run also sweeps any leftover `do-it-self-test` nodes from prior failed runs before provisioning, so stale nodes never accumulate.
+When you eventually run `--destroy` (or kick off another test run), pass `--ts-api-token` so all Tailscale nodes from that test run are reaped at the same time — both the host and every container sidecar (matched via the `tag:container` tag every sidecar advertises). The next test run also sweeps any leftover test nodes from prior failed runs before provisioning, so they never accumulate.
 
 ## Tailscale Integration Testing
 
@@ -151,7 +151,7 @@ This will:
 4. Enable a curated set of containers (searxng, freshrss, the-lounge, uptime, kanboard, paste)
 5. Start them and verify they're running
 6. Destroy the server
-7. Remove the test node from the tailnet via the API
+7. Remove the host node and every container sidecar from the tailnet via the API
 
 ## Server Types
 
