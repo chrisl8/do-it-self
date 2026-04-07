@@ -112,7 +112,7 @@ runcmd:
   - chown -R ubuntu:ubuntu /home/ubuntu/.ssh
   - chmod 700 /home/ubuntu/.ssh
   - chmod 600 /home/ubuntu/.ssh/authorized_keys
-  - su - ubuntu -c "${TS_ENV_LINE} curl -fsSL https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh | bash" > /home/ubuntu/setup.log 2>&1
+  - su - ubuntu -c "curl -fsSL -o /home/ubuntu/setup.sh https://raw.githubusercontent.com/chrisl8/do-it-self/main/scripts/setup.sh && ${TS_ENV_LINE} bash /home/ubuntu/setup.sh" > /home/ubuntu/setup.log 2>&1
   - chown ubuntu:ubuntu /home/ubuntu/setup.log
   - touch /home/ubuntu/.setup-complete
   - chown ubuntu:ubuntu /home/ubuntu/.setup-complete
