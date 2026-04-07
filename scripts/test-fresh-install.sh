@@ -198,7 +198,7 @@ fi
 if [[ "$TS_READY" == true ]]; then
   section "Container Startup (with Tailscale)"
 
-  TEST_CONTAINERS="searxng freshrss the-lounge uptime kanboard paste"
+  TEST_CONTAINERS="homepage searxng freshrss the-lounge uptime kanboard paste"
 
   # Enable each container via the web admin API
   for c in $TEST_CONTAINERS; do
