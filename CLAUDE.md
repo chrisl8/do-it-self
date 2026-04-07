@@ -15,7 +15,7 @@ Mirrored at [Codeberg](https://codeberg.org/Chris10/do-it-self) and [GitHub](htt
 ### Container Management
 
 - **`restart: on-failure`** — every service uses `restart: on-failure`. This restarts crashed containers automatically but does **not** auto-start on boot (unlike `unless-stopped` or `always`), avoiding collisions with the cron startup script.
-- **`_DISABLED_` file** — create this file in a service folder to skip it during start/stop operations.
+- **Enabled state** — managed in `user-config.yaml` (gitignored) and the registry's `default_disabled` flag. Edit via the web admin Configuration tab.
 - **`.start-order` file** — contains an alphanumeric priority (e.g., `000`, `010`, `z010`). Lower values start first; containers without this file start after ordered ones. Stop order is reversed.
 - **`mount-permissions.yaml`** — optional per-service file specifying directory ownership/mode applied before container start.
 
@@ -48,7 +48,8 @@ Some services embed cloned git repos (e.g., `dawarich/dawarich/`, `minecraft/doc
 | `system-health-check.sh` | Periodic health monitoring, restarts unhealthy containers, pings healthchecks.io |
 | `start-web-admin.sh` | Manages the PM2-based web admin dashboard |
 | `update-containers-from-diun-list.sh` | Processes DIUN-detected image updates |
-| `enable-all-containers.sh` / `disable-all-containers.sh` | Bulk add/remove `_DISABLED_` files |
+| `setup.sh` / `setup-infisical.sh` | First-time install on bare Ubuntu and Infisical bootstrap |
+| `hetzner-test.sh` / `test-fresh-install.sh` | End-to-end testing on a fresh Hetzner VPS |
 
 ## Build, Lint, and Test
 

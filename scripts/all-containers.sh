@@ -102,7 +102,7 @@ fi
 
 if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} = false && ${LIST_MOUNTS} = false ]];then
   echo ""
-  echo "If you want to skip a folder, and just not run that container, you can create a _DISABLED_ file in the folder."
+  echo "Containers are enabled/disabled via the web admin Configuration tab (or by editing user-config.yaml directly)."
   echo ""
   echo "You must an action of either start or stop like this:"
   echo "all-containers.sh --start"
@@ -426,15 +426,27 @@ if [[ ${START_ACTION} = true ]]; then
   fi
 fi
 
+# Determine which containers are enabled (per registry + user-config).
+# Falls back to "all containers" if the helper isn't available.
+ENABLED_LIST=""
+LIST_HELPER="${SCRIPT_DIR}/scripts/list-enabled-containers.js"
+if [[ -x "$(command -v node)" ]] && [[ -f "${LIST_HELPER}" ]]; then
+  ENABLED_LIST=$(node "${LIST_HELPER}" 2>/dev/null || true)
+fi
+
 # Create and sort list
 CONTAINER_LIST=()
 for DIR in *;do
   if [[ -d "${SCRIPT_DIR}/${DIR}" ]] && [[ -e "${SCRIPT_DIR}/${DIR}/compose.yaml" ]];then
-    # Skip folders that contain a _DISABLED_ file
-    if [[ ${RESTART_UNHEALTHY} = false ]] &&[[ -e "${SCRIPT_DIR}/${DIR}/_DISABLED_" ]];then
-      continue
-    fi
     STRIPPED_DIR=${DIR%*/}
+    # Skip containers not in the enabled list (only if we have a list).
+    # During --restart-unhealthy we still process all containers so we
+    # can recover any that may have been temporarily down.
+    if [[ ${RESTART_UNHEALTHY} = false ]] && [[ -n "${ENABLED_LIST}" ]]; then
+      if ! echo "${ENABLED_LIST}" | grep -qx "${STRIPPED_DIR}"; then
+        continue
+      fi
+    fi
     ORDER="a"
     if [[ -e "${SCRIPT_DIR}/${DIR}/.start-order" ]];then
       ORDER=$(< "${SCRIPT_DIR}/${DIR}/.start-order")

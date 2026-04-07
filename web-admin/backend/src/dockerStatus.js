@@ -74,6 +74,10 @@ async function getFormattedDockerContainers() {
         ...info,
         icon: getStackIcon(name, stackIcons),
         hasPendingUpdates: pendingUpdates.has(name),
+        // isDisabled now reflects user-config + registry enabled state,
+        // not a filesystem marker. Containers not in config are treated
+        // as enabled (default).
+        isDisabled: config ? !config.enabled : false,
         configReady: config?.ready ?? null,
         configMissing: config?.missing ?? [],
       };
