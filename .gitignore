@@ -33,9 +33,12 @@ searxng/etc
 homepage/config/
 homepage/config-personal/
 # icons/ and images/ stay in the repo as empty dirs (via .gitkeep) but
-# their contents are user-specific and not tracked.
+# their contents are user-specific and not tracked. Exceptions: the
+# small handful of default-shipped icons referenced by config-defaults/
+# (e.g. do-it-self.svg used by the Web Admin tile in the Top group).
 homepage/icons/*
 !homepage/icons/.gitkeep
+!homepage/icons/do-it-self.svg
 homepage/images/*
 !homepage/images/.gitkeep
 # dashboard-icons is cloned by setup.sh from the upstream repo.
