@@ -249,7 +249,36 @@ ok "Web-admin built"
 "${SCRIPT_DIR}/scripts/start-web-admin.sh" start
 ok "Web-admin started"
 
-# ── Step 9: Infisical secret manager ────────────────────────────────────
+# ── Step 9: Scripts dependencies ────────────────────────────────────────
+# A handful of scripts in scripts/ need npm packages (currently just the
+# `yaml` parser used by merge-homepage-config.js). Install them into
+# scripts/node_modules/ so those scripts can run from a fresh clone.
+
+step "Installing scripts dependencies"
+if [[ -f "${SCRIPT_DIR}/scripts/package.json" ]]; then
+  (cd "${SCRIPT_DIR}/scripts" && npm install --silent 2>&1 | tail -1)
+  ok "scripts/node_modules ready"
+else
+  ok "scripts/package.json not found, skipping"
+fi
+
+# ── Step 10: Homepage dashboard-icons library ───────────────────────────
+# The homepage dashboard uses icons from homarr-labs/dashboard-icons for
+# the container tiles (referenced in compose.yaml labels as
+# homepage.icon=/dashboard-icons/...). Cloned shallow so it's smaller than
+# the full 2GB repo. Updated on subsequent runs via
+# `scripts/all-containers.sh --update-git-repos`.
+
+DASHBOARD_ICONS_DIR="${SCRIPT_DIR}/homepage/dashboard-icons"
+if [[ ! -d "${DASHBOARD_ICONS_DIR}/.git" ]]; then
+  step "Cloning dashboard-icons (for homepage)"
+  git clone --depth 1 https://github.com/homarr-labs/dashboard-icons.git "${DASHBOARD_ICONS_DIR}" 2>&1 | tail -2
+  ok "dashboard-icons cloned to ${DASHBOARD_ICONS_DIR}"
+else
+  ok "dashboard-icons already present"
+fi
+
+# ── Step 11: Infisical secret manager ───────────────────────────────────
 
 step "Setting up Infisical"
 "${SCRIPT_DIR}/scripts/setup-infisical.sh"
