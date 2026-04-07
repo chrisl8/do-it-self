@@ -145,3 +145,17 @@ Instructions about the CLI SHOULD still be somewhere (README "advanced" section)
 - Rebooting
 - Patching and rebooting
 - What else?
+
+### Testing
+
+- Add info to the TESTING.md about how to add yourself to the test tailnet so you can actually connect to the test endpoints to fully test.
+- Add some more output to the test that provides links to click on to go to the testing site.
+- Probably add some automated tests to ensure the site works and tailnet sites are responding to traffic.
+- Maybe add a "pause" option to the hetzner test so it just pauses, waits for you to test stuff, then destroys.
+
+### Security
+
+- At the moment, the newly setup host exposes its web admin page on the public IP to everyone with no authentication. The assumption was that people ran this on a home network, but that isn't a good assumption. We can PROBABLY rely on Tailscale as good enough lockdown, but for sure dont' just expose the web admin on the local IP, because for instance in Hetzner, this now exposes every secret in the web admin to the entire internet!
+  - No seriously, like if you run the Hetzner test, it ends up putting your TS_AUTHKEY on a web page that is publicly accessible! I probably need to revoke that and set up a new one!
+    - But that is just like an example of the issue there, so we need to think about that!
+- Have Claude do a thorough review of everything for "is this safe"?
