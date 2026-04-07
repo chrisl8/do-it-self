@@ -114,7 +114,13 @@ Several scripts expect cron entries but none are installed automatically:
 ### Config embedded in mounts
 
 - Some containers, like homepage, have a lot of their config buried in mounts, new users will end up with NOTHING. Need to review each such case and make a plan for each.
-- Specific known case: homepage requires `~/container-data/container-mounts/homepage/config/` to exist with at least empty/default config files; otherwise the container starts but is unhealthy. Currently homepage is one of only two containers default-enabled, so this trips on every fresh install.
+- Specific known case: homepage requires `~/container-data/container-mounts/homepage/config/` to exist with at least empty/default config files; otherwise the container starts but is unhealthy.
+
+### Make homepage default-enabled again once its config issue is solved
+
+- Homepage was previously default-enabled because it gives new users a dashboard immediately. Currently set to `default_disabled: true` because it can't start cleanly on a fresh install (see "Config embedded in mounts" above).
+- Once setup.sh creates the homepage config directory with sane defaults (or homepage's own image initializes its config), flip homepage back to default-enabled.
+- Goal: a fresh install should have infisical AND homepage running by default, so the user has both a secret manager and a dashboard with zero configuration.
 
 ### `mount-permissions.yaml` files have hardcoded `/mnt/2000` paths
 
