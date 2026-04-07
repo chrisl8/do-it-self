@@ -44,7 +44,7 @@ scripts/hetzner-test.sh --destroy
 | `--type cx33`          | Server type (default: cx23)                                   |
 | `--location ash`       | Location (default: nbg1 / Nuremberg, Germany)                 |
 | `--ts-key KEY`         | Tailscale auth key (joins server, enables container startup)  |
-| `--ts-api-token TOKEN` | Tailscale API token (for removing the node after destruction) |
+| `--ts-api-token TOKEN` | Tailscale API token (removes stale test nodes before build, on `--destroy`, and after a successful run) |
 | `--ts-tailnet TAILNET` | Tailnet name (optional, auto-detected from API token)         |
 
 ## Realtime Output
@@ -66,6 +66,8 @@ After each run, logs are saved to `/tmp/hetzner-test-logs/hetzner-test-<timestam
 - `file-state.log` -- key directories listing
 
 If a test fails, the server is kept running by default so you can SSH in and investigate. Use `--no-keep-if-fails` to override.
+
+When you eventually run `--destroy` (or kick off another test run), pass `--ts-api-token` so the corresponding Tailscale node is reaped at the same time. The next test run also sweeps any leftover `do-it-self-test` nodes from prior failed runs before provisioning, so stale nodes never accumulate.
 
 ## Tailscale Integration Testing
 

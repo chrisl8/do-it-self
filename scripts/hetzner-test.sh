@@ -56,6 +56,35 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# Delete every Tailscale device whose hostname is $SERVER_NAME (or whose
+# name starts with "$SERVER_NAME."). Used as a pre-build sweep, in --destroy,
+# and on the success path so stale nodes from prior failed runs never
+# accumulate. No-op when --ts-api-token was not provided.
+cleanup_tailscale_nodes() {
+  if [[ -z "$TS_API_TOKEN" ]]; then
+    return 0
+  fi
+  printf "${YELLOW}Checking for stale Tailscale node(s) named %s...${NC}\n" "$SERVER_NAME"
+  local node_ids
+  node_ids=$(curl -sf -H "Authorization: Bearer ${TS_API_TOKEN}" \
+    "https://api.tailscale.com/api/v2/tailnet/${TS_TAILNET}/devices" 2>/dev/null \
+    | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);(j.devices||[]).filter(x=>x.hostname==='${SERVER_NAME}'||x.name.startsWith('${SERVER_NAME}.')).forEach(dev=>console.log(dev.id));}catch(e){}});" 2>/dev/null)
+  if [[ -z "$node_ids" ]]; then
+    printf "${GREEN}No stale Tailscale node found for %s.${NC}\n" "$SERVER_NAME"
+    return 0
+  fi
+  while IFS= read -r node_id; do
+    [[ -z "$node_id" ]] && continue
+    if curl -sf -X DELETE \
+      -H "Authorization: Bearer ${TS_API_TOKEN}" \
+      "https://api.tailscale.com/api/v2/device/${node_id}" > /dev/null 2>&1; then
+      printf "${GREEN}Tailscale node %s removed.${NC}\n" "$node_id"
+    else
+      printf "${YELLOW}Failed to remove Tailscale node (id=%s).${NC}\n" "$node_id"
+    fi
+  done <<< "$node_ids"
+}
+
 # Check prerequisites
 if ! command -v hcloud &>/dev/null; then
   printf "${RED}hcloud CLI not installed.${NC}\n"
@@ -68,6 +97,7 @@ fi
 if [[ "$DESTROY_ONLY" == true ]]; then
   printf "${YELLOW}Destroying server %s...${NC}\n" "$SERVER_NAME"
   hcloud server delete "$SERVER_NAME" 2>/dev/null || echo "Server not found"
+  cleanup_tailscale_nodes
   printf "${GREEN}Done.${NC}\n"
   exit 0
 fi
@@ -90,8 +120,9 @@ if [[ "$RETEST" == true ]]; then
   fi
   printf "${GREEN}Reusing existing server at %s${NC}\n" "$IP"
 else
-  # Clean up any existing test server
+  # Clean up any existing test server (Hetzner VM + stale Tailscale nodes from prior runs)
   hcloud server delete "$SERVER_NAME" 2>/dev/null || true
+  cleanup_tailscale_nodes
 
   printf "${YELLOW}Creating %s server (%s) in %s...${NC}\n" "$SERVER_TYPE" "$IMAGE" "$LOCATION"
 
@@ -259,23 +290,7 @@ else
   printf "${GREEN}Server destroyed.${NC}\n"
 
   # Clean up the Tailscale node from the test tailnet
-  if [[ -n "$TS_API_TOKEN" ]]; then
-    printf "${YELLOW}Removing Tailscale node...${NC}\n"
-    NODE_ID=$(curl -sf -H "Authorization: Bearer ${TS_API_TOKEN}" \
-      "https://api.tailscale.com/api/v2/tailnet/${TS_TAILNET}/devices" 2>/dev/null \
-      | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);const dev=(j.devices||[]).find(x=>x.hostname==='${SERVER_NAME}'||x.name.startsWith('${SERVER_NAME}.'));console.log(dev?dev.id:'');}catch(e){}});" 2>/dev/null)
-    if [[ -n "$NODE_ID" ]]; then
-      if curl -sf -X DELETE \
-        -H "Authorization: Bearer ${TS_API_TOKEN}" \
-        "https://api.tailscale.com/api/v2/device/${NODE_ID}" > /dev/null 2>&1; then
-        printf "${GREEN}Tailscale node removed.${NC}\n"
-      else
-        printf "${YELLOW}Failed to remove Tailscale node (id=%s).${NC}\n" "$NODE_ID"
-      fi
-    else
-      printf "${YELLOW}No Tailscale node found for ${SERVER_NAME}.${NC}\n"
-    fi
-  fi
+  cleanup_tailscale_nodes
 fi
 
 exit $TEST_EXIT
