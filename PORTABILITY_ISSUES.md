@@ -9,7 +9,7 @@ This document catalogs issues that would affect someone cloning this repository 
 ### Tailscale Setup Needs a Guide
 
 - 40+ services use the Tailscale sidecar pattern requiring `TS_AUTHKEY` and `TS_DOMAIN`
-- Both are now configurable via the web-admin and stored in Infisical, but there's no documentation on how to _get_ them (creating an OAuth client, setting up ACL tags with a "container" tag, etc.)
+- Both are now configurable via the web-admin and stored in Infisical, but there's no general user-facing documentation on how to _get_ them. The Tailscale-specific bits in `docs/TESTING.md` are testing-focused, not a general onboarding guide.
 - A step-by-step Tailscale setup guide is needed for new users
 - **The auth key MUST be created with the `tag:container` ACL tag.** Every container sidecar in this repo runs `--advertise-tags=tag:container`, and the Tailscale control plane rejects registration with `requested tags [tag:container] are invalid or not permitted` if the key isn't authorized for that tag. The user's tailnet ACL policy must also define `tag:container`. The key should be reusable so all 40+ sidecars can use the same one.
 
@@ -27,20 +27,17 @@ This document catalogs issues that would affect someone cloning this repository 
 
 ### Some Host Package Dependencies Not Checked by Setup Scripts
 
-`setup.sh` checks for docker, node, npm, and pm2. `setup-infisical.sh` checks for the infisical CLI. The following are not checked and not documented in one place:
+`setup.sh` checks for / installs docker, node, npm, pm2, infisical CLI, and tailscale. The following are not checked and not documented in one place:
 
-- Tailscale CLI (`/usr/bin/tailscale`)
 - BorgBackup CLI (`borg`) -- only needed if using backup scripts
-- `yq` (optional, for mount-permissions YAML parsing)
 - NVIDIA Docker runtime (for jellyfin, obsidian, mame, retroarch, secure-browser)
-- Passwordless `sudo` for `/usr/bin/chown` and `/usr/sbin/shutdown`
+- Passwordless `sudo` for `/usr/bin/chown` and `/usr/sbin/shutdown` (`scripts/all-containers.sh` and `scripts/system-graceful-shutdown.sh` test for it and print sudoers instructions, but neither configures it)
 
 ### Cron Jobs Must Be Manually Created
 
-Several scripts expect cron entries but none are installed automatically:
+Most cron entries are still manual. `scripts/setup-borg-backup.sh` installs its own borg cron entries; the rest do not:
 
 - `@reboot` for `system-cron-startup.sh`
-- Daily for `borg-backup.sh`
 - Periodic for `system-health-check.sh` and `kopia-backup-check.sh`
 
 ### External Service Accounts Required
@@ -53,12 +50,11 @@ Several scripts expect cron entries but none are installed automatically:
 ### Git-Cloned Subprojects Are Excluded from Repo
 
 - `.gitignore` excludes `tsidp/tsidp/`, `valheim/valheim-server-docker/`, `dawarich/dawarich/`, `minecraft/docker-minecraft-bedrock-server/`
-- Must be cloned separately; only `all-containers.sh --update-git-repos` handles it (not documented for first run)
+- `scripts/all-containers.sh --update-git-repos` clones them, but `setup.sh` does not call it on first run, so a fresh install can't start any of these containers without a manual extra step.
 
-### `caddy-net` Docker Network Must Pre-exist
+### Some `my-stuff` category containers are still default-enabled
 
-- 9 services declare `caddy-net` as `external: true`
-- `all-containers.sh` creates it, but running services standalone would fail
+`immich`, `jellyfin`, `nextcloud`, and `paperless` live under `category: my-stuff` in `container-registry.yaml` but lack `default_disabled: true`. A fresh install would attempt to enable them and immediately hit missing-config / hardcoded-mount failures (e.g. nextcloud's `/mnt/2000` mount-permissions). They should be flipped to `default_disabled: true` until each one is verified to start cleanly on a fresh install.
 
 ### `AGENTS.md` and `CLAUDE.md` Are Developer-Facing, Not User-Facing
 
@@ -68,42 +64,22 @@ Several scripts expect cron entries but none are installed automatically:
 
 ## Further Notes
 
-### Need to fully remove 1Password CLI dependency from ALL things running on Neuromancer and transition them all to Infisical
+### Need to fully remove 1Password CLI dependency
 
-- Other tools on the system that are not part of ~/containers use it too, and they should be migrated so that the final "deploy" doesn't need to include the 1Password related container at all
+Borg has been migrated to Infisical (`scripts/setup-borg-backup.sh` is Infisical-only) and `scripts/all-containers.sh` itself contains zero `op://` references. What's still left:
 
-### Need a way to test the "from scratch" setup path for new users.
-
-- A physical machine?
-- A VM setup?
-
-### Need a full "zero to done" script
-
-- There are setup script(s) but they need to be consolidated or have an initial startup that can be curl to bashed by a new user
+- The `1password/` container itself still exists in the repo (currently `default_disabled`).
+- `scripts/kopia-backup-check.sh:51-58` still has a 1Password fallback path.
+- 20+ containers still ship a `1password_credential_paths.env` file (factorio, paste, pure-ftpd, immich, zipline, quicken, kopia-tr0n, searxng, your-spotify, dawarich, the-lounge, secure-browser, speedtest, paperless, forgejo, portainer, netdata, seerr, starbound, meshtastic). These are unused on Infisical-based deploys but should be removed for clarity.
+- Other tools on the host (outside `~/containers`) that use 1Password should be migrated so the final "deploy" doesn't need to include the 1Password container at all.
 
 ### Need a full README rewrite
 
-- The readme probably needs a complete rewrite/replace
-
-### The "hostname" and IP are "hand coded" in the config right now
-
-- Either the initial setup should set those
-- Or the scripts that start things should grab them at run-time and inject them as needed
-
-### The Docker GID should be auto-detected by setup scripts
-
-- The GID is configurable via the web-admin Global Settings and injected via .env, but the setup scripts don't auto-detect it. `getent group docker | cut -d: -f3` would set it automatically during initial setup.
-
-### Internal secrets (DB passwords, JWT keys) should be auto-generated
-
-- Many containers need passwords that no human ever types (database credentials, encryption keys, session secrets)
-- Currently users must manually create and enter these in the Configuration tab
-- The registry should distinguish between `auto_generate: true` secrets (internal, can be random) and external secrets (API keys, VPN credentials the user must provide)
-- When a container is first enabled, the web-admin should auto-generate any empty `auto_generate` secrets with a random value and store them in Infisical
-- This would help: paste DB passwords, nextcloud MYSQL\_\*, immich DB_PASSWORD, dawarich SECRET_KEY_BASE, zipline CORE_SECRET, formbricks ENCRYPTION_KEY, and many others
+The current README still tells users to manually clone, edit mounts, and run `all-containers.sh --start`, with no mention of `setup.sh` or the web admin. It should open with a quickstart along the lines of: "curl|bash `scripts/setup.sh` → open `http://<host>:3333` → Configuration tab → enable containers → start them" — and move the existing maintainer-specific notes lower.
 
 ### Caddy is there to host MY website specifically.
 
+- Caddy is `default_disabled` but still embeds a hardcoded `lofland.com` healthcheck and a `voidship_ephemeral` mount.
 - Perhaps the public version just doesn't even include any caddy at all or any config?
 - Or perhaps it has some helps on hosting one's own website?
 - Either way my website shouldn't be included
@@ -114,25 +90,34 @@ Several scripts expect cron entries but none are installed automatically:
 
 ### Config embedded in mounts
 
-- Some containers, like homepage, have a lot of their config buried in mounts, new users will end up with NOTHING. Need to review each such case and make a plan for each.
-- Specific known case: homepage requires `~/container-data/container-mounts/homepage/config/` to exist with at least empty/default config files; otherwise the container starts but is unhealthy.
+- Some containers, like homepage, have a lot of their config buried in mounts; new users may end up with NOTHING. Need to review each such case and make a plan for each.
+- Homepage was the named example and is now unblocked (`homepage/config/` is seeded in the repo with sane defaults), but the general principle still applies and other containers should be audited.
 
-### Make homepage default-enabled again once its config issue is solved
+### Make homepage default-enabled again
 
-- Homepage was previously default-enabled because it gives new users a dashboard immediately. Currently set to `default_disabled: true` because it can't start cleanly on a fresh install (see "Config embedded in mounts" above).
-- Once setup.sh creates the homepage config directory with sane defaults (or homepage's own image initializes its config), flip homepage back to default-enabled.
+The blocker is now mostly removed: `homepage/config/` is seeded in the repo (`bookmarks.yaml`, `services.yaml`, `docker.yaml`, `settings.yaml`, `widgets.yaml`, etc.). Next steps:
+
+- Verify on a fresh Hetzner test that homepage starts cleanly with the seeded config (add it to the test's enabled-container list).
+- If green, flip `homepage` to `default_disabled: false` in `container-registry.yaml`.
 - Goal: a fresh install should have infisical AND homepage running by default, so the user has both a secret manager and a dashboard with zero configuration.
 
 ### `mount-permissions.yaml` files have hardcoded `/mnt/2000` paths
 
-- Some containers (e.g. nextcloud) ship a `mount-permissions.yaml` that hardcodes paths like `/mnt/2000/container-mounts/nextcloud/html`. These should use `${VOL_*}` variables or be dropped in favor of the container managing its own permissions.
-- Currently triggers if you try to start nextcloud on a non-`/mnt/2000` system; not a blocker since most users won't enable nextcloud immediately, but should be fixed.
+The `apply_mount_permissions` resolver in `scripts/all-containers.sh` now supports `${VOL_*}` variable expansion and `mkdir -p`s missing paths (commit `cf101e1`). What's left is to update the existing files to use the new syntax:
+
+- `nextcloud/mount-permissions.yaml` — still hardcodes `/mnt/2000/container-mounts/nextcloud/html`
+- `wallabag/mount-permissions.yaml` — still hardcodes `/mnt/2000/container-mounts/wallabag/data`
+
+Quick fix: rewrite each path to `"${VOL_NEXTCLOUD_HTML:-~/container-data}/container-mounts/nextcloud/html"` style and add the corresponding `VOL_*` entry to `container-registry.yaml`'s volumes section.
 
 ### Directing user to CLI instead of web admin
 
-- Currently both the website and the setup say to "6. Run: ~/containers/scripts/all-containers.sh --start" but I think we should guide them to the web UI instead.
-- Instructions SHOULD be somewhere (readme?) about the CLI, but the "go to" for people who didn't RTFM should be the web GUI
-- This does imply we should probably improve the web UI somewhat as there is no "start all enabled" option I don't think.
+Currently both the README and `setup.sh` say to run `~/containers/scripts/all-containers.sh --start`, but new users should be guided to the web UI instead. Two-part fix:
+
+1. Update README + `setup.sh` final-instructions to point at the web admin.
+2. The web admin lacks a "Start All Enabled" button, so even after enabling containers in the UI a user has to drop to CLI. Adding that button is a prerequisite for the redirection above to make sense.
+
+Instructions about the CLI SHOULD still be somewhere (README "advanced" section), but the default "go to" should be the web GUI.
 
 ### Document and/or automate maintenance tasks
 
