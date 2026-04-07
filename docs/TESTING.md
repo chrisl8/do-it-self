@@ -106,6 +106,31 @@ will fail with "tag:container is invalid" and every container sidecar in the
 test will crashloop with `requested tags [tag:container] are invalid or not
 permitted`.
 
+### Enable HTTPS in the tailnet
+
+Container sidecars in this repo use Tailscale Serve to expose each container
+as `https://<name>.<tailnet>.ts.net` (e.g. `console.example.ts.net` for
+homepage). That requires HTTPS certificates, which Tailscale provisions via
+Let's Encrypt — but only after you opt in for the tailnet.
+
+1. Go to https://login.tailscale.com/admin/dns
+2. Scroll to **"HTTPS Certificates"**
+3. Click **"Enable HTTPS"**
+
+Free, takes effect immediately, applied to every node tagged in your tailnet.
+
+Without this, the test VM will join the tailnet successfully and every
+sidecar's `tailscaled` will report:
+
+> serve proxy: this node is configured as a proxy that exposes an HTTPS
+> endpoint to tailnet... but it is not able to issue TLS certs, so this
+> will likely not work. To make it work, ensure that HTTPS is enabled
+> for your tailnet
+
+The container will still show as "running" in the test report (it is — it
+just can't serve HTTPS), but visiting `https://<name>.<tailnet>.ts.net` in
+a browser returns nothing.
+
 ### Generate the auth key
 
 1. Go to https://login.tailscale.com/admin/settings/keys (in your test account)
