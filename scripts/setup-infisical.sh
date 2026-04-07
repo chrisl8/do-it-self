@@ -75,12 +75,12 @@ else
   cp "$SECRETS_FILE" "${INFISICAL_DIR}/.env"
 fi
 
-# 3. Start the core Infisical services (skip Tailscale -- credentials aren't set yet)
+# 3. Start the Infisical services
 printf "${YELLOW}Starting Infisical core services...${NC}\n"
 cd "$INFISICAL_DIR"
 # Don't use --wait here -- Infisical takes time for DB migrations on first boot.
 # We poll the API directly below.
-docker compose up -d infisical infisical-db infisical-redis
+docker compose up -d
 
 # 4. Wait for the API to be ready (may take a few minutes on first boot due to migrations)
 printf "${YELLOW}Waiting for Infisical API (first boot may take a few minutes)...${NC}\n"
