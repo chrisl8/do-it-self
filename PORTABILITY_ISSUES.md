@@ -9,7 +9,7 @@ This document catalogs issues that would affect someone cloning this repository 
 ### Tailscale Setup Needs a Guide
 
 - 40+ services use the Tailscale sidecar pattern requiring `TS_AUTHKEY` and `TS_DOMAIN`
-- Both are now configurable via the web-admin and stored in Infisical, but there's no documentation on how to *get* them (creating an OAuth client, setting up ACL tags with a "container" tag, etc.)
+- Both are now configurable via the web-admin and stored in Infisical, but there's no documentation on how to _get_ them (creating an OAuth client, setting up ACL tags with a "container" tag, etc.)
 - A step-by-step Tailscale setup guide is needed for new users
 
 ### External Backup Infrastructure Assumed
@@ -99,7 +99,7 @@ Several scripts expect cron entries but none are installed automatically:
 - Currently users must manually create and enter these in the Configuration tab
 - The registry should distinguish between `auto_generate: true` secrets (internal, can be random) and external secrets (API keys, VPN credentials the user must provide)
 - When a container is first enabled, the web-admin should auto-generate any empty `auto_generate` secrets with a random value and store them in Infisical
-- This would help: paste DB passwords, nextcloud MYSQL_*, immich DB_PASSWORD, dawarich SECRET_KEY_BASE, zipline CORE_SECRET, formbricks ENCRYPTION_KEY, and many others
+- This would help: paste DB passwords, nextcloud MYSQL\_\*, immich DB_PASSWORD, dawarich SECRET_KEY_BASE, zipline CORE_SECRET, formbricks ENCRYPTION_KEY, and many others
 
 ### Caddy is there to host MY website specifically.
 
@@ -114,3 +114,21 @@ Several scripts expect cron entries but none are installed automatically:
 ### Config embedded in mounts
 
 - Some containers, like homepage, have a lot of their config buried in mounts, new users will end up with NOTHING. Need to review each such case and make a plan for each.
+- Specific known case: homepage requires `~/container-data/container-mounts/homepage/config/` to exist with at least empty/default config files; otherwise the container starts but is unhealthy. Currently homepage is one of only two containers default-enabled, so this trips on every fresh install.
+
+### `mount-permissions.yaml` files have hardcoded `/mnt/2000` paths
+
+- Some containers (e.g. nextcloud) ship a `mount-permissions.yaml` that hardcodes paths like `/mnt/2000/container-mounts/nextcloud/html`. These should use `${VOL_*}` variables or be dropped in favor of the container managing its own permissions.
+- Currently triggers if you try to start nextcloud on a non-`/mnt/2000` system; not a blocker since most users won't enable nextcloud immediately, but should be fixed.
+
+### Directing user to CLI instead of web admin
+
+- Currently both the website and the setup say to "6. Run: ~/containers/scripts/all-containers.sh --start" but I think we should guide them to the web UI instead.
+- Instructions SHOULD be somewhere (readme?) about the CLI, but the "go to" for people who didn't RTFM should be the web GUI
+- This does imply we should probably improve the web UI somewhat as there is no "start all enabled" option I don't think.
+
+### Document and/or automate maintenance tasks
+
+- Rebooting
+- Patching and rebooting
+- What else?

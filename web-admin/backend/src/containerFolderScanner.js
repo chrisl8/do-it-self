@@ -3,7 +3,6 @@ import { join } from 'path';
 import { homedir } from 'os';
 
 const CONTAINERS_PATH = join(homedir(), 'containers');
-const DISABLED_FILE = '_DISABLED_';
 const START_ORDER_FILE = '.start-order';
 const COMPOSE_FILE = 'compose.yaml';
 const DEFAULT_SORT_ORDER = 'a';
@@ -45,12 +44,14 @@ async function scanContainerFolders() {
         continue;
       }
 
-      const isDisabled = await fileExists(join(folderPath, DISABLED_FILE));
       const sortOrder = await getStartOrder(folderPath);
 
       stacks[entry.name] = {
         sortOrder,
-        isDisabled,
+        // Whether a container is "enabled" is determined by user-config.yaml
+        // and the registry, not by filesystem markers. The frontend reads
+        // configReady/configMissing from the validation status instead.
+        isDisabled: false,
         folderPath,
       };
     }

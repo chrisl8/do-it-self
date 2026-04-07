@@ -10,14 +10,11 @@ Like the other bits, you will probably need to use these as examples rather than
 
 I basically use this instead of something like Portainer to manage my system.
 
-## disable-all-containers.sh
+## Enabling/disabling containers
 
-Likely you don't want to use all of the containers that I set up here.  
-Run this script to disable ALL of them, then delete the `_DISABLED_` file in the folder for any container that you want to use.
-
-## enable-all-containers.sh
-
-Just does the reverse of `disable-all-containers.sh` in case you want to enable them all later.
+Use the web admin Configuration tab. The enabled state is stored in
+`user-config.yaml` (gitignored). On a fresh install, only `infisical`
+and `homepage` are enabled by default.
 
 ## system-cron-startup.sh
 
