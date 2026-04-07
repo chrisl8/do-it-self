@@ -1,0 +1,3 @@
+mounts:
+  "${VOL_SEARXNG_ETC:-~/container-data}/container-mounts/searxng/etc":
+    owner: "1000:1000"
