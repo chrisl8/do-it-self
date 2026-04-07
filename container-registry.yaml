@@ -451,6 +451,7 @@ containers:
     uses_docker_gid: true
     start_order: "002"
     monitor_all_mounts: true
+    default_disabled: true
   immich:
     description: Self-hosted photo and video backup
     category: my-stuff
