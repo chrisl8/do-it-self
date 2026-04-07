@@ -795,10 +795,20 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           continue
         fi
         if [[ ${CONTAINER_DIR} = "homepage" ]];then
-          # This is my personal hack to get icons the way I want them in homepage.
-          docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/* /app/public"
-          docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico"
-          docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png"
+          # Personal favicon overlay: if the user has dropped favicon files
+          # into the bind-mounted homepage/images/favicons/ dir on the host,
+          # copy them to /app/public so homepage serves them as site icons.
+          # Skipped silently when the dir is empty or missing (fresh installs
+          # have nothing in homepage/images/ except a .gitkeep). Wrapped in
+          # set +e so a failure here can never abort the broader start loop
+          # before the next container in the list runs.
+          set +e
+          if docker exec homepage sh -c '[ -d /app/public/images/favicons ] && [ -n "$(ls -A /app/public/images/favicons 2>/dev/null)" ]' 2>/dev/null; then
+            docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/* /app/public" 2>/dev/null
+            docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico" 2>/dev/null
+            docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png" 2>/dev/null
+          fi
+          set -e
         fi
 
         if [[ ${NO_WAIT} = false ]];then
