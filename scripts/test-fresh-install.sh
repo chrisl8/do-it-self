@@ -220,15 +220,39 @@ if [[ "$TS_READY" == true ]]; then
     fail "all-containers.sh --start failed (see /tmp/start.log)"
   fi
 
-  # Verify each container has a running container in its compose project
+  # Verify EVERY container in each compose project is in 'running' state.
+  # The previous lenient check passed if any container in the project was
+  # running, which masked failures where (e.g.) only the redis sidecar was
+  # up while the app and tailscale sidecar crashlooped.
   sleep 5
+  TAG_CONTAINER_HINT=false
   for c in $TEST_CONTAINERS; do
-    if docker ps --filter "label=com.docker.compose.project=$c" --filter "status=running" -q 2>/dev/null | grep -q .; then
-      pass "$c is running"
+    TOTAL=$(docker ps -a --filter "label=com.docker.compose.project=$c" -q 2>/dev/null | wc -l)
+    RUNNING=$(docker ps --filter "label=com.docker.compose.project=$c" --filter "status=running" -q 2>/dev/null | wc -l)
+    if [[ $TOTAL -gt 0 && $TOTAL -eq $RUNNING ]]; then
+      pass "$c fully running ($RUNNING/$TOTAL)"
     else
-      fail "$c is not running"
+      fail "$c not fully running ($RUNNING/$TOTAL)"
+      # If the failing project has a *-ts sidecar that's failing the
+      # tag:container ACL check, surface a hint at the bottom of the run.
+      TS_NAME=$(docker ps -a --filter "label=com.docker.compose.project=$c" --format '{{.Names}}' 2>/dev/null | grep -- '-ts$' | head -1)
+      if [[ -n "$TS_NAME" ]] && docker logs "$TS_NAME" 2>&1 | tail -20 | grep -q 'tag:container'; then
+        TAG_CONTAINER_HINT=true
+      fi
     fi
   done
+
+  if [[ "$TAG_CONTAINER_HINT" == true ]]; then
+    printf "\n${RED}┌──────────────────────────────────────────────────────────────────────┐${NC}\n"
+    printf "${RED}│ Tailscale sidecar(s) rejected by control plane:                       │${NC}\n"
+    printf "${RED}│   'requested tags [tag:container] are invalid or not permitted'      │${NC}\n"
+    printf "${RED}│                                                                        │${NC}\n"
+    printf "${RED}│ Your TS_AUTHKEY needs to be created with the 'tag:container' ACL tag. │${NC}\n"
+    printf "${RED}│ In the Tailscale admin console (Settings → Keys → Generate auth key), │${NC}\n"
+    printf "${RED}│ check 'tag:container' under tags before generating. tag:container     │${NC}\n"
+    printf "${RED}│ must also be defined in your tailnet ACL policy.                       │${NC}\n"
+    printf "${RED}└──────────────────────────────────────────────────────────────────────┘${NC}\n"
+  fi
 else
   section "Container Startup (skipped -- no Tailscale)"
   printf "${YELLOW}  Skipping container startup test: TS_AUTHKEY not configured.${NC}\n"
