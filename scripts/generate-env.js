@@ -7,7 +7,7 @@
 //
 // Usage: node generate-env.js <container-name> [--all] [--validate-only] [--quiet]
 
-import { readFile, writeFile, access } from "fs/promises";
+import { readFile, writeFile, appendFile, access } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
@@ -198,6 +198,22 @@ function formatEnvFile(env) {
   return content;
 }
 
+// Infisical is a chicken-and-egg case: every other container can pull its secrets
+// from Infisical at start time, but Infisical itself cannot. Its bootstrap secrets
+// (AUTH_SECRET, ENCRYPTION_KEY, DB_PASSWORD) live in infisical/infisical-secrets.env
+// and must be appended to .env after generation, or Infisical will refuse to boot.
+async function appendInfisicalBootstrapSecrets(envPath, containerName) {
+  if (containerName !== "infisical") return;
+  const secretsPath = join(CONTAINERS_DIR, "infisical", "infisical-secrets.env");
+  if (!(await fileExists(secretsPath))) return;
+  const raw = await readFile(secretsPath, "utf8");
+  const lines = raw
+    .split("\n")
+    .filter((line) => line.trim() && !line.trim().startsWith("#"));
+  if (lines.length === 0) return;
+  await appendFile(envPath, `\n# Infisical internal secrets\n${lines.join("\n")}\n`, "utf8");
+}
+
 async function generateForContainer(registry, userConfig, containerName, opts = {}) {
   const { validateOnly = false, quiet = false } = opts;
   const { env, errors } = buildEnvForContainer(registry, userConfig, containerName);
@@ -210,6 +226,7 @@ async function generateForContainer(registry, userConfig, containerName, opts = 
   if (!validateOnly) {
     const envPath = join(CONTAINERS_DIR, containerName, ".env");
     await writeFile(envPath, formatEnvFile(env), "utf8");
+    await appendInfisicalBootstrapSecrets(envPath, containerName);
     if (!quiet) console.log(`${containerName}: wrote .env (${Object.keys(env).length} variables)`);
   }
 
