@@ -148,9 +148,11 @@ else
   # Env vars passed through to setup.sh:
   #   TS_AUTHKEY='...' -- required by setup.sh, used to join Tailscale and
   #     to register the web-admin Tailscale sidecar so the dashboard is
-  #     reachable at https://admin.<tailnet>.ts.net. setup.sh now always
-  #     binds the web-admin backend to 127.0.0.1, so there's no longer a
-  #     need for a WEB_ADMIN_BIND_HOST override here.
+  #     reachable at https://admin.<tailnet>.ts.net. setup.sh has the
+  #     web-admin backend listen on a Unix domain socket inside
+  #     web-admin/backend/sockets/, with the sidecar bind-mounting it.
+  #     There is no host TCP listener at all by default, so there's no
+  #     security concern about the test VM being publicly routable.
   CLOUD_INIT_FILE=$(mktemp)
   SETUP_ENV_LINE=""
   if [[ -n "$TS_KEY" ]]; then

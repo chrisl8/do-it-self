@@ -10,18 +10,23 @@ services:
       - TS_ENABLE_HEALTH_CHECK=true
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
       - TS_AUTHKEY=${TS_AUTHKEY}
+    # The web-admin backend is a PM2 process on the host (it has to be on
+    # the host so it can run scripts as the maintainer's user, with sudo,
+    # and share those scripts with cron and SSH sessions). It listens on a
+    # Unix domain socket at backend/sockets/web-admin.sock. This sidecar
+    # bind-mounts that directory and Tailscale Serve proxies
+    # https://admin.<tailnet>.ts.net/* to the socket via the JSON config
+    # in tailscale-config/tailscale-config.json. Filesystem permissions on
+    # the socket file (chmod 0660 set by server.js) are the access
+    # control: only processes that bind-mount the socket file can connect.
+    # Nothing on the LAN, the public internet, any other tailnet device
+    # other than this sidecar's MagicDNS hostname, or any other docker
+    # container can reach the backend.
     volumes:
       - ./tailscale-state:/var/lib/tailscale
       - ./tailscale-config:/config
+      - ./backend/sockets:/sockets
       - /dev/net/tun:/dev/net/tun
-    # The web-admin backend itself is a PM2 process on the host, bound to
-    # 127.0.0.1:3333. host-gateway resolves host.docker.internal to the
-    # host's docker bridge IP from inside the container, giving this
-    # sidecar the *only* network path to the backend. Nothing on the
-    # public internet, the LAN, or any other tailnet device can reach the
-    # backend except through Tailscale Serve on this sidecar.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     cap_add:
       - net_admin
       - sys_module

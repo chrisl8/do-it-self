@@ -59,20 +59,31 @@ check "repo cloned to ~/containers" test -d "${CONTAINERS_DIR}/scripts"
 check "container-registry.yaml exists" test -f "${CONTAINERS_DIR}/container-registry.yaml"
 check "user-config.yaml created" test -f "${CONTAINERS_DIR}/user-config.yaml"
 
-# Verify auto-detected values
-if [[ -f "${CONTAINERS_DIR}/user-config.yaml" ]]; then
-  HOST_IN_CONFIG=$(grep "HOST_NAME:" "${CONTAINERS_DIR}/user-config.yaml" | head -1 | sed 's/.*HOST_NAME: *//' | tr -d '"')
-  if [[ -n "$HOST_IN_CONFIG" && "$HOST_IN_CONFIG" != '""' ]]; then
-    pass "HOST_NAME auto-detected: ${HOST_IN_CONFIG}"
+# Verify auto-detected shared variables made it into Infisical. After the
+# shared-vars-consolidation, HOST_NAME and DOCKER_GID live in Infisical at
+# /shared (not in user-config.yaml's `shared:` block, which no longer
+# exists). setup.sh's step 11b seeds them on first run.
+if [[ -f "${HOME}/credentials/infisical.env" ]] \
+   && docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+  source "${HOME}/credentials/infisical.env"
+  HOST_IN_INFISICAL=$(infisical secrets get HOST_NAME \
+    --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" \
+    --path=/shared --env=prod --domain="${INFISICAL_API_URL}" \
+    --silent --plain 2>/dev/null) || true
+  if [[ -n "$HOST_IN_INFISICAL" ]]; then
+    pass "HOST_NAME seeded into Infisical: ${HOST_IN_INFISICAL}"
   else
-    fail "HOST_NAME not auto-detected in user-config.yaml"
+    fail "HOST_NAME not seeded into Infisical /shared"
   fi
 
-  GID_IN_CONFIG=$(grep "DOCKER_GID:" "${CONTAINERS_DIR}/user-config.yaml" | head -1 | sed 's/.*DOCKER_GID: *//' | tr -d '"')
-  if [[ -n "$GID_IN_CONFIG" && "$GID_IN_CONFIG" != '""' ]]; then
-    pass "DOCKER_GID auto-detected: ${GID_IN_CONFIG}"
+  GID_IN_INFISICAL=$(infisical secrets get DOCKER_GID \
+    --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" \
+    --path=/shared --env=prod --domain="${INFISICAL_API_URL}" \
+    --silent --plain 2>/dev/null) || true
+  if [[ -n "$GID_IN_INFISICAL" ]]; then
+    pass "DOCKER_GID seeded into Infisical: ${GID_IN_INFISICAL}"
   else
-    fail "DOCKER_GID not auto-detected in user-config.yaml"
+    fail "DOCKER_GID not seeded into Infisical /shared"
   fi
 fi
 
@@ -82,10 +93,19 @@ section "Web Admin"
 
 check "web-admin frontend built" test -f "${CONTAINERS_DIR}/web-admin/backend/public/index.html"
 
-if curl -sf http://localhost:3333 > /dev/null 2>&1; then
-  pass "web-admin responding on port 3333"
+# Web admin listens on a Unix socket only (no host TCP). Test it via
+# --unix-socket from the host, since we run on the same machine.
+WEB_ADMIN_SOCKET="${CONTAINERS_DIR}/web-admin/backend/sockets/web-admin.sock"
+if [[ -S "$WEB_ADMIN_SOCKET" ]]; then
+  pass "web-admin Unix socket exists"
 else
-  fail "web-admin not responding on port 3333"
+  fail "web-admin Unix socket missing at $WEB_ADMIN_SOCKET"
+fi
+
+if curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/config/infisical-status > /dev/null 2>&1; then
+  pass "web-admin responding on Unix socket"
+else
+  fail "web-admin not responding on Unix socket"
 fi
 
 # ── Phase 4: Infisical ──────────────────────────────────────────────────
@@ -164,16 +184,69 @@ fi
 
 section "Web Admin API"
 
-if curl -sf http://localhost:3333/api/registry > /dev/null 2>&1; then
+if curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/registry > /dev/null 2>&1; then
   pass "GET /api/registry responds"
 else
   fail "GET /api/registry failed"
 fi
 
-if curl -sf http://localhost:3333/api/config/validate > /dev/null 2>&1; then
+if curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/config/validate > /dev/null 2>&1; then
   pass "GET /api/config/validate responds"
 else
   fail "GET /api/config/validate failed"
+fi
+
+# ── Phase 6b: Web-admin reachability through the tailnet ───────────────
+# The architectural regression guard. setup.sh runs the same checks at the
+# end of an install; we run them here too because test-fresh-install.sh
+# may be invoked independently (e.g. on an existing host) and we want it
+# to catch the kind of break we hit in commit 9e4715c (sidecar can't reach
+# the backend) without having to re-run setup.sh.
+
+section "Web Admin Tailnet Path"
+
+if docker ps --filter "name=^web-admin-ts$" --filter "status=running" -q 2>/dev/null | grep -q .; then
+  pass "web-admin-ts sidecar running"
+else
+  fail "web-admin-ts sidecar not running"
+fi
+
+if docker exec web-admin-ts test -S /sockets/web-admin.sock 2>/dev/null; then
+  pass "sidecar sees /sockets/web-admin.sock via bind mount"
+else
+  fail "sidecar bind mount missing or wrong (compose.yaml volumes block)"
+fi
+
+if docker exec web-admin-ts tailscale serve status --json 2>/dev/null \
+   | grep -q 'unix:/sockets/web-admin.sock'; then
+  pass "TS Serve proxy targets unix:/sockets/web-admin.sock"
+else
+  fail "TS Serve proxy not pointing at unix socket (tailscale-config.json)"
+fi
+
+# Tailnet HTTPS round-trip. Detect TS_DOMAIN from tailscale itself so we
+# don't have to rely on env vars.
+if command -v tailscale > /dev/null 2>&1; then
+  TS_DOMAIN_DETECTED=$(tailscale status --json 2>/dev/null \
+    | grep -oP '"MagicDNSSuffix":\s*"\K[^"]+' | head -1)
+  if [[ -n "$TS_DOMAIN_DETECTED" ]]; then
+    ADMIN_URL="https://admin.${TS_DOMAIN_DETECTED}/api/config/infisical-status"
+    REACHED=false
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+      if curl -sf -m 5 -o /dev/null "$ADMIN_URL" 2>/dev/null; then
+        REACHED=true
+        break
+      fi
+      sleep 5
+    done
+    if [[ "$REACHED" = true ]]; then
+      pass "https://admin.${TS_DOMAIN_DETECTED} reachable end-to-end"
+    else
+      fail "https://admin.${TS_DOMAIN_DETECTED} did not respond after 60s"
+    fi
+  else
+    fail "could not detect tailnet domain (is the host on Tailscale?)"
+  fi
 fi
 
 # ── Phase 7: Container startup (only if Tailscale was set up) ───────────
@@ -200,9 +273,9 @@ if [[ "$TS_READY" == true ]]; then
 
   TEST_CONTAINERS="homepage searxng freshrss the-lounge uptime kanboard paste"
 
-  # Enable each container via the web admin API
+  # Enable each container via the web admin API (over the Unix socket).
   for c in $TEST_CONTAINERS; do
-    if curl -sf -X PUT "http://localhost:3333/api/config/container/$c" \
+    if curl -sf --unix-socket "$WEB_ADMIN_SOCKET" -X PUT "http://localhost/api/config/container/$c" \
       -H 'Content-Type: application/json' \
       -d '{"enabled": true}' > /dev/null 2>&1; then
       pass "enabled $c via API"

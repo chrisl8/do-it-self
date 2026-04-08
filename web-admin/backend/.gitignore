@@ -2,3 +2,9 @@ node_modules/
 .env
 .DS_Store
 dist/
+
+# Runtime Unix socket created by server.js. The directory itself is
+# tracked (via .gitkeep) so the bind mount in web-admin/compose.yaml
+# always has something to mount; the socket file inside it is not.
+sockets/*
+!sockets/.gitkeep
