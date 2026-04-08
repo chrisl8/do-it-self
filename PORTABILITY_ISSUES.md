@@ -104,28 +104,19 @@ The current README still tells users to manually clone, edit mounts, and run `al
 
 ### Config embedded in mounts
 
-- Some containers have a lot of their config buried in mounts; new users may end up with NOTHING.
-- Homepage was the named example and now uses a dual-config pattern (`homepage/config-defaults/` in git, `homepage/config-personal/` gitignored, merged at start by `scripts/merge-homepage-config.js`) as of commit `fce10ba`. Apply the same pattern to other containers as they come up.
+- Some containers have a lot of their config buried in bind-mounted directories. New users get nothing in those dirs and the container either fails to start or starts useless.
+- Homepage was the named example and is now solved via the dual-config pattern: `homepage/config-defaults/` (in git, what every user gets) merged with `homepage/config-personal/` (gitignored, per-host overrides) by `scripts/merge-homepage-config.js`, run as a pre-start hook from `scripts/all-containers.sh`. Apply the same pattern to any other container that hits this problem.
 
 ### Revisit homepage default groups, icons, and widgets
 
-The `config-defaults/` files are opinionated about what a new user sees and will effectively be "forced on the public":
+The `homepage/config-defaults/` files are opinionated about what a new user sees and will effectively be "forced on the public":
 
-- The `Top` group in `config-defaults/services.yaml` (Web Admin, Tailscale Admin, do-it-self on GitHub) is a first draft. Reasonable for now but worth revisiting once more users are onboard.
+- The `Top` group in `config-defaults/services.yaml` (Web Admin, Tailscale Admin, do-it-self on GitHub) is a first draft. Established and working but worth revisiting once more users are onboard.
 - The default `widgets.yaml` ships a greeting-with-FQDN + system resources + search + auto-injected storage widget. The greeting in particular is "just something in the slot" and could be replaced with something genuinely useful (weather with per-user coords, a real datetime widget, etc.) once a better idea surfaces.
 - Icon choices (`/icons/do-it-self.svg` for Web Admin, others from the dashboard-icons library) should be reviewed for consistency.
 - The maintainer's personal `settings.yaml` layout block hardcodes a 13-group ordering that new users don't benefit from; eventually the default layout should establish a sensible ordering without leaning on personal overrides.
 
 Not urgent — first-pass defaults are landing with the homepage refactor and working. Revisit once the portability effort is closer to "public".
-
-### Make homepage default-enabled again
-
-Phase 1+2 of the homepage refactor (commits `fce10ba` and this one) have laid the groundwork. Remaining:
-
-- Verify on a fresh Hetzner test that homepage starts cleanly with the shipped defaults + zero personal config (add `homepage` to the test's enabled-container list in `scripts/test-fresh-install.sh`).
-- Clone `homepage/dashboard-icons/` during `setup.sh` so the icon labels on container compose files resolve on new installs (the `homepage.icon=/dashboard-icons/...` patterns need the library present).
-- If the test passes, flip `homepage` to `default_disabled: false` in `container-registry.yaml`.
-- Goal: a fresh install should have infisical AND homepage running by default, so the user has both a secret manager and a dashboard with zero configuration.
 
 ### Audit remaining containers for hardcoded mount paths
 
