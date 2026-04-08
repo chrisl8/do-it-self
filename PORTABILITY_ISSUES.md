@@ -22,6 +22,7 @@ Several Tailscale-side configuration mistakes currently fail silently or surface
 - **Auth key not marked Reusable** — first sidecar registers, the rest fail because the key was consumed. Today only visible in sidecar logs.
 - **Auth key expired** — every sidecar fails to register. Today only visible in sidecar logs.
 - **Free-tier 100-device limit reached** — registrations rejected with a quota message.
+  - Is it 50 devices now with the new pricing? I'm not sure.
 
 Approaches worth considering:
 
@@ -156,3 +157,11 @@ New users should be guided to the web UI as their default entry point, with the 
 
 - ~~The newly setup host exposes its web admin page on the public IP to everyone with no authentication.~~ **Fixed.** The web-admin backend has no host TCP listener at all by default. It listens on a Unix domain socket at `web-admin/backend/sockets/web-admin.sock` (chmod 0660). The only network ingress is a Tailscale Serve sidecar at `web-admin/compose.yaml` which bind-mounts that socket directory and proxies `https://admin.<tailnet>.ts.net` to `unix:/sockets/web-admin.sock`. Filesystem permissions on the socket file are the access control: nothing on the LAN, the public internet, any other tailnet device, or any other docker container can reach the backend except via that sidecar. This matches the rest of the repo's pattern (Tailscale is the auth boundary, no per-service login needed). An earlier iteration of this fix tried `HOST=127.0.0.1` + `host.docker.internal:host-gateway` from the sidecar, on the (incorrect) assumption that `host-gateway` would route to loopback; in practice it routes to the docker bridge IP, which a 127.0.0.1-bound process doesn't listen on. `scripts/setup.sh` Step 13 and `scripts/test-fresh-install.sh` now run end-to-end checks (socket exists, sidecar bind-mounts it, TS Serve proxy points at the unix target, real HTTPS round-trip to `https://admin.<tailnet>` succeeds) so this class of break is caught at install time. `TS_AUTHKEY` is a hard prerequisite of the whole project, but `setup.sh` no longer demands it as an env var on every run — it accepts the key via env var (for automation), prompts for it interactively when run from a TTY (first-time human installs), or fetches it back from Infisical on subsequent runs. The key is stored in Infisical at `/shared/TS_AUTHKEY` only, never on disk in plaintext.
 - Have Claude do a thorough review of everything for "is this safe"?
+
+## Nits
+
+- The setup.sh tries to install packages even if they are already installed, is this necessary? A tiny check would avoid unnecessary root escalations.
+- Could the setup.sh also know if it is in a non-interactive situation, check to see if it WILL need to escalate and bail if it is going to fail?
+- While we are here, I notice when setup.sh is run on a pre-built system, it still always pulls down the infisical containers during the core service start. Why does that happen if infisical is literally already running?
+- The web admin's isAvailable() check (infisicalClient.js:39) only verifies the credentials file is parseable — it does not test connectivity. So if the infisical container is down but ~/credentials/infisical.env exists, PUT /api/config/shared returns 500 (from the catch block) instead of the intended 503. This is pre-existing behavior — the OLD secrets-only guard had the same flaw — and the doc accepts the existing semantic. Worth a follow-up but not part of this work.
+- Pre-existing data issue I noticed but didn't touch: user-config.yaml still has 1password: enabled: true even though 1password/ directory has been deleted. Causes node scripts/generate-env.js --all to fail (web admin's writeAllContainerEnvs skips it correctly via the compose.yaml existence check). Cleanup belongs with the broader 1Password removal item in PORTABILITY_ISSUES.md.
