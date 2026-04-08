@@ -3,7 +3,9 @@ import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { spawn } from "child_process";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, unlink, chmod, mkdir } from "fs/promises";
+import { unlinkSync } from "fs";
+import http from "http";
 import os from "os";
 import "dotenv/config";
 import getFormattedDockerContainers from "./dockerStatus.js";
@@ -669,24 +671,97 @@ app.use((req, res, next) => {
   });
 });
 
-const port = process.env.PORT || 3333;
-// Bind address. Defaults to 0.0.0.0 (current behavior, reachable from
-// LAN/Tailscale) so existing deployments are unaffected. The Hetzner
-// test sets HOST=127.0.0.1 via the generated .env so the test VM never
-// exposes the web admin (and the Tailscale auth key it holds) to the
-// public internet. The broader question of what the default should be
-// for new installs is tracked in PORTABILITY_ISSUES.md "Security".
-const host = process.env.HOST || "0.0.0.0";
+// Primary listener path: a Unix domain socket. The Tailscale Serve sidecar
+// in web-admin/compose.yaml bind-mounts the directory containing this socket
+// (web-admin/backend/sockets/) and proxies https://admin.<tailnet>.ts.net to
+// it. Filesystem permissions on the socket file (chmod 0660) are the access
+// control: only processes that can open the file can connect. The only such
+// process on the host (besides the web-admin user itself) is the docker
+// container that bind-mounts it. Nothing on the LAN, the public internet, any
+// tailnet device that isn't the sidecar's own MagicDNS host, or any other
+// docker container can reach the backend except via that sidecar.
+const SOCKET_PATH =
+  process.env.SOCKET_PATH ||
+  join(dirName, "..", "sockets", "web-admin.sock");
+// Optional secondary listener: a loopback TCP port for local debugging from
+// the host (curl http://127.0.0.1:3333/...). Off by default. Set
+// DEBUG_TCP_PORT in web-admin/backend/.env to enable.
+const DEBUG_TCP_PORT = process.env.DEBUG_TCP_PORT;
 
 async function webserver() {
-  const server = app.listen(port, host);
+  // Make sure the socket directory exists. The bind mount in compose.yaml
+  // depends on this directory being present before the sidecar container
+  // starts, so creating it here protects against a fresh checkout where
+  // setup.sh hasn't run.
+  await mkdir(dirname(SOCKET_PATH), { recursive: true });
+
+  // Clean up a stale socket file from a previous run. Linux does NOT
+  // auto-remove unix sockets when the listening process dies, so without
+  // this the next listen() would EADDRINUSE.
+  try {
+    await unlink(SOCKET_PATH);
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
+  }
+
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on("upgrade", (request, socket, head) => {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit("connection", ws, request);
+  // Wire WebSocket upgrades. wss is configured with `noServer: true` so a
+  // single wss instance can serve multiple http.Server listeners (the
+  // primary unix-socket server and the optional loopback TCP server).
+  function wireUpgrade(server) {
+    server.on("upgrade", (request, socket, head) => {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+    });
+  }
+
+  // Primary listener: Unix domain socket. Awaiting the listen callback
+  // ensures the socket file exists (and is chmod'd) before we report
+  // ready, so the sidecar's first probe can't race us.
+  const unixServer = http.createServer(app);
+  await new Promise((resolve, reject) => {
+    unixServer.once("error", reject);
+    unixServer.listen(SOCKET_PATH, async () => {
+      try {
+        // chmod 660: owner (the user running PM2) and group can read/write,
+        // others cannot. The docker container's tailscaled runs as root and
+        // bypasses these checks, so it has access. Arbitrary host users do
+        // not (assuming they're not in the owner's group).
+        await chmod(SOCKET_PATH, 0o660);
+        console.log(`web-admin listening on unix:${SOCKET_PATH}`);
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
     });
   });
+  wireUpgrade(unixServer);
+
+  if (DEBUG_TCP_PORT) {
+    const tcpServer = http.createServer(app);
+    tcpServer.listen(parseInt(DEBUG_TCP_PORT, 10), "127.0.0.1", () => {
+      console.log(
+        `web-admin also listening on http://127.0.0.1:${DEBUG_TCP_PORT} (debug)`,
+      );
+    });
+    wireUpgrade(tcpServer);
+  }
+
+  // Best-effort cleanup of the socket file on graceful shutdown so the
+  // next start doesn't have to do it. The unlink-on-startup above is the
+  // real safety net; this is just hygiene.
+  const cleanup = () => {
+    try {
+      unlinkSync(SOCKET_PATH);
+    } catch {
+      // Already gone or never existed -- nothing to do.
+    }
+    process.exit(0);
+  };
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
 
   wss.on("connection", async (ws) => {
     console.log("WebSocket client connected");
@@ -1048,8 +1123,6 @@ async function webserver() {
       console.log("WebSocket client disconnected");
     });
   });
-
-  console.log(`Docker Status server running on port ${port}`);
 }
 
 export default webserver;

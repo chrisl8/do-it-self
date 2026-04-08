@@ -312,20 +312,26 @@ fi
 
 step "Setting up web-admin"
 
-# Create / update the backend .env. The web-admin backend is always bound
-# to 127.0.0.1 -- the only network ingress is the Tailscale Serve sidecar
-# in web-admin/compose.yaml, which proxies https://admin.${TS_DOMAIN} to
-# http://host.docker.internal:3333. This makes it structurally impossible
-# for the web admin (and the secrets it holds) to be reached from anywhere
-# except the user's tailnet. WEB_ADMIN_BIND_HOST is still honored as an
-# override for local debugging.
+# Create / update the backend .env. The web-admin backend listens on a Unix
+# domain socket at web-admin/backend/sockets/web-admin.sock. The Tailscale
+# Serve sidecar in web-admin/compose.yaml bind-mounts that directory and
+# proxies https://admin.${TS_DOMAIN} to the socket. Filesystem permissions
+# on the socket file (chmod 0660 set by server.js) are the access control:
+# nothing on the LAN, the public internet, any other tailnet device, or any
+# other docker container can reach the backend except via the sidecar. So
+# the .env contains no HOST/PORT -- there's no TCP listener at all by
+# default.
+#
+# DEBUG_TCP_PORT is an optional escape hatch: set it (e.g. to 3333) to
+# also start a loopback-only TCP listener, useful for `curl
+# http://127.0.0.1:3333/...` debugging from the host. Off by default.
 WEB_ADMIN_ENV="${SCRIPT_DIR}/web-admin/backend/.env"
-WEB_ADMIN_HOST_VALUE="${WEB_ADMIN_BIND_HOST:-127.0.0.1}"
 if [[ ! -f "$WEB_ADMIN_ENV" ]]; then
-  cat > "$WEB_ADMIN_ENV" << WEBENV
-# Server configuration
-PORT=3333
-HOST=${WEB_ADMIN_HOST_VALUE}
+  cat > "$WEB_ADMIN_ENV" << 'WEBENV'
+# Server configuration. The web-admin listens on a Unix domain socket at
+# web-admin/backend/sockets/web-admin.sock. To also start a loopback TCP
+# listener for local debugging from the host, uncomment DEBUG_TCP_PORT:
+# DEBUG_TCP_PORT=3333
 
 # Docker configuration
 DOCKER_SOCKET_PATH=/var/run/docker.sock
@@ -334,15 +340,20 @@ ICONS_BASE_DIR=~/containers/homepage/dashboard-icons
 WEBENV
   ok "Created ${WEB_ADMIN_ENV}"
 else
-  # Existing .env: ensure HOST is set to a localhost-only bind. Idempotent;
-  # rewrites the line if it's missing or set to anything else.
-  if ! grep -q "^HOST=${WEB_ADMIN_HOST_VALUE}$" "$WEB_ADMIN_ENV"; then
-    sed -i.bak '/^HOST=/d' "$WEB_ADMIN_ENV" && rm -f "${WEB_ADMIN_ENV}.bak"
-    printf "HOST=%s\n" "${WEB_ADMIN_HOST_VALUE}" >> "$WEB_ADMIN_ENV"
-    ok "Set HOST=${WEB_ADMIN_HOST_VALUE} in ${WEB_ADMIN_ENV}"
+  # Existing .env from before the Unix-socket migration: strip stale
+  # HOST= and PORT= lines if present. They're now ignored by server.js,
+  # but leaving them around is confusing for future maintainers.
+  if grep -qE '^(HOST|PORT)=' "$WEB_ADMIN_ENV"; then
+    sed -i.bak -E '/^(HOST|PORT)=/d' "$WEB_ADMIN_ENV" && rm -f "${WEB_ADMIN_ENV}.bak"
+    ok "Removed stale HOST/PORT lines from ${WEB_ADMIN_ENV}"
   fi
 fi
-ok "Web admin backend bound to ${WEB_ADMIN_HOST_VALUE}"
+
+# Ensure the sockets directory exists. server.js also mkdirs this on
+# startup as a safety net, but creating it here means the bind mount in
+# compose.yaml has something to mount even before PM2 has run.
+mkdir -p "${SCRIPT_DIR}/web-admin/backend/sockets"
+ok "Web admin backend will listen on Unix socket at web-admin/backend/sockets/web-admin.sock"
 
 cd "${SCRIPT_DIR}/web-admin"
 npm run install:all 2>&1 | tail -1
@@ -435,6 +446,100 @@ fi
 step "Starting default-enabled containers"
 "${SCRIPT_DIR}/scripts/all-containers.sh" --start
 ok "Default-enabled containers started"
+
+# ── Step 13: End-to-end web admin reachability check ────────────────────
+# Architectural regression guard. The web-admin backend listens on a Unix
+# domain socket inside web-admin/backend/sockets/ and the Tailscale Serve
+# sidecar (web-admin-ts) bind-mounts that directory and proxies
+# https://admin.${TS_DOMAIN} to the socket. We learned the hard way that
+# this whole pipeline is easy to break in subtle ways: bind on a TCP
+# interface the sidecar can't see, mount the socket file directly instead
+# of its directory (which pins the inode), forget to chmod the socket so
+# the container can't open it, etc. Catch all of those here BEFORE the
+# user goes looking for the dashboard URL and finds it broken.
+#
+# Each check has a clear error message pointing at the most likely cause
+# so a future Claude session (or human) doesn't have to start from
+# scratch.
+
+step "Verifying web admin end-to-end"
+
+WEB_ADMIN_SOCKET="${SCRIPT_DIR}/web-admin/backend/sockets/web-admin.sock"
+
+# 1. The socket file should exist as a socket. server.js creates it on
+#    startup; if it's missing the PM2 process either crashed or never ran.
+if [[ ! -S "$WEB_ADMIN_SOCKET" ]]; then
+  printf "${RED}  FAIL: web-admin socket not found at ${WEB_ADMIN_SOCKET}${NC}\n"
+  printf "${RED}  Check 'pm2 logs Container Web Admin --lines 30' for backend errors.${NC}\n"
+  printf "${RED}  Most likely: server.js failed to start (syntax error, missing dep, port conflict on the optional DEBUG_TCP_PORT).${NC}\n"
+  exit 1
+fi
+ok "Backend socket exists at web-admin/backend/sockets/web-admin.sock"
+
+# 2. The web-admin-ts sidecar should be running and reporting healthy.
+if ! docker ps --filter "name=^web-admin-ts$" --filter "status=running" -q | grep -q .; then
+  printf "${RED}  FAIL: web-admin-ts sidecar is not running${NC}\n"
+  printf "${RED}  Check 'docker logs web-admin-ts' for the error.${NC}\n"
+  printf "${RED}  Most likely: TS_AUTHKEY missing/expired/wrong-tag, or tag:container not in tailnet ACL.${NC}\n"
+  exit 1
+fi
+ok "Sidecar web-admin-ts is running"
+
+# 3. The sidecar should see the socket file via its bind mount. If this
+#    fails, the bind mount in compose.yaml is wrong (most likely mounting
+#    the socket file directly instead of its parent directory, which pins
+#    the inode and breaks on every PM2 restart).
+if ! docker exec web-admin-ts test -S /sockets/web-admin.sock 2>/dev/null; then
+  printf "${RED}  FAIL: sidecar cannot see /sockets/web-admin.sock${NC}\n"
+  printf "${RED}  Check the volumes block in web-admin/compose.yaml: it should mount${NC}\n"
+  printf "${RED}  ./backend/sockets:/sockets (the directory, not the socket file).${NC}\n"
+  exit 1
+fi
+ok "Sidecar sees the socket via bind mount"
+
+# 4. Tailscale Serve inside the sidecar should be configured to proxy to
+#    the unix socket. If TS_SERVE_CONFIG points somewhere else, this is
+#    where we'd find out.
+if ! docker exec web-admin-ts tailscale serve status --json 2>/dev/null \
+     | grep -q 'unix:/sockets/web-admin.sock'; then
+  printf "${RED}  FAIL: TS Serve not proxying to unix:/sockets/web-admin.sock${NC}\n"
+  printf "${RED}  Check web-admin/tailscale-config/tailscale-config.json -- the Proxy field${NC}\n"
+  printf "${RED}  should be \"unix:/sockets/web-admin.sock\".${NC}\n"
+  exit 1
+fi
+ok "Tailscale Serve proxy targets the unix socket"
+
+# 5. End-to-end: from this host (which is on the tailnet), HTTPS-fetch
+#    the admin URL through Tailscale Serve. This is the same path the
+#    user's browser will take. Retry for ~60s because TS Serve has to
+#    provision a Let's Encrypt cert on first run, which can take a few
+#    seconds.
+if [[ -n "${TS_DOMAIN:-}" ]]; then
+  ADMIN_URL="https://admin.${TS_DOMAIN}/api/config/infisical-status"
+  printf "${YELLOW}  Probing ${ADMIN_URL} ...${NC}\n"
+  REACHED=false
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    if curl -sf -m 5 -o /dev/null "$ADMIN_URL" 2>/dev/null; then
+      REACHED=true
+      break
+    fi
+    sleep 5
+  done
+  if [[ "$REACHED" = true ]]; then
+    ok "https://admin.${TS_DOMAIN} is reachable end-to-end"
+  else
+    printf "${RED}  FAIL: https://admin.${TS_DOMAIN} did not respond after 60s${NC}\n"
+    printf "${RED}  All four upstream checks above passed, so the failure is somewhere${NC}\n"
+    printf "${RED}  in the tailnet routing layer. Most likely causes:${NC}\n"
+    printf "${RED}    - HTTPS Certificates not enabled in your tailnet (Tailscale admin --> DNS).${NC}\n"
+    printf "${RED}    - First-run cert provisioning still in progress; retry in a minute.${NC}\n"
+    printf "${RED}    - This host isn't actually on the tailnet (run 'tailscale status').${NC}\n"
+    printf "${RED}    - sidecar logs: docker logs web-admin-ts | grep -i 'serve\\|cert'${NC}\n"
+    exit 1
+  fi
+else
+  printf "${YELLOW}  Skipping tailnet probe (TS_DOMAIN not set this run).${NC}\n"
+fi
 
 # ── Done ─────────────────────────────────────────────────────────────────
 
