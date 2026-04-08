@@ -83,8 +83,8 @@ Most cron entries are still manual. `scripts/setup-borg-backup.sh` installs its 
 Borg has been migrated to Infisical (`scripts/setup-borg-backup.sh` is Infisical-only) and `scripts/all-containers.sh` itself contains zero `op://` references. What's still left:
 
 - The `1password/` container itself still exists in the repo (currently `default_disabled`).
-- `scripts/kopia-backup-check.sh:51-58` still has a 1Password fallback path.
-- 20+ containers still ship a `1password_credential_paths.env` file (factorio, paste, pure-ftpd, immich, zipline, quicken, kopia-tr0n, searxng, your-spotify, dawarich, the-lounge, secure-browser, speedtest, paperless, forgejo, portainer, netdata, seerr, starbound, meshtastic). These are unused on Infisical-based deploys but should be removed for clarity.
+- `scripts/kopia-backup-check.sh:41-58` still has a 1Password fallback path.
+- **54 containers** still ship a `1password_credential_paths.env` file (run `find . -name 1password_credential_paths.env` for the current list). These are unused on Infisical-based deploys but should be removed for clarity.
 - Other tools on the host (outside `~/containers`) that use 1Password should be migrated so the final "deploy" doesn't need to include the 1Password container at all.
 
 ### Need a full README rewrite
@@ -97,6 +97,9 @@ The current README still tells users to manually clone, edit mounts, and run `al
 - Perhaps the public version just doesn't even include any caddy at all or any config?
 - Or perhaps it has some helps on hosting one's own website?
 - Either way my website shouldn't be included
+- I wonder about the idea of "modules" as in, sets of containers that are not part of this repo, but can be chosen from some menu and told to pull in. Have them based on git repos and even allow private modules sets?
+  - This could also allow breaking down this set into modules instead of ALL stacks here no matter what.
+  - Should EACH stack be a "module"?!
 
 ### Several other PERSONAL stacks that are for Caddy to serve
 
@@ -120,16 +123,15 @@ Not urgent — first-pass defaults are landing with the homepage refactor and wo
 
 ### Audit remaining containers for hardcoded mount paths
 
-The `apply_mount_permissions` resolver in `scripts/all-containers.sh` now supports `${VOL_*}` variable expansion and `mkdir -p`s missing paths (commit `cf101e1`). The known offenders (`searxng`, `nextcloud`, `wallabag`) have all been converted. Other containers should be audited for any remaining hardcoded `/mnt/...` paths in `mount-permissions.yaml`, `compose.yaml` `volumes:`, or scripts.
+The `apply_mount_permissions` resolver in `scripts/all-containers.sh` now supports `${VOL_*}` variable expansion and `mkdir -p`s missing paths (commit `cf101e1`). `searxng`, `nextcloud`, `wallabag`, and `cloudflared` have all been converted. A full audit of every `mount-permissions.yaml` in the repo found **only one remaining offender**: `caddy/mount-permissions.yaml:2` still hardcodes `/mnt/2000/container-mounts/caddy/site/my-digital-garden/dist`. This will be addressed by the "Caddy is there to host MY website specifically" item below — caddy is on the chopping block anyway, so a one-off conversion isn't worthwhile.
 
 ### Directing user to CLI instead of web admin
 
-Currently both the README and `setup.sh` say to run `~/containers/scripts/all-containers.sh --start`, but new users should be guided to the web UI instead. Two-part fix:
+New users should be guided to the web UI as their default entry point, with the CLI kept as an "advanced" option. Status:
 
-1. Update README + `setup.sh` final-instructions to point at the web admin.
-2. The web admin lacks a "Start All Enabled" button, so even after enabling containers in the UI a user has to drop to CLI. Adding that button is a prerequisite for the redirection above to make sense.
-
-Instructions about the CLI SHOULD still be somewhere (README "advanced" section), but the default "go to" should be the web GUI.
+1. **`setup.sh` final instructions — done** (commit `9bfb731`). `scripts/setup.sh` now prints next-steps that point at the web admin, the Configuration tab, and the Start button.
+2. **README — still mixed.** `README.md` still tells users to manually clone, edit mounts, and run `all-containers.sh --start`. Tracked under the "Need a full README rewrite" item above.
+3. **"Start All Enabled" button — still missing.** The web admin has an "Update All" endpoint (`web-admin/backend/src/server.js:947`) but no equivalent for starting all enabled containers in one click. Until this exists, a user who follows setup.sh's advice and clicks into the Configuration tab still has to drop to the CLI to actually bring everything up.
 
 ### Document and/or automate maintenance tasks
 
