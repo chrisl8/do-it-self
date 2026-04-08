@@ -534,40 +534,21 @@ app.get("/api/config/infisical-status", async (req, res) => {
 
 app.put("/api/config/shared", async (req, res) => {
   try {
-    const registry = await getRegistry();
-    const sharedDefs = registry.shared_variables || {};
-    const userConfig = await getUserConfig();
-
-    // Separate secrets from non-secrets
-    const secrets = {};
-    const nonSecrets = {};
-    for (const [key, value] of Object.entries(req.body)) {
-      if (sharedDefs[key]?.type === "secret") {
-        secrets[key] = value;
-      } else {
-        nonSecrets[key] = value;
-      }
-    }
-
-    // Secrets MUST go to Infisical -- no disk fallback. TS_AUTHKEY (and any
-    // other shared secret) is never stored in user-config.yaml.
-    if (Object.keys(secrets).length > 0 && !(await isInfisicalAvailable())) {
+    // Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) live
+    // in Infisical at /shared only. user-config.yaml no longer has a
+    // `shared:` block; the runtime injection path
+    // (`infisical export --path=/shared` in scripts/all-containers.sh)
+    // is the single delivery channel. So Infisical is a hard requirement
+    // for ANY save through this endpoint, secret or not.
+    if (Object.keys(req.body).length > 0 && !(await isInfisicalAvailable())) {
       return res.status(503).json({
-        error: "Cannot save secret: Infisical is not available",
+        error: "Cannot save shared variables: Infisical is not available",
         detail:
-          "Shared secrets (e.g. TS_AUTHKEY) are stored in Infisical only. Start the infisical container and try again.",
+          "Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) are stored in Infisical only. Start the infisical container and try again.",
       });
     }
 
-    // Non-secrets go in user-config.yaml
-    userConfig.shared = { ...userConfig.shared, ...nonSecrets };
-    await saveUserConfig(userConfig);
-
-    // Push everything (non-secrets + secrets) to Infisical /shared so
-    // `infisical export --path=/shared` picks it all up at container start.
-    if (await isInfisicalAvailable()) {
-      await setSharedSecrets({ ...nonSecrets, ...secrets });
-    }
+    await setSharedSecrets(req.body);
 
     const envResults = await writeAllContainerEnvs();
     res.json({ success: true, envsGenerated: Object.keys(envResults).length });

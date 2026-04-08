@@ -273,12 +273,16 @@ fi
 
 # ── Step 7: User configuration ──────────────────────────────────────────
 
+# Detect host facts that step 11b will seed into Infisical. Done here (not
+# inside the first-run-only block below) so subsequent runs can also reseed
+# if Infisical was wiped or restored from a backup that's missing values.
+DETECTED_HOSTNAME=$(hostname)
+DETECTED_DOCKER_GID=$(getent group docker 2>/dev/null | cut -d: -f3)
+DETECTED_DOCKER_GID=${DETECTED_DOCKER_GID:-985}
+
 CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
 if [[ ! -f "$CONFIG_FILE" ]]; then
   step "Creating default user-config.yaml"
-  DETECTED_HOSTNAME=$(hostname)
-  DETECTED_DOCKER_GID=$(getent group docker 2>/dev/null | cut -d: -f3)
-  DETECTED_DOCKER_GID=${DETECTED_DOCKER_GID:-985}
   ok "Detected hostname: ${DETECTED_HOSTNAME}"
   ok "Detected Docker GID: ${DETECTED_DOCKER_GID}"
   cat > "$CONFIG_FILE" << YAML
@@ -287,19 +291,15 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 #
 # Storage mounts: define one per disk or directory.
 # All container volumes default to the first mount.
+#
+# Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) are NOT
+# stored here. They live in Infisical at /shared and are injected into
+# containers at start time by scripts/all-containers.sh. Set/rotate them
+# via the web admin Configuration tab or \`infisical secrets set\`.
 
 mounts:
   - path: "~/container-data"
     label: "Default"
-
-shared:
-  TS_DOMAIN: "${TS_DOMAIN:-}"
-  HOST_NAME: "${DETECTED_HOSTNAME}"
-  DOCKER_GID: "${DETECTED_DOCKER_GID}"
-  # TS_AUTHKEY is intentionally NOT stored here. It lives in Infisical at
-  # /shared/TS_AUTHKEY and is injected into containers at start time by
-  # scripts/all-containers.sh. Set/rotate via the web admin Configuration
-  # tab or `infisical secrets set`.
 
 containers: {}
 YAML
@@ -386,50 +386,43 @@ fi
 step "Setting up Infisical"
 "${SCRIPT_DIR}/scripts/setup-infisical.sh"
 
-# Write the Tailscale credentials to Infisical only if they aren't already
-# the same value there. Infisical is the canonical store for TS_AUTHKEY;
-# this block seeds it on first run and is a no-op on subsequent runs.
+# Seed shared variables into Infisical only if they aren't already the
+# same value there. Infisical is the canonical (and ONLY) store for these
+# four variables; this block seeds them on first run and is a no-op on
+# subsequent runs. New values come from: TS_AUTHKEY (env/prompt/Infisical
+# fetch above), TS_DOMAIN (auto-detected from `tailscale status` above),
+# HOST_NAME and DOCKER_GID (detected in step 7).
+seed_shared() {
+  local name="$1"
+  local value="$2"
+  [[ -z "$value" ]] && return 0
+  local existing
+  existing=$(infisical secrets get "$name" \
+    --token="${INFISICAL_TOKEN}" \
+    --projectId="${INFISICAL_PROJECT_ID}" \
+    --path=/shared --env=prod \
+    --domain="${INFISICAL_API_URL}" \
+    --silent --plain 2>/dev/null) || true
+  if [[ "$existing" != "$value" ]]; then
+    step "Writing ${name} to Infisical"
+    infisical secrets set "${name}=${value}" \
+      --token="${INFISICAL_TOKEN}" \
+      --projectId="${INFISICAL_PROJECT_ID}" \
+      --path="/shared" \
+      --env=prod \
+      --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
+    ok "${name} saved to Infisical"
+  fi
+}
+
 if [[ -f "${HOME}/credentials/infisical.env" ]]; then
   # shellcheck disable=SC1091
   source "${HOME}/credentials/infisical.env"
 
-  if [[ -n "${TS_AUTHKEY:-}" ]]; then
-    EXISTING_KEY=$(infisical secrets get TS_AUTHKEY \
-      --token="${INFISICAL_TOKEN}" \
-      --projectId="${INFISICAL_PROJECT_ID}" \
-      --path=/shared --env=prod \
-      --domain="${INFISICAL_API_URL}" \
-      --silent --plain 2>/dev/null) || true
-    if [[ "$EXISTING_KEY" != "$TS_AUTHKEY" ]]; then
-      step "Writing TS_AUTHKEY to Infisical"
-      infisical secrets set "TS_AUTHKEY=${TS_AUTHKEY}" \
-        --token="${INFISICAL_TOKEN}" \
-        --projectId="${INFISICAL_PROJECT_ID}" \
-        --path="/shared" \
-        --env=prod \
-        --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
-      ok "TS_AUTHKEY saved to Infisical"
-    fi
-  fi
-
-  if [[ -n "${TS_DOMAIN:-}" ]]; then
-    EXISTING_DOMAIN=$(infisical secrets get TS_DOMAIN \
-      --token="${INFISICAL_TOKEN}" \
-      --projectId="${INFISICAL_PROJECT_ID}" \
-      --path=/shared --env=prod \
-      --domain="${INFISICAL_API_URL}" \
-      --silent --plain 2>/dev/null) || true
-    if [[ "$EXISTING_DOMAIN" != "$TS_DOMAIN" ]]; then
-      step "Writing TS_DOMAIN to Infisical"
-      infisical secrets set "TS_DOMAIN=${TS_DOMAIN}" \
-        --token="${INFISICAL_TOKEN}" \
-        --projectId="${INFISICAL_PROJECT_ID}" \
-        --path="/shared" \
-        --env=prod \
-        --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
-      ok "TS_DOMAIN saved to Infisical"
-    fi
-  fi
+  seed_shared TS_AUTHKEY "${TS_AUTHKEY:-}"
+  seed_shared TS_DOMAIN  "${TS_DOMAIN:-}"
+  seed_shared HOST_NAME  "${DETECTED_HOSTNAME}"
+  seed_shared DOCKER_GID "${DETECTED_DOCKER_GID}"
 fi
 
 # ── Step 12: Start default-enabled containers ───────────────────────────
