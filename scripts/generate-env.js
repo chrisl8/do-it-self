@@ -2,12 +2,13 @@
 
 // Generates .env files for containers by merging:
 // - User-defined storage mounts with per-volume assignments
-// - Shared variables (TS_DOMAIN, HOST_NAME, DOCKER_GID)
 // - Container-specific variables
 //
-// TS_AUTHKEY is intentionally NOT handled here. It lives in Infisical at
-// /shared/TS_AUTHKEY and is injected into the shell env by all-containers.sh
-// right before `docker compose up -d`.
+// Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) are
+// intentionally NOT handled here. They live in Infisical at /shared and
+// are injected into the shell env by all-containers.sh via `infisical
+// export --path=/shared` right before `docker compose up -d`. This keeps
+// Infisical as the single source of truth for shared vars.
 //
 // Usage: node generate-env.js <container-name> [--all] [--validate-only] [--quiet]
 
@@ -135,6 +136,14 @@ function getMountPath(mounts, index) {
   return mount ? resolveHomePath(mount.path || DEFAULT_MOUNT_PATH) : DEFAULT_MOUNT_PATH;
 }
 
+// Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) are
+// intentionally NOT written into per-container .env files. They live in
+// Infisical at /shared and are injected into the shell env at container
+// start time by scripts/all-containers.sh via `infisical export
+// --path=/shared`. Docker Compose then substitutes ${VAR} references in
+// compose.yaml from that shell env. This keeps Infisical as the single
+// source of truth for shared vars and avoids drift between disk and the
+// secret store.
 function buildEnvForContainer(registry, userConfig, containerName) {
   const containerDef = registry.containers?.[containerName];
   if (!containerDef) return { env: {}, errors: [] };
@@ -142,26 +151,8 @@ function buildEnvForContainer(registry, userConfig, containerName) {
   const errors = [];
   const env = {};
   const mounts = userConfig.mounts || [{ path: DEFAULT_MOUNT_PATH, label: "Default" }];
-  const sharedDefs = registry.shared_variables || {};
-  const sharedValues = userConfig.shared || {};
   const containerConfig = userConfig.containers?.[containerName] || {};
   const volumeMounts = containerConfig.volume_mounts || {};
-
-  // DOCKER_GID
-  if (containerDef.uses_docker_gid) {
-    env.DOCKER_GID = sharedValues.DOCKER_GID || sharedDefs.DOCKER_GID?.default || "985";
-  }
-
-  // Tailscale. TS_AUTHKEY is intentionally NOT written here — it lives in
-  // Infisical only and is injected into the shell env at container start
-  // time by scripts/all-containers.sh. TS_DOMAIN is non-secret and lives in
-  // user-config.yaml.
-  if (containerDef.uses_tailscale) {
-    if (sharedValues.TS_DOMAIN) env.TS_DOMAIN = sharedValues.TS_DOMAIN;
-    else errors.push("TS_DOMAIN (shared variable)");
-  }
-
-  if (sharedValues.HOST_NAME) env.HOST_NAME = sharedValues.HOST_NAME;
 
   // Per-volume mount paths
   const volumes = containerDef.volumes || {};

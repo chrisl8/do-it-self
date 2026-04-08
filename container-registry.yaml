@@ -9,15 +9,15 @@ shared_variables:
     required: true
   TS_DOMAIN:
     type: string
-    description: Your Tailscale domain (e.g. tail1234.ts.net)
+    description: Your Tailscale domain (e.g. tail1234.ts.net). Stored in Infisical at /shared/TS_DOMAIN only -- never written to user-config.yaml or any container .env file. Injected into the shell env at container start time by scripts/all-containers.sh.
     required: true
   HOST_NAME:
     type: string
-    description: This server's hostname on the Tailnet
+    description: This server's hostname on the Tailnet. Stored in Infisical at /shared/HOST_NAME only -- never written to user-config.yaml or any container .env file. Injected into the shell env at container start time by scripts/all-containers.sh.
     default: ""
   DOCKER_GID:
     type: number
-    description: GID of the docker group on the host (for socket access)
+    description: GID of the docker group on the host (for socket access). Stored in Infisical at /shared/DOCKER_GID only -- never written to user-config.yaml or any container .env file. Injected into the shell env at container start time by scripts/all-containers.sh.
     default: "985"
 categories:
   desktop-apps:

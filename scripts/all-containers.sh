@@ -723,15 +723,18 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         GENERATE_ENV_SCRIPT="${SCRIPT_DIR}/scripts/generate-env.js"
         INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
 
-        # If this container needs Tailscale (compose.yaml references
-        # ${TS_AUTHKEY}), Infisical must be reachable: TS_AUTHKEY lives in
-        # Infisical only and is injected into the shell env at start time
-        # below. Without Infisical we have no source of truth for the key,
-        # so fail clearly rather than starting with an empty TS_AUTHKEY.
-        if grep -q '${TS_AUTHKEY}' compose.yaml 2>/dev/null; then
+        # If this container references any shared variable that lives in
+        # Infisical (TS_AUTHKEY, TS_DOMAIN, HOST_NAME), Infisical must be
+        # reachable: those vars are injected into the shell env at start
+        # time below via `infisical export --path=/shared`. Without
+        # Infisical we have no source of truth, so fail clearly rather
+        # than starting with empty values. DOCKER_GID is omitted from this
+        # check because compose files use ${DOCKER_GID:-985} -- it has a
+        # built-in fallback and won't break startup.
+        if grep -qE '\$\{(TS_AUTHKEY|TS_DOMAIN|HOST_NAME)\}' compose.yaml 2>/dev/null; then
           if [[ ! -f "${INFISICAL_CRED_FILE}" ]] || ! docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
-            printf "${RED}  SKIPPING ${CONTAINER_DIR}: Infisical must be running to start Tailscale-using containers.${NC}\n"
-            printf "${RED}  TS_AUTHKEY is stored in Infisical only -- start Infisical first, then retry.${NC}\n"
+            printf "${RED}  SKIPPING ${CONTAINER_DIR}: Infisical must be running to start containers that use shared variables.${NC}\n"
+            printf "${RED}  Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME) are stored in Infisical only -- start Infisical first, then retry.${NC}\n"
             FAILED_CONTAINERS+=("${CONTAINER_DIR}")
             continue
           fi
@@ -751,7 +754,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
               continue
             fi
           fi
-          # Generate .env file (volume paths, DOCKER_GID -- non-secret config)
+          # Generate .env file (volume paths and per-container variables)
           set +e
           node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --quiet
           set -e

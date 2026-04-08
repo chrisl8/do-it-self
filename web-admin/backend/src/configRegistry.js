@@ -25,15 +25,18 @@ export async function getRegistry() {
 
 export async function getUserConfig() {
   if (!(await fileExists(USER_CONFIG_PATH))) {
-    return { mounts: [{ path: DEFAULT_MOUNT_PATH, label: "Default" }], shared: {}, containers: {} };
+    return { mounts: [{ path: DEFAULT_MOUNT_PATH, label: "Default" }], containers: {} };
   }
   const content = await readFile(USER_CONFIG_PATH, "utf8");
   const config = parseYaml(content) || {};
   if (!config.mounts || config.mounts.length === 0) {
     config.mounts = [{ path: DEFAULT_MOUNT_PATH, label: "Default" }];
   }
-  if (!config.shared) config.shared = {};
   if (!config.containers) config.containers = {};
+  // NOTE: `shared` is intentionally NOT initialized here. Shared variables
+  // (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) live in Infisical at
+  // /shared only. Endpoints that need them merge from Infisical on demand
+  // (see validateContainer / getConfigStatus / GET /api/config/raw).
   return config;
 }
 
@@ -61,6 +64,14 @@ function isContainerEnabled(containerDef, containerConfig) {
   return true;
 }
 
+// Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) are
+// intentionally NOT written into per-container .env files. They live in
+// Infisical at /shared and are injected into the shell env at container
+// start time by scripts/all-containers.sh via `infisical export
+// --path=/shared`. Docker Compose then substitutes ${VAR} references in
+// compose.yaml from that shell env. This keeps Infisical as the single
+// source of truth for shared vars and avoids drift between disk and the
+// secret store.
 export function buildEnvForContainer(registry, userConfig, containerName) {
   const containerDef = registry.containers?.[containerName];
   if (!containerDef) return { env: {}, errors: [], warnings: [] };
@@ -69,33 +80,8 @@ export function buildEnvForContainer(registry, userConfig, containerName) {
   const warnings = [];
   const env = {};
   const mounts = userConfig.mounts || [{ path: DEFAULT_MOUNT_PATH, label: "Default" }];
-  const sharedDefs = registry.shared_variables || {};
-  const sharedValues = userConfig.shared || {};
   const containerConfig = userConfig.containers?.[containerName] || {};
   const volumeMounts = containerConfig.volume_mounts || {};
-
-  // Add DOCKER_GID if needed
-  if (containerDef.uses_docker_gid) {
-    env.DOCKER_GID = sharedValues.DOCKER_GID || sharedDefs.DOCKER_GID?.default || "985";
-  }
-
-  // Add Tailscale vars if needed. TS_AUTHKEY is intentionally NOT written
-  // to the container .env file -- it lives in Infisical only and is
-  // injected into the shell env at container start time by
-  // scripts/all-containers.sh. TS_DOMAIN is non-secret and lives in
-  // user-config.yaml.
-  if (containerDef.uses_tailscale) {
-    if (sharedValues.TS_DOMAIN) {
-      env.TS_DOMAIN = sharedValues.TS_DOMAIN;
-    } else {
-      errors.push("TS_DOMAIN (shared variable)");
-    }
-  }
-
-  // Add HOST_NAME if available
-  if (sharedValues.HOST_NAME) {
-    env.HOST_NAME = sharedValues.HOST_NAME;
-  }
 
   // Add per-volume mount paths
   const volumes = containerDef.volumes || {};
@@ -287,8 +273,12 @@ export async function regenerateMonitoringMounts(registry, userConfig) {
 }
 
 export async function validateContainer(registry, userConfig, containerName) {
-  // Merge Infisical /shared into userConfig.shared so the TS_AUTHKEY check
-  // below sees what's actually in Infisical, not just what's on disk.
+  // LOAD-BEARING: Merge Infisical /shared into userConfig.shared so the
+  // TS_AUTHKEY check below sees what's actually in Infisical. After the
+  // shared-vars consolidation, Infisical is the *only* store for shared
+  // variables -- user-config.yaml no longer has a `shared:` block -- so
+  // this merge is the only path the validation code can learn about
+  // shared variable values. Do not remove.
   try {
     const { isAvailable, listSecrets } = await import("./infisicalClient.js");
     if (await isAvailable()) {
@@ -346,7 +336,12 @@ export async function getConfigStatus() {
   const registry = await getRegistry();
   const userConfig = await getUserConfig();
 
-  // Merge Infisical secrets so validation accounts for them
+  // LOAD-BEARING: Merge Infisical secrets so validation accounts for them.
+  // After the shared-vars consolidation, Infisical is the *only* store for
+  // shared variables -- user-config.yaml no longer has a `shared:` block --
+  // so this /shared merge is the only path the TS_AUTHKEY check below can
+  // learn about shared variable values. The /<container> merges that follow
+  // are the equivalent path for per-container secrets. Do not remove.
   let infisicalMerged = false;
   try {
     const { isAvailable, listSecrets } = await import("./infisicalClient.js");
