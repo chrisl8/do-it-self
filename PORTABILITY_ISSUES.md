@@ -87,6 +87,12 @@ Borg has been migrated to Infisical (`scripts/setup-borg-backup.sh` is Infisical
 - **54 containers** still ship a `1password_credential_paths.env` file (run `find . -name 1password_credential_paths.env` for the current list). These are unused on Infisical-based deploys but should be removed for clarity.
 - Other tools on the host (outside `~/containers`) that use 1Password should be migrated so the final "deploy" doesn't need to include the 1Password container at all.
 
+### Consolidate shared variables to Infisical-only
+
+The `shared:` block in `user-config.yaml` (`TS_DOMAIN`, `HOST_NAME`, `DOCKER_GID`) is currently dual-written to both `user-config.yaml` and Infisical `/shared` by the web admin's save handler at `web-admin/backend/src/server.js` `PUT /api/config/shared`. Two sources of truth, free to drift the moment anyone edits one without going through the web admin. `TS_AUTHKEY` was the same kind of wart and is already fixed (Infisical-only). The same cleanup should be applied to the non-secret shared variables so all four behave the same way.
+
+See [docs/shared-vars-consolidation.md](docs/shared-vars-consolidation.md) for the full design and step-by-step plan. The doc is self-contained — a fresh Claude session can pick it up and execute it without needing the conversation history that produced it.
+
 ### Need a full README rewrite
 
 The current README still tells users to manually clone, edit mounts, and run `all-containers.sh --start`, with no mention of `setup.sh` or the web admin. It should open with a quickstart along the lines of: "curl|bash `scripts/setup.sh` → open `http://<host>:3333` → Configuration tab → enable containers → start them" — and move the existing maintainer-specific notes lower.
@@ -148,7 +154,5 @@ New users should be guided to the web UI as their default entry point, with the 
 
 ### Security
 
-- At the moment, the newly setup host exposes its web admin page on the public IP to everyone with no authentication. The assumption was that people ran this on a home network, but that isn't a good assumption. We can PROBABLY rely on Tailscale as good enough lockdown, but for sure dont' just expose the web admin on the local IP, because for instance in Hetzner, this now exposes every secret in the web admin to the entire internet!
-  - No seriously, like if you run the Hetzner test, it ends up putting your TS_AUTHKEY on a web page that is publicly accessible! I probably need to revoke that and set up a new one!
-    - But that is just like an example of the issue there, so we need to think about that!
+- ~~The newly setup host exposes its web admin page on the public IP to everyone with no authentication.~~ **Fixed.** The web-admin backend is now bound to `127.0.0.1` only (`scripts/setup.sh` always writes `HOST=127.0.0.1` into `web-admin/backend/.env`). The only network ingress is a Tailscale Serve sidecar at `web-admin/compose.yaml` which proxies `https://admin.<tailnet>.ts.net` to `http://host.docker.internal:3333`. Nothing on the public internet, the LAN, or any other tailnet device can reach the backend except through the tailnet. This matches the rest of the repo's pattern (Tailscale is the auth boundary, no per-service login needed). `TS_AUTHKEY` is a hard prerequisite of the whole project, but `setup.sh` no longer demands it as an env var on every run — it accepts the key via env var (for automation), prompts for it interactively when run from a TTY (first-time human installs), or fetches it back from Infisical on subsequent runs. The key is stored in Infisical at `/shared/TS_AUTHKEY` only, never on disk in plaintext.
 - Have Claude do a thorough review of everything for "is this safe"?

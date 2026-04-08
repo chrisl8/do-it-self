@@ -79,13 +79,12 @@ export function buildEnvForContainer(registry, userConfig, containerName) {
     env.DOCKER_GID = sharedValues.DOCKER_GID || sharedDefs.DOCKER_GID?.default || "985";
   }
 
-  // Add Tailscale vars if needed
+  // Add Tailscale vars if needed. TS_AUTHKEY is intentionally NOT written
+  // to the container .env file -- it lives in Infisical only and is
+  // injected into the shell env at container start time by
+  // scripts/all-containers.sh. TS_DOMAIN is non-secret and lives in
+  // user-config.yaml.
   if (containerDef.uses_tailscale) {
-    if (sharedValues.TS_AUTHKEY) {
-      env.TS_AUTHKEY = sharedValues.TS_AUTHKEY;
-    } else {
-      errors.push("TS_AUTHKEY (shared variable)");
-    }
     if (sharedValues.TS_DOMAIN) {
       env.TS_DOMAIN = sharedValues.TS_DOMAIN;
     } else {
@@ -287,8 +286,29 @@ export async function regenerateMonitoringMounts(registry, userConfig) {
   }
 }
 
-export function validateContainer(registry, userConfig, containerName) {
+export async function validateContainer(registry, userConfig, containerName) {
+  // Merge Infisical /shared into userConfig.shared so the TS_AUTHKEY check
+  // below sees what's actually in Infisical, not just what's on disk.
+  try {
+    const { isAvailable, listSecrets } = await import("./infisicalClient.js");
+    if (await isAvailable()) {
+      const sharedSecrets = await listSecrets("/shared").catch(() => []);
+      for (const s of sharedSecrets) {
+        if (!userConfig.shared) userConfig.shared = {};
+        userConfig.shared[s.key] = s.value;
+      }
+    }
+  } catch {
+    // Infisical not available -- TS_AUTHKEY check below will flag it as missing
+  }
+
   const { errors } = buildEnvForContainer(registry, userConfig, containerName);
+
+  const containerDef = registry.containers?.[containerName];
+  if (containerDef?.uses_tailscale && !userConfig.shared?.TS_AUTHKEY) {
+    errors.push("TS_AUTHKEY (Infisical)");
+  }
+
   return { ready: errors.length === 0, missing: errors };
 }
 
@@ -359,6 +379,17 @@ export async function getConfigStatus() {
     const containerConfig = userConfig.containers?.[name];
     const enabled = isContainerEnabled(def, containerConfig);
     const { errors } = buildEnvForContainer(registry, userConfig, name);
+
+    // buildEnvForContainer no longer writes TS_AUTHKEY into the .env (it's
+    // injected from Infisical at runtime). But we still need to validate
+    // that the key exists in Infisical for any container that uses
+    // Tailscale -- otherwise the runtime injection will inject nothing and
+    // the sidecar will fail. The Infisical merge above pulled /shared into
+    // userConfig.shared, so a missing TS_AUTHKEY here means it isn't in
+    // Infisical (or Infisical wasn't reachable when this status was built).
+    if (def.uses_tailscale && !userConfig.shared?.TS_AUTHKEY) {
+      errors.push("TS_AUTHKEY (Infisical)");
+    }
 
     containers[name] = {
       ready: errors.length === 0,

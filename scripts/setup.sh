@@ -170,21 +170,104 @@ else
   ok "Tailscale already installed"
 fi
 
-# If TS_AUTHKEY env var is set (e.g. from cloud-init for testing), join Tailscale now.
-# Then auto-detect TS_DOMAIN from `tailscale status`.
-if [[ -n "${TS_AUTHKEY:-}" ]]; then
-  if ! tailscale status &>/dev/null || ! tailscale status --json 2>/dev/null | grep -q '"BackendState": "Running"'; then
-    step "Joining Tailscale via provided TS_AUTHKEY"
-    sudo tailscale up --authkey="$TS_AUTHKEY" --hostname="$(hostname)" --ssh --accept-routes 2>&1 | tail -3
-    ok "Joined Tailscale"
-  fi
-  # Auto-detect TS_DOMAIN if not already provided
-  if [[ -z "${TS_DOMAIN:-}" ]]; then
-    DETECTED_DOMAIN=$(tailscale status --json 2>/dev/null | grep -oP '"MagicDNSSuffix":\s*"\K[^"]+' | head -1)
-    if [[ -n "$DETECTED_DOMAIN" ]]; then
-      TS_DOMAIN="$DETECTED_DOMAIN"
-      ok "Detected Tailscale domain: ${TS_DOMAIN}"
+# Tailscale is a hard prerequisite. The web-admin and every container that
+# uses_tailscale: true relies on TS_AUTHKEY being available. We need it now
+# only when the host has not joined Tailscale yet, OR when Infisical has not
+# yet been bootstrapped to hold the key (first-run install), OR when
+# Infisical is bootstrapped but the secret is missing (recovery case).
+#
+# Resolution order (when needed):
+#   1. Already in environment (e.g. TS_AUTHKEY=... bash setup.sh)
+#   2. Fetched from Infisical (subsequent runs on a healthy host)
+#   3. Interactive prompt with read -s, only if stdin is a TTY
+#   4. Bail with the red error block
+
+TS_HOST_JOINED=true
+if ! tailscale status &>/dev/null || ! tailscale status --json 2>/dev/null | grep -q '"BackendState": "Running"'; then
+  TS_HOST_JOINED=false
+fi
+
+INFISICAL_BOOTSTRAPPED=false
+if [[ -f "${HOME}/credentials/infisical.env" ]]; then
+  INFISICAL_BOOTSTRAPPED=true
+fi
+
+# Try to fetch TS_AUTHKEY from Infisical if it's bootstrapped, the container
+# is running, and the env var isn't already set. Cheap and harmless to try.
+if [[ -z "${TS_AUTHKEY:-}" ]] && [[ "$INFISICAL_BOOTSTRAPPED" = true ]]; then
+  if docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+    # shellcheck disable=SC1091
+    source "${HOME}/credentials/infisical.env"
+    FETCHED_KEY=$(infisical secrets get TS_AUTHKEY \
+      --token="${INFISICAL_TOKEN}" \
+      --projectId="${INFISICAL_PROJECT_ID}" \
+      --path=/shared --env=prod \
+      --domain="${INFISICAL_API_URL}" \
+      --silent --plain 2>/dev/null) || true
+    if [[ -n "$FETCHED_KEY" ]]; then
+      TS_AUTHKEY="$FETCHED_KEY"
+      ok "Fetched TS_AUTHKEY from Infisical"
     fi
+  fi
+fi
+
+# Decide whether we still need TS_AUTHKEY. Three reasons it would be needed:
+#   (a) host needs to (re-)join Tailscale
+#   (b) Infisical is not yet bootstrapped — step 11b will need to seed it
+#   (c) Infisical is bootstrapped but the fetch above came back empty — recovery
+TS_AUTHKEY_NEEDED=false
+if [[ "$TS_HOST_JOINED" = false ]]; then
+  TS_AUTHKEY_NEEDED=true
+fi
+if [[ "$INFISICAL_BOOTSTRAPPED" = false ]]; then
+  TS_AUTHKEY_NEEDED=true
+fi
+if [[ "$INFISICAL_BOOTSTRAPPED" = true ]] && [[ -z "${TS_AUTHKEY:-}" ]]; then
+  TS_AUTHKEY_NEEDED=true
+fi
+
+# If we need it and still don't have it, prompt or bail.
+if [[ "$TS_AUTHKEY_NEEDED" = true ]] && [[ -z "${TS_AUTHKEY:-}" ]]; then
+  if [[ -t 0 ]]; then
+    printf "\n${YELLOW}Tailscale auth key required.${NC}\n"
+    printf "Mint a reusable auth key tagged 'tag:container' at:\n"
+    printf "  https://login.tailscale.com/admin/settings/keys\n"
+    printf "Your tailnet ACL must define tag:container, and HTTPS Certificates\n"
+    printf "must be enabled in the tailnet admin console for Tailscale Serve to\n"
+    printf "issue Let's Encrypt certs. See docs/TESTING.md for the details.\n\n"
+    read -r -s -p "Tailscale auth key (input hidden): " TS_AUTHKEY
+    echo
+    if [[ -z "$TS_AUTHKEY" ]]; then
+      printf "${RED}No key provided. Aborting.${NC}\n"
+      exit 1
+    fi
+  else
+    printf "${RED}TS_AUTHKEY is required but not available.${NC}\n"
+    printf "\n"
+    printf "This project routes all service ingress through Tailscale.\n"
+    printf "Mint a reusable auth key tagged 'tag:container' at:\n"
+    printf "  https://login.tailscale.com/admin/settings/keys\n"
+    printf "Your tailnet ACL must define tag:container, and HTTPS Certificates\n"
+    printf "must be enabled in the tailnet admin console for Tailscale Serve to\n"
+    printf "issue Let's Encrypt certs. See docs/TESTING.md for the details.\n"
+    printf "\n"
+    printf "Then re-run this script with TS_AUTHKEY in your environment, e.g.:\n"
+    printf "  TS_AUTHKEY=tskey-auth-... bash %s\n" "$0"
+    exit 1
+  fi
+fi
+
+if [[ "$TS_HOST_JOINED" = false ]]; then
+  step "Joining Tailscale via provided TS_AUTHKEY"
+  sudo tailscale up --authkey="$TS_AUTHKEY" --hostname="$(hostname)" --ssh --accept-routes 2>&1 | tail -3
+  ok "Joined Tailscale"
+fi
+# Auto-detect TS_DOMAIN if not already provided
+if [[ -z "${TS_DOMAIN:-}" ]]; then
+  DETECTED_DOMAIN=$(tailscale status --json 2>/dev/null | grep -oP '"MagicDNSSuffix":\s*"\K[^"]+' | head -1)
+  if [[ -n "$DETECTED_DOMAIN" ]]; then
+    TS_DOMAIN="$DETECTED_DOMAIN"
+    ok "Detected Tailscale domain: ${TS_DOMAIN}"
   fi
 fi
 
@@ -210,10 +293,13 @@ mounts:
     label: "Default"
 
 shared:
-  TS_AUTHKEY: "${TS_AUTHKEY:-}"
   TS_DOMAIN: "${TS_DOMAIN:-}"
   HOST_NAME: "${DETECTED_HOSTNAME}"
   DOCKER_GID: "${DETECTED_DOCKER_GID}"
+  # TS_AUTHKEY is intentionally NOT stored here. It lives in Infisical at
+  # /shared/TS_AUTHKEY and is injected into containers at start time by
+  # scripts/all-containers.sh. Set/rotate via the web admin Configuration
+  # tab or `infisical secrets set`.
 
 containers: {}
 YAML
@@ -226,18 +312,20 @@ fi
 
 step "Setting up web-admin"
 
-# Create the backend .env file if missing (PM2 ecosystem config requires it).
-# WEB_ADMIN_BIND_HOST is an optional env var passed in by hetzner-test.sh's
-# cloud-init to lock the test VM down to localhost-only. When unset, the
-# .env omits HOST and server.js falls back to 0.0.0.0 (current default for
-# real installs -- see PORTABILITY_ISSUES.md "Security" for the broader
-# discussion of what the default should be for new installs).
+# Create / update the backend .env. The web-admin backend is always bound
+# to 127.0.0.1 -- the only network ingress is the Tailscale Serve sidecar
+# in web-admin/compose.yaml, which proxies https://admin.${TS_DOMAIN} to
+# http://host.docker.internal:3333. This makes it structurally impossible
+# for the web admin (and the secrets it holds) to be reached from anywhere
+# except the user's tailnet. WEB_ADMIN_BIND_HOST is still honored as an
+# override for local debugging.
 WEB_ADMIN_ENV="${SCRIPT_DIR}/web-admin/backend/.env"
+WEB_ADMIN_HOST_VALUE="${WEB_ADMIN_BIND_HOST:-127.0.0.1}"
 if [[ ! -f "$WEB_ADMIN_ENV" ]]; then
   cat > "$WEB_ADMIN_ENV" << WEBENV
 # Server configuration
 PORT=3333
-${WEB_ADMIN_BIND_HOST:+HOST=${WEB_ADMIN_BIND_HOST}}
+HOST=${WEB_ADMIN_HOST_VALUE}
 
 # Docker configuration
 DOCKER_SOCKET_PATH=/var/run/docker.sock
@@ -245,10 +333,16 @@ CONTAINERS_DIR=~/containers
 ICONS_BASE_DIR=~/containers/homepage/dashboard-icons
 WEBENV
   ok "Created ${WEB_ADMIN_ENV}"
-  if [[ -n "${WEB_ADMIN_BIND_HOST:-}" ]]; then
-    ok "Web admin bound to ${WEB_ADMIN_BIND_HOST} (test mode)"
+else
+  # Existing .env: ensure HOST is set to a localhost-only bind. Idempotent;
+  # rewrites the line if it's missing or set to anything else.
+  if ! grep -q "^HOST=${WEB_ADMIN_HOST_VALUE}$" "$WEB_ADMIN_ENV"; then
+    sed -i.bak '/^HOST=/d' "$WEB_ADMIN_ENV" && rm -f "${WEB_ADMIN_ENV}.bak"
+    printf "HOST=%s\n" "${WEB_ADMIN_HOST_VALUE}" >> "$WEB_ADMIN_ENV"
+    ok "Set HOST=${WEB_ADMIN_HOST_VALUE} in ${WEB_ADMIN_ENV}"
   fi
 fi
+ok "Web admin backend bound to ${WEB_ADMIN_HOST_VALUE}"
 
 cd "${SCRIPT_DIR}/web-admin"
 npm run install:all 2>&1 | tail -1
@@ -292,62 +386,87 @@ fi
 step "Setting up Infisical"
 "${SCRIPT_DIR}/scripts/setup-infisical.sh"
 
-# If we joined Tailscale earlier, write the credentials to Infisical so that
-# `infisical run` can inject them into containers that need them.
-if [[ -n "${TS_AUTHKEY:-}" ]] && [[ -f "${HOME}/credentials/infisical.env" ]]; then
-  step "Writing Tailscale credentials to Infisical"
+# Write the Tailscale credentials to Infisical only if they aren't already
+# the same value there. Infisical is the canonical store for TS_AUTHKEY;
+# this block seeds it on first run and is a no-op on subsequent runs.
+if [[ -f "${HOME}/credentials/infisical.env" ]]; then
   # shellcheck disable=SC1091
   source "${HOME}/credentials/infisical.env"
-  infisical secrets set "TS_AUTHKEY=${TS_AUTHKEY}" \
-    --token="${INFISICAL_TOKEN}" \
-    --projectId="${INFISICAL_PROJECT_ID}" \
-    --path="/shared" \
-    --env=prod \
-    --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
-  if [[ -n "${TS_DOMAIN:-}" ]]; then
-    infisical secrets set "TS_DOMAIN=${TS_DOMAIN}" \
+
+  if [[ -n "${TS_AUTHKEY:-}" ]]; then
+    EXISTING_KEY=$(infisical secrets get TS_AUTHKEY \
       --token="${INFISICAL_TOKEN}" \
       --projectId="${INFISICAL_PROJECT_ID}" \
-      --path="/shared" \
-      --env=prod \
-      --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
+      --path=/shared --env=prod \
+      --domain="${INFISICAL_API_URL}" \
+      --silent --plain 2>/dev/null) || true
+    if [[ "$EXISTING_KEY" != "$TS_AUTHKEY" ]]; then
+      step "Writing TS_AUTHKEY to Infisical"
+      infisical secrets set "TS_AUTHKEY=${TS_AUTHKEY}" \
+        --token="${INFISICAL_TOKEN}" \
+        --projectId="${INFISICAL_PROJECT_ID}" \
+        --path="/shared" \
+        --env=prod \
+        --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
+      ok "TS_AUTHKEY saved to Infisical"
+    fi
   fi
-  ok "Tailscale credentials saved to Infisical"
+
+  if [[ -n "${TS_DOMAIN:-}" ]]; then
+    EXISTING_DOMAIN=$(infisical secrets get TS_DOMAIN \
+      --token="${INFISICAL_TOKEN}" \
+      --projectId="${INFISICAL_PROJECT_ID}" \
+      --path=/shared --env=prod \
+      --domain="${INFISICAL_API_URL}" \
+      --silent --plain 2>/dev/null) || true
+    if [[ "$EXISTING_DOMAIN" != "$TS_DOMAIN" ]]; then
+      step "Writing TS_DOMAIN to Infisical"
+      infisical secrets set "TS_DOMAIN=${TS_DOMAIN}" \
+        --token="${INFISICAL_TOKEN}" \
+        --projectId="${INFISICAL_PROJECT_ID}" \
+        --path="/shared" \
+        --env=prod \
+        --domain="${INFISICAL_API_URL}" 2>/dev/null | tail -1
+      ok "TS_DOMAIN saved to Infisical"
+    fi
+  fi
 fi
 
+# ── Step 12: Start default-enabled containers ───────────────────────────
+# Bring up the few containers that are enabled by default (infisical,
+# homepage, the admin Tailscale sidecar, ...) so the URLs printed below
+# are immediately live. Without this, a fresh setup would print URLs that
+# 404 until the user manually ran all-containers.sh --start. Additional
+# containers can be enabled later via the web admin's Configuration tab.
+
+step "Starting default-enabled containers"
+"${SCRIPT_DIR}/scripts/all-containers.sh" --start
+ok "Default-enabled containers started"
+
 # ── Done ─────────────────────────────────────────────────────────────────
-
-WEB_ADMIN_PORT=$(grep "^PORT=" "${SCRIPT_DIR}/web-admin/backend/.env" 2>/dev/null | cut -d= -f2)
-WEB_ADMIN_PORT=${WEB_ADMIN_PORT:-3333}
-WEB_ADMIN_BIND=$(grep "^HOST=" "${SCRIPT_DIR}/web-admin/backend/.env" 2>/dev/null | cut -d= -f2)
-
-# Detect the primary network IP for a usable URL when ssh'd into a remote box
-NETWORK_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 
 echo ""
 echo "============================================"
 printf "${GREEN}Setup Complete!${NC}\n"
 echo "============================================"
 echo ""
-echo "Web admin:"
-echo "  Local:   http://localhost:${WEB_ADMIN_PORT}"
-# Only advertise the network URL if the web admin is actually bound to it.
-# When HOST=127.0.0.1 (the test mode), the network IP isn't serving anything.
-if [[ -z "$WEB_ADMIN_BIND" || "$WEB_ADMIN_BIND" == "0.0.0.0" ]] && [[ -n "$NETWORK_IP" && "$NETWORK_IP" != "127.0.0.1" ]]; then
-  echo "  Network: http://${NETWORK_IP}:${WEB_ADMIN_PORT}"
-fi
-# Once Tailscale is configured, homepage runs as the user's main "console"
-# at console.<tailnet>.ts.net. Show that URL when we know the tailnet.
 if [[ -n "${TS_DOMAIN:-}" ]]; then
+  echo "Web admin: https://admin.${TS_DOMAIN}"
+  echo "Dashboard: https://console.${TS_DOMAIN}"
   echo ""
-  echo "Dashboard (after Tailscale + first-time container start):"
-  echo "  https://console.${TS_DOMAIN}"
+  echo "Both URLs are reachable from any device signed in to your tailnet."
+  echo "If your browser can't reach them, confirm the device is on the same"
+  echo "tailnet as this host."
+else
+  echo "Setup completed but no Tailscale domain was detected."
+  echo "Run 'tailscale status' on this host to confirm the tailnet state,"
+  echo "then re-run this script."
 fi
 echo ""
 echo "Next steps:"
-echo "  1. Open the web admin in your browser (URL above)"
-echo "  2. Configuration tab → set storage mount paths and Tailscale auth key"
-echo "     (homepage and infisical are enabled by default; enable any others)"
-echo "  3. Click Start to bring containers up"
-echo "  4. Open your dashboard once homepage finishes starting"
+echo "  1. Open https://admin.${TS_DOMAIN:-<your-tailnet>} in your browser"
+echo "  2. Configuration tab → enable any additional containers you want and"
+echo "     fill in their per-container variables"
+echo "  3. Bring newly-enabled containers up via the web admin or by running"
+echo "     'bash ~/containers/scripts/all-containers.sh --start'"
 echo ""

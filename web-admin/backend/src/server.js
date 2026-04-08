@@ -549,21 +549,24 @@ app.put("/api/config/shared", async (req, res) => {
       }
     }
 
+    // Secrets MUST go to Infisical -- no disk fallback. TS_AUTHKEY (and any
+    // other shared secret) is never stored in user-config.yaml.
+    if (Object.keys(secrets).length > 0 && !(await isInfisicalAvailable())) {
+      return res.status(503).json({
+        error: "Cannot save secret: Infisical is not available",
+        detail:
+          "Shared secrets (e.g. TS_AUTHKEY) are stored in Infisical only. Start the infisical container and try again.",
+      });
+    }
+
     // Non-secrets go in user-config.yaml
     userConfig.shared = { ...userConfig.shared, ...nonSecrets };
-    // Also store non-secret shared vars so they're available for .env generation
-    // (TS_DOMAIN, HOST_NAME, DOCKER_GID are non-secret shared vars)
     await saveUserConfig(userConfig);
 
-    // Secrets go to Infisical if available
+    // Push everything (non-secrets + secrets) to Infisical /shared so
+    // `infisical export --path=/shared` picks it all up at container start.
     if (await isInfisicalAvailable()) {
-      // Write ALL shared vars (including non-secrets) to Infisical /shared
-      // so `infisical run --path="/shared"` picks them up
       await setSharedSecrets({ ...nonSecrets, ...secrets });
-    } else {
-      // Fallback: store secrets in user-config.yaml too
-      userConfig.shared = { ...userConfig.shared, ...secrets };
-      await saveUserConfig(userConfig);
     }
 
     const envResults = await writeAllContainerEnvs();
@@ -641,7 +644,7 @@ app.get("/api/config/validate/:name", async (req, res) => {
   try {
     const registry = await getRegistry();
     const userConfig = await getUserConfig();
-    const result = validateContainer(registry, userConfig, req.params.name);
+    const result = await validateContainer(registry, userConfig, req.params.name);
     res.json(result);
   } catch (err) {
     console.error("Error validating container:", err);

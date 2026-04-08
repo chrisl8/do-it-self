@@ -5,7 +5,7 @@
 shared_variables:
   TS_AUTHKEY:
     type: secret
-    description: Tailscale authentication key for container networking
+    description: Tailscale authentication key for container networking. Stored in Infisical at /shared/TS_AUTHKEY only -- never written to user-config.yaml or any container .env file. Injected into the shell env at container start time by scripts/all-containers.sh.
     required: true
   TS_DOMAIN:
     type: string
@@ -88,6 +88,10 @@ containers:
         type: secret
         required: false
         description: API key for homepage widget
+      SYNC_ID:
+        type: secret
+        required: false
+        description: Budget Sync ID used by the actual-budget-sync host cron (Settings → Show advanced settings → Sync ID)
     volumes:
       actual_api_data:
         var: VOL_ACTUAL_BUDGET_API_ACTUAL_API_DATA
@@ -1303,6 +1307,11 @@ containers:
     description: Voidship Ephemeral web application
     category: uncategorized
     default_disabled: true
+  web-admin:
+    description: Self-hosted container management dashboard (Tailscale sidecar; the backend is a PM2 process on the host bound to 127.0.0.1)
+    category: system-monitoring
+    uses_tailscale: true
+    start_order: "001"
   wallabag:
     description: Self-hosted read-it-later and article archiver
     category: reading

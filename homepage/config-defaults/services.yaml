@@ -11,7 +11,7 @@
 
 - Top:
     - Web Admin:
-        href: http://${HOST_NAME}.${TS_DOMAIN}:3333
+        href: https://admin.${TS_DOMAIN}
         description: Configure containers, secrets, and mounts
         icon: /icons/do-it-self.svg
     - Tailscale Admin:
