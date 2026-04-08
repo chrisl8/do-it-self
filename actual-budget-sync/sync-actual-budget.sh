@@ -24,18 +24,44 @@ if [[ -f "${FAILURE_COUNT_FILE}" ]]; then
     FAILURE_COUNT=$(cat "${FAILURE_COUNT_FILE}")
 fi
 
-# Set up 1Password Connect
-if [[ -d "${HOME}/.config/op" ]]; then
-    chmod go-rx "${HOME}/.config/op"
+# Load secrets from Infisical (silently no-op if Infisical is unavailable —
+# treated like the actual-server-not-running case above, not a sync failure)
+if ! command -v infisical &>/dev/null \
+   || [[ ! -f "${HOME}/credentials/infisical.env" ]] \
+   || ! /usr/bin/docker ps --filter "name=infisical" --filter "status=running" -q | grep -q .; then
+    exit 0
 fi
-export OP_CONNECT_HOST="http://127.0.0.1:9980/"
-OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
-export OP_CONNECT_TOKEN
+
+# shellcheck disable=SC1091
+source "${HOME}/credentials/infisical.env"
+export INFISICAL_TOKEN INFISICAL_API_URL
+
+get_secret() {
+    local path="$1"
+    local key="$2"
+    infisical secrets get "${key}" \
+        --token="${INFISICAL_TOKEN}" \
+        --projectId="${INFISICAL_PROJECT_ID}" \
+        --path="${path}" \
+        --env=prod \
+        --domain="${INFISICAL_API_URL}" \
+        --silent --plain 2>/dev/null
+}
+
+TS_DOMAIN=$(get_secret "/shared" "TS_DOMAIN") || true
+ACTUAL_SERVER_PASSWORD=$(get_secret "/actual-budget-api" "ACTUAL_SERVER_PASSWORD") || true
+SYNC_ID=$(get_secret "/actual-budget-api" "SYNC_ID") || true
+
+if [[ -z "${TS_DOMAIN}" || -z "${ACTUAL_SERVER_PASSWORD}" || -z "${SYNC_ID}" ]]; then
+    # Required secret missing — silently no-op rather than spamming the failure counter
+    exit 0
+fi
+export TS_DOMAIN ACTUAL_SERVER_PASSWORD SYNC_ID
 
 # Attempt the sync, capturing output and exit code
 cd "${SCRIPT_DIR}"
 set +e
-OUTPUT=$(/usr/bin/op run --env-file 1password_sync_actual_budget.env -- node actual-budget-bank-sync.js 2>&1)
+OUTPUT=$(node actual-budget-bank-sync.js 2>&1)
 EXIT_CODE=$?
 set -e
 
