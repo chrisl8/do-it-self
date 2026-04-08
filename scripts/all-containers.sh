@@ -722,6 +722,21 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         USER_CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
         GENERATE_ENV_SCRIPT="${SCRIPT_DIR}/scripts/generate-env.js"
         INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
+
+        # If this container needs Tailscale (compose.yaml references
+        # ${TS_AUTHKEY}), Infisical must be reachable: TS_AUTHKEY lives in
+        # Infisical only and is injected into the shell env at start time
+        # below. Without Infisical we have no source of truth for the key,
+        # so fail clearly rather than starting with an empty TS_AUTHKEY.
+        if grep -q '${TS_AUTHKEY}' compose.yaml 2>/dev/null; then
+          if [[ ! -f "${INFISICAL_CRED_FILE}" ]] || ! docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+            printf "${RED}  SKIPPING ${CONTAINER_DIR}: Infisical must be running to start Tailscale-using containers.${NC}\n"
+            printf "${RED}  TS_AUTHKEY is stored in Infisical only -- start Infisical first, then retry.${NC}\n"
+            FAILED_CONTAINERS+=("${CONTAINER_DIR}")
+            continue
+          fi
+        fi
+
         if [[ -f "${REGISTRY_FILE}" ]] && [[ -f "${USER_CONFIG_FILE}" ]] && [[ -x "$(command -v node)" ]] && [[ -f "${GENERATE_ENV_SCRIPT}" ]]; then
           # Only validate when Infisical is NOT available (secrets come from infisical run, not .env)
           if [[ ! -f "${INFISICAL_CRED_FILE}" ]] || ! docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then

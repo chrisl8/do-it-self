@@ -190,22 +190,15 @@ Add `?ephemeral=false` to the end of the key so that your container connections 
 
 #### Getting `TS_AUTHKEY` into your containers
 
-The compose files reference `${TS_AUTHKEY}` which must be available as an environment variable when `docker compose up` runs.
+The compose files reference `${TS_AUTHKEY}`, which is stored in Infisical at `/shared/TS_AUTHKEY` and injected into the shell environment by `scripts/all-containers.sh` right before `docker compose up`. **The key is never written to disk in plaintext** — not in `user-config.yaml`, not in any container's `.env` file, not in `~/credentials/`.
 
-**If using 1Password:** Each service already has a `1password_credential_paths.env` file with `TS_AUTHKEY="op://Docker/tailscale/TS_AUTHKEY"`. The `all-containers.sh` script resolves these automatically via the `op` CLI. Store your key in 1Password and you're done.
+To set or rotate the key:
 
-**Without 1Password:** Create a `.env` file in each service directory containing:
-`TS_AUTHKEY=tskey-client-xxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxx?ephemeral=false`
+- **Web admin:** Open the Configuration tab and edit the `TS_AUTHKEY` field. The web admin writes it to Infisical via API.
+- **CLI:** `infisical secrets set TS_AUTHKEY=tskey-... --path=/shared --env=prod` (after sourcing `~/credentials/infisical.env` for the token).
+- **First install:** `scripts/setup.sh` accepts the key via the `TS_AUTHKEY` environment variable for automation, or prompts for it interactively when run from a TTY. It seeds Infisical with the key on first run; subsequent runs fetch it back from Infisical.
 
-Docker Compose automatically reads `.env` from the project directory. To avoid duplicating the key, you can keep one copy and symlink it:
-
-```
-echo 'TS_AUTHKEY=tskey-client-xxx?ephemeral=false' > ~/credentials/tailscale.env
-cd ~/containers/nextcloud
-ln -s ~/credentials/tailscale.env .env
-```
-
-If a service also needs other credentials, add them to the same `.env` file (or the `~/credentials/` source file).
+Containers that use Tailscale therefore have a hard dependency on Infisical being reachable to start. If Infisical is down, `all-containers.sh --start` will refuse to start any Tailscale-using container with a clear error.
 
 ## Mounted Volumes
 

@@ -56,6 +56,18 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# setup.sh now requires TS_AUTHKEY (Tailscale is a hard prerequisite of the
+# project), so the test must provide one. Destroy-only and retest paths
+# don't run setup.sh and so don't need a key.
+if [[ "$DESTROY_ONLY" != true ]] && [[ "$RETEST" != true ]] && [[ -z "$TS_KEY" ]]; then
+  printf "${RED}--ts-key is required.${NC}\n"
+  printf "setup.sh now hard-requires TS_AUTHKEY (Tailscale is a project prereq).\n"
+  printf "Mint a reusable auth key tagged 'tag:container' at:\n"
+  printf "  https://login.tailscale.com/admin/settings/keys\n"
+  printf "and re-run with --ts-key tskey-auth-...\n"
+  exit 1
+fi
+
 # Delete every Tailscale device that belongs to a test run: the host VM
 # (matched by hostname == $SERVER_NAME, or name starting with "$SERVER_NAME.")
 # AND every container sidecar (matched by the "tag:container" tag, which
@@ -134,18 +146,15 @@ else
   # then run setup.sh via curl|bash as that user. This matches a realistic
   # install where the user is a regular user with sudo, not root.
   # Env vars passed through to setup.sh:
-  #   WEB_ADMIN_BIND_HOST=127.0.0.1 -- always, so the web admin is reachable
-  #     ONLY from inside the test VM. Without this, setup.sh writes a .env
-  #     that binds the web admin to 0.0.0.0 and the test VM's public IP
-  #     ends up serving the secrets page (including TS_AUTHKEY) on port 3333.
-  #     test-fresh-install.sh runs ON the VM and uses curl localhost, so
-  #     127.0.0.1 doesn't break anything.
-  #   TS_AUTHKEY='...'             -- only when --ts-key was provided, so
-  #     setup.sh can join Tailscale automatically.
+  #   TS_AUTHKEY='...' -- required by setup.sh, used to join Tailscale and
+  #     to register the web-admin Tailscale sidecar so the dashboard is
+  #     reachable at https://admin.<tailnet>.ts.net. setup.sh now always
+  #     binds the web-admin backend to 127.0.0.1, so there's no longer a
+  #     need for a WEB_ADMIN_BIND_HOST override here.
   CLOUD_INIT_FILE=$(mktemp)
-  SETUP_ENV_LINE="WEB_ADMIN_BIND_HOST=127.0.0.1"
+  SETUP_ENV_LINE=""
   if [[ -n "$TS_KEY" ]]; then
-    SETUP_ENV_LINE="${SETUP_ENV_LINE} TS_AUTHKEY='${TS_KEY}'"
+    SETUP_ENV_LINE="TS_AUTHKEY='${TS_KEY}'"
   fi
   cat > "$CLOUD_INIT_FILE" << CLOUDINIT
 #cloud-config

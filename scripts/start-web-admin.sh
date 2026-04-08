@@ -73,11 +73,26 @@ load_env() {
 
 start() {
     if pm2 list 2>/dev/null | grep -q "$PM2_NAME"; then
-        STATUS=$(pm2 jlist 2>/dev/null | grep -o "\"status\":\"[^\"]*\"" | head -1 | grep -o "online" || true)
+        # Look up "Container Web Admin" specifically. The previous version
+        # used `grep -o "\"status\":\"[^\"]*\"" | head -1`, which returned
+        # the status of whichever PM2 process happened to come first in the
+        # JSON output (often a different module entirely), causing spurious
+        # restarts whenever any unrelated process was momentarily not online.
+        STATUS=$(pm2 jlist 2>/dev/null | node -e "
+            let d='';
+            process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+                try {
+                    const procs=JSON.parse(d);
+                    const me=procs.find(p=>p.name==='$PM2_NAME');
+                    process.stdout.write(me?.pm2_env?.status||'');
+                } catch(e) {}
+            });
+        " 2>/dev/null)
         if [ "$STATUS" = "online" ]; then
              return 0
         fi
-        echo "web-admin process exists but is not healthy, restarting..."
+        echo "web-admin process exists but is not healthy (status='$STATUS'), restarting..."
     fi
 
     echo "Starting web-admin..."

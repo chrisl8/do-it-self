@@ -2,8 +2,12 @@
 
 // Generates .env files for containers by merging:
 // - User-defined storage mounts with per-volume assignments
-// - Shared variables (TS_AUTHKEY, TS_DOMAIN, etc.)
+// - Shared variables (TS_DOMAIN, HOST_NAME, DOCKER_GID)
 // - Container-specific variables
+//
+// TS_AUTHKEY is intentionally NOT handled here. It lives in Infisical at
+// /shared/TS_AUTHKEY and is injected into the shell env by all-containers.sh
+// right before `docker compose up -d`.
 //
 // Usage: node generate-env.js <container-name> [--all] [--validate-only] [--quiet]
 
@@ -148,10 +152,11 @@ function buildEnvForContainer(registry, userConfig, containerName) {
     env.DOCKER_GID = sharedValues.DOCKER_GID || sharedDefs.DOCKER_GID?.default || "985";
   }
 
-  // Tailscale
+  // Tailscale. TS_AUTHKEY is intentionally NOT written here — it lives in
+  // Infisical only and is injected into the shell env at container start
+  // time by scripts/all-containers.sh. TS_DOMAIN is non-secret and lives in
+  // user-config.yaml.
   if (containerDef.uses_tailscale) {
-    if (sharedValues.TS_AUTHKEY) env.TS_AUTHKEY = sharedValues.TS_AUTHKEY;
-    else errors.push("TS_AUTHKEY (shared variable)");
     if (sharedValues.TS_DOMAIN) env.TS_DOMAIN = sharedValues.TS_DOMAIN;
     else errors.push("TS_DOMAIN (shared variable)");
   }

@@ -65,12 +65,18 @@ if [[ -f "$USER_CONFIG" ]] && command -v node &>/dev/null; then
   node "${SCRIPT_DIR}/scripts/generate-env.js" infisical --quiet 2>/dev/null || true
 fi
 
-# Append Infisical-specific secrets to the .env file
-# (generate-env.js writes volume paths and Tailscale vars; we add DB_PASSWORD etc.)
+# Append Infisical-specific secrets to the .env file IF they aren't already
+# there. generate-env.js (called above) also appends them via its
+# appendInfisicalBootstrapSecrets path, so this is a defensive idempotency
+# check to avoid duplicating the secrets section on every run. The fallback
+# branch handles the case where generate-env.js didn't run (no
+# user-config.yaml or no node) and the .env file doesn't exist yet.
 if [[ -f "${INFISICAL_DIR}/.env" ]]; then
-  echo "" >> "${INFISICAL_DIR}/.env"
-  echo "# Infisical internal secrets" >> "${INFISICAL_DIR}/.env"
-  grep -v '^#' "$SECRETS_FILE" | grep -v '^$' >> "${INFISICAL_DIR}/.env"
+  if ! grep -q '^AUTH_SECRET=' "${INFISICAL_DIR}/.env"; then
+    echo "" >> "${INFISICAL_DIR}/.env"
+    echo "# Infisical internal secrets" >> "${INFISICAL_DIR}/.env"
+    grep -v '^#' "$SECRETS_FILE" | grep -v '^$' >> "${INFISICAL_DIR}/.env"
+  fi
 else
   cp "$SECRETS_FILE" "${INFISICAL_DIR}/.env"
 fi
