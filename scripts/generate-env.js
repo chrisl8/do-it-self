@@ -257,6 +257,12 @@ async function main() {
       // Respect user config if set, otherwise check registry default_disabled
       const enabled = cc?.enabled !== undefined ? cc.enabled : !def.default_disabled;
       if (!enabled) continue;
+      // Skip containers whose compose.yaml has been deleted but whose
+      // user-config or registry entry still lingers — matches the
+      // web admin's writeAllContainerEnvs behavior in
+      // web-admin/backend/src/configRegistry.js:166. Without this check
+      // a stale entry crashes the whole --all run.
+      if (!(await fileExists(join(CONTAINERS_DIR, name, "compose.yaml")))) continue;
       const r = await generateForContainer(registry, userConfig, name, { validateOnly, quiet });
       if (!r.valid) hasErrors = true;
     }
