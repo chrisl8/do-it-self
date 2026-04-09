@@ -18,6 +18,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import UpgradeIcon from "@mui/icons-material/Upgrade";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import WarningIcon from "@mui/icons-material/Warning";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -187,6 +188,10 @@ const DockerStatus = ({
   updateAllAction,
   cancelUpdateAll,
   dismissUpdateAll,
+  startAllStatus,
+  startAllEnabled,
+  cancelStartAll,
+  dismissStartAll,
   connectionState,
   isLoading,
   releaseNotes,
@@ -283,6 +288,12 @@ const DockerStatus = ({
   ).length;
   const pendingUpdatesCount = unifiedStacks.filter(
     (stack) => stack.hasPendingUpdates,
+  ).length;
+  const startableCount = unifiedStacks.filter(
+    (stack) =>
+      !stack.isDisabled &&
+      !stack.isRunning &&
+      stack.configReady !== false,
   ).length;
 
   const hasData = dockerStatus.running || dockerStatus.stacks;
@@ -437,6 +448,20 @@ const DockerStatus = ({
               Update All ({pendingUpdatesCount})
             </Button>
           )}
+        {startableCount > 0 &&
+          (!startAllStatus ||
+            startAllStatus.status === "completed" ||
+            startAllStatus.status === "cancelled") && (
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<PlayArrowIcon />}
+              onClick={startAllEnabled}
+              size="small"
+            >
+              Start All Enabled ({startableCount})
+            </Button>
+          )}
       </Box>
 
       {!hasData && !isLoading && (
@@ -579,6 +604,133 @@ const DockerStatus = ({
                     >
                       View Output
                     </Button>
+                  </Box>
+                </Box>
+              )}
+          </CardContent>
+        </Card>
+      )}
+
+      {startAllStatus && (
+        <Card
+          elevation={3}
+          sx={{
+            mb: 2,
+            border: 2,
+            borderColor:
+              startAllStatus.status === "completed" &&
+              (startAllStatus.failed?.length || 0) === 0
+                ? "success.main"
+                : startAllStatus.status === "completed" &&
+                    (startAllStatus.failed?.length || 0) > 0
+                  ? "warning.main"
+                  : startAllStatus.status === "cancelled"
+                    ? "grey.500"
+                    : "info.main",
+          }}
+        >
+          <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                mb:
+                  startAllStatus.status === "completed" &&
+                  (startAllStatus.failed?.length || 0) > 0
+                    ? 1.5
+                    : 0,
+              }}
+            >
+              {startAllStatus.status === "running" && <Spinner size={24} />}
+              {startAllStatus.status === "completed" &&
+                (startAllStatus.failed?.length || 0) === 0 && (
+                  <CheckCircleIcon color="success" />
+                )}
+              {startAllStatus.status === "completed" &&
+                (startAllStatus.failed?.length || 0) > 0 && (
+                  <WarningIcon color="warning" />
+                )}
+              {startAllStatus.status === "cancelled" && (
+                <CancelIcon color="action" />
+              )}
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  {startAllStatus.status === "running" &&
+                    `Starting ${startAllStatus.completed.length + (startAllStatus.failed?.length || 0) + 1} of ${startAllStatus.total}: ${startAllStatus.current || "..."}`}
+                  {startAllStatus.status === "completed" &&
+                    (startAllStatus.failed?.length || 0) === 0 &&
+                    `Started ${startAllStatus.completed.length} of ${startAllStatus.total} stacks`}
+                  {startAllStatus.status === "completed" &&
+                    (startAllStatus.failed?.length || 0) > 0 &&
+                    `Started ${startAllStatus.completed.length} of ${startAllStatus.total} stacks (${startAllStatus.failed.length} failed)`}
+                  {startAllStatus.status === "cancelled" &&
+                    `Cancelled — ${startAllStatus.completed.length} of ${startAllStatus.total} stacks started`}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={
+                    ((startAllStatus.completed.length +
+                      (startAllStatus.failed?.length || 0)) /
+                      startAllStatus.total) *
+                    100
+                  }
+                  sx={{ mt: 0.5 }}
+                />
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ flexShrink: 0 }}
+              >
+                {startAllStatus.completed.length +
+                  (startAllStatus.failed?.length || 0)}{" "}
+                / {startAllStatus.total}
+              </Typography>
+              {startAllStatus.status === "running" && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  onClick={cancelStartAll}
+                >
+                  Cancel
+                </Button>
+              )}
+              {(startAllStatus.status === "completed" ||
+                startAllStatus.status === "cancelled") && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={dismissStartAll}
+                >
+                  Dismiss
+                </Button>
+              )}
+            </Box>
+            {startAllStatus.status === "completed" &&
+              (startAllStatus.failed?.length || 0) > 0 && (
+                <Box>
+                  <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
+                    Failed: {startAllStatus.failed.map((f) => f.stackName).join(", ")}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    {startAllStatus.failed.map((f) => (
+                      <Button
+                        key={f.stackName}
+                        variant="text"
+                        size="small"
+                        onClick={() =>
+                          setOutputDialog({
+                            open: true,
+                            stackName: f.stackName,
+                            output: f.output || "No output",
+                          })
+                        }
+                      >
+                        View {f.stackName} output
+                      </Button>
+                    ))}
                   </Box>
                 </Box>
               )}
