@@ -72,3 +72,6 @@ cloudflared/config
 actual-budget-sync/node_modules/
 scripts/node_modules/
 scripts/package-lock.json
+
+# Personal post-startup hook (see system-cron-startup.sh)
+scripts/post-startup-hook.sh

@@ -40,14 +40,12 @@ fi
 # Start web-admin
 "/home/$CURRENT_USER/containers/scripts/start-web-admin.sh" start >> "/home/$CURRENT_USER/logs/system-cron-startup.log" 2>&1
 
-if [[ -e "/home/$CURRENT_USER/Metatron/start-pm2.sh" ]]; then
-  # Start the Metatron and other Node.js processes
-  # THIS IS A PERSONAL SCRIPT THAT I RUN ON MY SYSTEM, I DO NOT EXPECT YOU TO HAVE IT.
-  "/home/$CURRENT_USER/Metatron/start-pm2.sh" >> "/home/$CURRENT_USER/logs/system-cron-startup.log" 2>&1
-fi
-
-if [[ -e "/home/$CURRENT_USER/Kryten/scripts/start-pm2.sh" ]]; then
-  "/home/$CURRENT_USER/Kryten/scripts/start-pm2.sh" >> "/home/$CURRENT_USER/logs/system-cron-startup.log" 2>&1
+# Optional hook for personal or site-specific startup tasks.
+# Runs after containers and web-admin are up. Output goes to the same log and email.
+# This file is gitignored — create it on your system if you need it.
+POST_STARTUP_HOOK="/home/$CURRENT_USER/containers/scripts/post-startup-hook.sh"
+if [[ -x "$POST_STARTUP_HOOK" ]]; then
+  "$POST_STARTUP_HOOK" >> "/home/$CURRENT_USER/logs/system-cron-startup.log" 2>&1
 fi
 
 echo "System startup complete." >> "/home/$CURRENT_USER/logs/system-cron-startup.log" 2>&1
