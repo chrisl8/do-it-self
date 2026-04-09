@@ -10,6 +10,7 @@ function useDockerStatus() {
   const [isLoading, setIsLoading] = useState(true);
   const [restartStatus, setRestartStatus] = useState({});
   const [updateAllStatus, setUpdateAllStatus] = useState(null);
+  const [startAllStatus, setStartAllStatus] = useState(null);
   const [releaseNotes, setReleaseNotes] = useState(null);
   const [releaseNotesLoading, setReleaseNotesLoading] = useState(false);
   const socketRef = useRef(null);
@@ -67,6 +68,9 @@ function useDockerStatus() {
           }
           if (data.updateAllStatus !== undefined) {
             setUpdateAllStatus(data.updateAllStatus);
+          }
+          if (data.startAllStatus !== undefined) {
+            setStartAllStatus(data.startAllStatus);
           }
           if (data.docker.running || data.docker.stacks) {
             setIsLoading(false);
@@ -191,6 +195,25 @@ function useDockerStatus() {
     setUpdateAllStatus(null);
   }, []);
 
+  const startAllEnabled = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "startAllEnabled" }));
+    }
+  }, []);
+
+  const cancelStartAll = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "cancelStartAll" }));
+    }
+  }, []);
+
+  const dismissStartAll = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "dismissStartAll" }));
+    }
+    setStartAllStatus(null);
+  }, []);
+
   const fetchReleaseNotes = useCallback((stackName) => {
     setReleaseNotesLoading(true);
     setReleaseNotes(null);
@@ -231,6 +254,10 @@ function useDockerStatus() {
     updateAllAction,
     cancelUpdateAll,
     dismissUpdateAll,
+    startAllStatus,
+    startAllEnabled,
+    cancelStartAll,
+    dismissStartAll,
     connectionState,
     isLoading,
     releaseNotes,

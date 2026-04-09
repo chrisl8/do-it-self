@@ -7,6 +7,7 @@ statusEmitter.setMaxListeners(20);
 const trackedStatus = {
   restartStatus: {},
   updateAllStatus: null,
+  startAllStatus: null,
 };
 
 const debouncedEmit = _.debounce(() => {

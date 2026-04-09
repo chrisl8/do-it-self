@@ -42,6 +42,10 @@ let updateAllResumeResolver = null;
 let updateAllChildProcess = null;
 let updateAllAborted = false;
 
+// Start-all state
+let startAllChildProcess = null;
+let startAllAborted = false;
+
 function spawnTracked(command, args, timeoutMs) {
   let output = "";
   const child = spawn(command, args);
@@ -185,6 +189,97 @@ async function processUpdateQueue() {
   console.log(`[Update All] Finished: ${status.status} (${status.completed.length} of ${status.total} updated)`);
 
   updateAllAborted = false;
+}
+
+async function processStartAllQueue() {
+  const scriptPath = join(os.homedir(), "containers/scripts/all-containers.sh");
+  const status = getStatus().startAllStatus;
+
+  while (status.queue.length > 0) {
+    if (startAllAborted) {
+      break;
+    }
+
+    const stackName = status.queue.shift();
+
+    if (activeStacks.has(stackName)) {
+      status.completed.push(stackName);
+      updateStatus("startAllStatus", { ...status });
+      continue;
+    }
+
+    status.current = stackName;
+    updateStatus("startAllStatus", { ...status });
+
+    activeStacks.add(stackName);
+    updateStatus(`restartStatus.${stackName}`, {
+      status: "in_progress",
+      operation: "start",
+    });
+
+    const progressIdx = status.completed.length + status.failed.length + 1;
+    console.log(`[Start All] Starting ${stackName} (${progressIdx} of ${status.total})...`);
+
+    const { child, promise } = spawnTracked(scriptPath, [
+      "--start",
+      "--no-wait",
+      "--container",
+      stackName,
+    ], 600000);
+
+    startAllChildProcess = child;
+    const { exitCode, output } = await promise;
+    startAllChildProcess = null;
+
+    activeStacks.delete(stackName);
+
+    // Refresh container data
+    try {
+      const containers = await getFormattedDockerContainers();
+      updateStatus("docker.running", containers.running);
+      updateStatus("docker.stacks", containers.stacks);
+    } catch (err) {
+      console.error("[Start All] Error refreshing containers:", err);
+    }
+
+    if (startAllAborted) {
+      updateStatus(`restartStatus.${stackName}`, undefined);
+      break;
+    }
+
+    if (exitCode === 0) {
+      console.log(`[Start All] ${stackName} started successfully`);
+      status.completed.push(stackName);
+      status.current = null;
+      updateStatus(`restartStatus.${stackName}`, undefined);
+      updateStatus("startAllStatus", { ...status });
+    } else {
+      console.log(`[Start All] ${stackName} failed (exit code ${exitCode}), continuing`);
+      status.failed.push({ stackName, error: `Script exited with code ${exitCode}`, output });
+      status.current = null;
+      updateStatus(`restartStatus.${stackName}`, {
+        status: "failed",
+        operation: "start",
+        output,
+        error: `Script exited with code ${exitCode}`,
+      });
+      updateStatus("startAllStatus", { ...status });
+      // No pause-on-failure: keep going through the queue
+    }
+  }
+
+  // Done
+  if (startAllAborted) {
+    status.status = "cancelled";
+  } else {
+    status.status = "completed";
+  }
+  status.current = null;
+  updateStatus("startAllStatus", { ...status });
+
+  console.log(`[Start All] Finished: ${status.status} (${status.completed.length} of ${status.total} started, ${status.failed.length} failed)`);
+
+  startAllAborted = false;
 }
 
 const CONTAINERS_DIR = join(os.homedir(), "containers");
@@ -1077,6 +1172,85 @@ async function webserver() {
         }
       } else if (message.type === "dismissUpdateAll") {
         updateStatus("updateAllStatus", null);
+      } else if (message.type === "startAllEnabled") {
+        const currentStartStatus = getStatus().startAllStatus;
+        if (currentStartStatus && currentStartStatus.status === "running") {
+          ws.send(
+            JSON.stringify({
+              type: "startAllError",
+              error: "A start-all operation is already in progress",
+            }),
+          );
+          return;
+        }
+        const currentUpdateAllStatus = getStatus().updateAllStatus;
+        if (currentUpdateAllStatus && (currentUpdateAllStatus.status === "running" || currentUpdateAllStatus.status === "paused")) {
+          ws.send(
+            JSON.stringify({
+              type: "startAllError",
+              error: "An update-all operation is in progress",
+            }),
+          );
+          return;
+        }
+
+        // Build queue from enabled, ready, not-running stacks
+        try {
+          const containers = await getFormattedDockerContainers();
+          updateStatus("docker.running", containers.running);
+          updateStatus("docker.stacks", containers.stacks);
+
+          const queue = Object.entries(containers.stacks)
+            .filter(([name, info]) =>
+              !info.isDisabled &&
+              info.configReady !== false &&
+              !containers.running[name]
+            )
+            .sort(([, a], [, b]) =>
+              (a.sortOrder || "z999").localeCompare(b.sortOrder || "z999", undefined, { numeric: true }),
+            )
+            .map(([name]) => name);
+
+          if (queue.length === 0) {
+            ws.send(
+              JSON.stringify({
+                type: "startAllError",
+                error: "No enabled containers need to be started",
+              }),
+            );
+            return;
+          }
+
+          console.log(`[Start All] Starting batch of ${queue.length} stacks: ${queue.join(", ")}`);
+
+          startAllAborted = false;
+          updateStatus("startAllStatus", {
+            status: "running",
+            queue: [...queue],
+            current: null,
+            completed: [],
+            failed: [],
+            total: queue.length,
+          });
+
+          processStartAllQueue();
+        } catch (e) {
+          console.error("[Start All] Error starting batch:", e);
+          ws.send(
+            JSON.stringify({
+              type: "startAllError",
+              error: e?.message || "Failed to start batch",
+            }),
+          );
+        }
+      } else if (message.type === "cancelStartAll") {
+        console.log("[Start All] Cancellation requested");
+        startAllAborted = true;
+        if (startAllChildProcess) {
+          startAllChildProcess.kill("SIGTERM");
+        }
+      } else if (message.type === "dismissStartAll") {
+        updateStatus("startAllStatus", null);
       } else if (message.type === "getReleaseNotes") {
         const stackName = message.payload?.stackName;
         if (!stackName) {

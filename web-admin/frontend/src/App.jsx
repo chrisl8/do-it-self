@@ -53,6 +53,10 @@ const App = () => {
     updateAllAction,
     cancelUpdateAll,
     dismissUpdateAll,
+    startAllStatus,
+    startAllEnabled,
+    cancelStartAll,
+    dismissStartAll,
     connectionState,
     isLoading,
     releaseNotes,
@@ -81,6 +85,10 @@ const App = () => {
               updateAllAction={updateAllAction}
               cancelUpdateAll={cancelUpdateAll}
               dismissUpdateAll={dismissUpdateAll}
+              startAllStatus={startAllStatus}
+              startAllEnabled={startAllEnabled}
+              cancelStartAll={cancelStartAll}
+              dismissStartAll={dismissStartAll}
               connectionState={connectionState}
               isLoading={isLoading}
               releaseNotes={releaseNotes}
