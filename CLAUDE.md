@@ -22,7 +22,7 @@ Mirrored at [Codeberg](https://codeberg.org/Chris10/do-it-self) and [GitHub](htt
 ### Credentials
 
 - Credentials go in `~/credentials/container-name.env`, symlinked as `.env` in each service folder: `ln -s ~/credentials/service.env .env`
-- Some services use 1Password via `1password_credential_paths.env` with `op://` references.
+- The web admin and `scripts/generate-env.js` pull secrets from Infisical at runtime; shell scripts that need secrets follow the `load_secret()` pattern in `scripts/borg-backup.sh:40-64`.
 - Environment variables use `VAR=${VAR}` in the compose `environment:` section — no `env_file:` directive. This keeps variables explicit per-container.
 - Sensitive values (passwords, API keys, personal URLs) go in `.env`; generic config goes directly in `compose.yaml`.
 
