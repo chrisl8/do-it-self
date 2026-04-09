@@ -480,7 +480,12 @@ fi
 # messages and admin-console fix URLs.
 if [[ -n "${TS_API_TOKEN:-}" ]]; then
   step "Running Tailscale preflight checks"
-  export TS_API_TOKEN TS_AUTHKEY TS_DOMAIN
+  # Intentionally do NOT export TS_DOMAIN here. The HTTPS round-trip check
+  # probes https://admin.${TS_DOMAIN}, but at this point no sidecar has
+  # started so the URL doesn't exist yet. That check belongs in Step 13,
+  # which runs AFTER containers are up. Omitting TS_DOMAIN makes the
+  # preflight script skip the round-trip and only check ACL + auth key.
+  export TS_API_TOKEN TS_AUTHKEY
   set +e
   node "${SCRIPT_DIR}/scripts/lib/tailscale-preflight.js"
   PREFLIGHT_EXIT=$?
