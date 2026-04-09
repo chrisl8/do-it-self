@@ -13,24 +13,15 @@ This document catalogs issues that would affect someone cloning this repository 
 - A step-by-step Tailscale setup guide is needed for new users
 - **The auth key MUST be created with the `tag:container` ACL tag.** Every container sidecar in this repo runs `--advertise-tags=tag:container`, and the Tailscale control plane rejects registration with `requested tags [tag:container] are invalid or not permitted` if the key isn't authorized for that tag. The user's tailnet ACL policy must also define `tag:container`. The key should be reusable so all 40+ sidecars can use the same one.
 
-### Pre-flight checks for Tailscale prerequisites
+### ~~Pre-flight checks for Tailscale prerequisites~~ (DONE)
 
-Several Tailscale-side configuration mistakes currently fail silently or surface only in deeply-buried sidecar logs. The user only finds out by either reading `docs/TESTING.md` cover-to-cover or by debugging "the URL doesn't work, why?" from scratch. We should add pre-flight checks (in `setup.sh`, `scripts/all-containers.sh --start`, and the web admin's pre-start UI) that detect these conditions up front and tell the user clearly. Known cases:
+API-based preflight checks now run in all three places: `setup.sh` (required, runs before any container start), `all-containers.sh --start` (soft-skip if `TS_API_TOKEN` is missing from Infisical), and the web admin (live health panel on the Docker Status tab with a Re-check button). Checks cover: ACL `tag:container` declared, auth key reusable / has right tag / not expired. HTTPS Certificates toggle has no API — covered by the existing Step 13 HTTPS round-trip probe. Device quota has no billing API and the Personal plan removed the cap.
 
-- **`tag:container` not declared in the tailnet ACL** — auth key creation succeeds but sidecars fail with `requested tags [tag:container] are invalid or not permitted`. Already partially surfaced by the test's tag-hint banner; should also be checked at setup time, ideally by querying the Tailscale API with the user's API token.
-- **HTTPS Certificates not enabled in the tailnet** — sidecars register and report healthy, but Tailscale Serve can't provision Let's Encrypt certs and the URL `https://<name>.<tailnet>.ts.net` returns nothing. The only signal is a `serve proxy: ... not able to issue TLS certs ...` line buried in `docker logs <container>-ts`.
-- **Auth key not marked Reusable** — first sidecar registers, the rest fail because the key was consumed. Today only visible in sidecar logs.
-- **Auth key expired** — every sidecar fails to register. Today only visible in sidecar logs.
-- **Free-tier 100-device limit reached** — registrations rejected with a quota message.
-  - Is it 50 devices now with the new pricing? I'm not sure.
+`TS_API_TOKEN` is now a required credential in `setup.sh` (prompted alongside `TS_AUTHKEY`), stored in Infisical `/shared/TS_API_TOKEN`, and editable via the web admin Configuration tab.
 
-Approaches worth considering:
+### Auth key expiry tracking
 
-1. **`setup.sh` check** — if the user provides `TS_API_TOKEN` (the cleanup token already used by hetzner-test.sh), `setup.sh` could query the Tailscale API to verify the ACL has `tag:container`, HTTPS is enabled, the auth key has the right tag and is reusable, and the device count is under quota. Print clear errors before proceeding.
-2. **`all-containers.sh --start` check** — before starting any container with `uses_tailscale: true`, run `tailscale status --json` and verify the host node is registered, then sample one sidecar's logs for known failure phrases after the first start attempt.
-3. **Web admin health panel** — surface the same checks as live status indicators on the dashboard, with links to the relevant Tailscale admin page for each fix.
-
-Partial mitigation in place: `scripts/setup.sh` Step 13 (and `scripts/test-fresh-install.sh` Phase 6b) run a real HTTPS round-trip to `https://admin.<tailnet>.ts.net` after setup, with diagnostics that list "HTTPS Certificates not enabled in your tailnet" and the other failure modes above as suspects when the probe fails. So the user no longer silently gets a broken dashboard URL — they get a setup-time failure with a hint. A proper pre-flight that _identifies_ which specific prerequisite is wrong (rather than "one of these") would still be better.
+Expired Tailscale auth keys are a recurring pain point: the key works, then a container restarts weeks later and silently fails to re-register. A banner in the web admin warning "your auth key expires in N days" and/or a periodic healthchecks.io ping would catch this proactively instead of waiting for the failure. The preflight helper (`scripts/lib/tailscale-preflight.js`) already reads the key's `expires` field — this item is about surfacing that as a persistent, visible countdown rather than a one-shot check.
 
 ### External Backup Infrastructure Assumed
 

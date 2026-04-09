@@ -148,7 +148,7 @@ a browser returns nothing.
 
 ### Generate the API access token
 
-The API token is needed to remove the test node from the tailnet after the server is destroyed.
+The API token is used by `setup.sh` to run preflight checks that catch common Tailscale misconfigurations (ACL missing `tag:container`, auth key not reusable or expired) before any container starts. It's also used by the web admin's live Tailscale health panel and by `hetzner-test.sh` to clean up test nodes.
 
 1. Go to https://login.tailscale.com/admin/settings/keys (same page)
 2. Scroll down to "API access tokens" and click "Generate access token"
