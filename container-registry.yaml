@@ -41,16 +41,6 @@ categories:
   uncategorized:
     label: Uncategorized
 containers:
-  1password:
-    description: 1Password Connect API for credential injection (legacy)
-    category: uncategorized
-    start_order: "000"
-    default_disabled: true
-    volumes:
-      data:
-        var: VOL_1PASSWORD_DATA
-        host_subpath: container-mounts/1password/data
-        container_path: /home/opuser/.op/data
   infisical:
     description: Self-hosted secret manager for credential injection
     category: uncategorized
