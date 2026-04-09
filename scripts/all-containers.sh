@@ -656,8 +656,10 @@ if [[ ${UPDATE_GIT_REPOS} = true && ${START_ACTION} = false && ${STOP_ACTION} = 
         if [[ "${REPO_SHALLOW}" = "true" ]]; then
           CLONE_ARGS+=(--depth 1)
         fi
+        # list-git-repos.js outputs "-" for empty fields (branch, shallow)
+        # because bash read with IFS=$'\t' collapses consecutive tabs.
         if git clone "${CLONE_ARGS[@]}" "${REPO_URL}" "${REPO_DIR}"; then
-          if [[ -n "${REPO_BRANCH}" ]]; then
+          if [[ -n "${REPO_BRANCH}" && "${REPO_BRANCH}" != "-" ]]; then
             cd "${REPO_DIR}"
             git checkout "${REPO_BRANCH}"
             cd "${SCRIPT_DIR}"

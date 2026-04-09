@@ -153,8 +153,12 @@ async function main() {
 
     for (const [subdir, meta] of Object.entries(repos)) {
       if (!meta || !meta.url) continue;
-      const branch = meta.branch || "";
-      const shallow = meta.shallow === true ? "true" : "";
+      // Use "-" instead of empty string for missing fields. Bash's `read`
+      // with IFS=$'\t' collapses consecutive tabs (whitespace), so an empty
+      // field between two tabs gets swallowed and shifts all subsequent
+      // fields left. The consumer (all-containers.sh) treats "-" as empty.
+      const branch = meta.branch || "-";
+      const shallow = meta.shallow === true ? "true" : "-";
       console.log(`${name}\t${subdir}\t${meta.url}\t${branch}\t${shallow}`);
     }
   }
