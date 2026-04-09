@@ -112,7 +112,13 @@ fi
 
 section "Infisical Secret Manager"
 
-check "infisical container running" docker ps --filter "name=infisical" --filter "status=running" -q
+# Plain `docker ps -q` returns exit 0 even with no matches — pipe
+# through grep to fail when output is empty (no matching container).
+if docker ps --filter "name=infisical" --filter "status=running" -q | grep -q .; then
+  pass "infisical container running"
+else
+  fail "infisical container running"
+fi
 check "credentials file created" test -f "${HOME}/credentials/infisical.env"
 
 if curl -sf http://localhost:8085/api/status > /dev/null 2>&1; then
