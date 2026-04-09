@@ -56,16 +56,19 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-# setup.sh now requires TS_AUTHKEY (Tailscale is a hard prerequisite of the
-# project), so the test must provide one. Destroy-only and retest paths
-# don't run setup.sh and so don't need a key.
-if [[ "$DESTROY_ONLY" != true ]] && [[ "$RETEST" != true ]] && [[ -z "$TS_KEY" ]]; then
-  printf "${RED}--ts-key is required.${NC}\n"
-  printf "setup.sh now hard-requires TS_AUTHKEY (Tailscale is a project prereq).\n"
-  printf "Mint a reusable auth key tagged 'tag:container' at:\n"
-  printf "  https://login.tailscale.com/admin/settings/keys\n"
-  printf "and re-run with --ts-key tskey-auth-...\n"
-  exit 1
+# setup.sh requires both TS_AUTHKEY and TS_API_TOKEN (Tailscale is a hard
+# prerequisite, and the API token drives the preflight checks that catch
+# ACL / auth-key misconfigurations). Destroy-only and retest paths don't
+# run setup.sh and so don't need either key.
+if [[ "$DESTROY_ONLY" != true ]] && [[ "$RETEST" != true ]]; then
+  if [[ -z "$TS_KEY" ]] || [[ -z "$TS_API_TOKEN" ]]; then
+    printf "${RED}Both --ts-key and --ts-api-token are required.${NC}\n"
+    printf "setup.sh requires a Tailscale auth key and an API access token.\n"
+    printf "Both are created at: https://login.tailscale.com/admin/settings/keys\n\n"
+    printf "  --ts-key tskey-auth-...        Auth key (Reusable=ON, Tags=tag:container)\n"
+    printf "  --ts-api-token tskey-api-...   API token (scroll to 'API access tokens')\n"
+    exit 1
+  fi
 fi
 
 # Delete every Tailscale device that belongs to a test run: the host VM
@@ -157,6 +160,9 @@ else
   SETUP_ENV_LINE=""
   if [[ -n "$TS_KEY" ]]; then
     SETUP_ENV_LINE="TS_AUTHKEY='${TS_KEY}'"
+  fi
+  if [[ -n "$TS_API_TOKEN" ]]; then
+    SETUP_ENV_LINE="${SETUP_ENV_LINE} TS_API_TOKEN='${TS_API_TOKEN}'"
   fi
   cat > "$CLOUD_INIT_FILE" << CLOUDINIT
 #cloud-config
