@@ -674,6 +674,39 @@ if [[ ${UPDATE_GIT_REPOS} = true && ${START_ACTION} = false && ${STOP_ACTION} = 
   exit 0
 fi
 
+# ── Tailscale preflight (before any container starts) ─────────────────
+# If Infisical has a TS_API_TOKEN, run the Tailscale API preflight to
+# catch ACL / auth-key misconfigurations early. Soft-skip on missing token
+# (existing installs that predate this feature won't have one yet).
+PREFLIGHT_SCRIPT="${SCRIPT_DIR}/scripts/lib/tailscale-preflight.js"
+if [[ ${START_ACTION} = true ]] && \
+   [[ -x "$(command -v infisical)" ]] && \
+   [[ -x "$(command -v node)" ]] && \
+   [[ -f "${PREFLIGHT_SCRIPT}" ]] && \
+   [[ -f "${HOME}/credentials/infisical.env" ]] && \
+   docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+  # shellcheck disable=SC1091
+  source "${HOME}/credentials/infisical.env"
+  export INFISICAL_TOKEN INFISICAL_API_URL
+  INFISICAL_ARGS="--token=${INFISICAL_TOKEN} --projectId=${INFISICAL_PROJECT_ID} --env=prod --domain=${INFISICAL_API_URL}"
+  # shellcheck disable=SC2086
+  PREFLIGHT_TOKEN=$(infisical secrets get TS_API_TOKEN ${INFISICAL_ARGS} --path=/shared --silent --plain 2>/dev/null) || true
+  if [[ -n "${PREFLIGHT_TOKEN}" ]]; then
+    export TS_API_TOKEN="${PREFLIGHT_TOKEN}"
+    # Also export TS_AUTHKEY and TS_DOMAIN for the auth-key and HTTPS checks
+    # shellcheck disable=SC2086
+    eval "$(infisical export ${INFISICAL_ARGS} --path="/shared" --format=dotenv-export 2>/dev/null)"
+    set +e
+    node "${PREFLIGHT_SCRIPT}" --quiet
+    PREFLIGHT_EXIT=$?
+    set -e
+    if [[ ${PREFLIGHT_EXIT} -ne 0 ]]; then
+      printf "${RED}Tailscale preflight failed. Fix the above and re-run.${NC}\n"
+      exit 1
+    fi
+  fi
+fi
+
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
   CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
