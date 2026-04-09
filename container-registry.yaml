@@ -455,6 +455,10 @@ containers:
     uses_docker_gid: true
     start_order: "002"
     monitor_all_mounts: true
+    git_repos:
+      dashboard-icons:
+        url: https://github.com/homarr-labs/dashboard-icons.git
+        shallow: true
   immich:
     description: Self-hosted photo and video backup
     category: my-stuff
@@ -725,6 +729,9 @@ containers:
     description: Minecraft Bedrock Edition dedicated server
     category: uncategorized
     uses_tailscale: true
+    git_repos:
+      docker-minecraft-bedrock-server:
+        url: https://github.com/itzg/docker-minecraft-bedrock-server.git
     volumes:
       data:
         var: VOL_MINECRAFT_DATA
@@ -1244,6 +1251,9 @@ containers:
     description: Tailscale Identity Provider
     category: tools
     uses_tailscale: true
+    git_repos:
+      tsidp:
+        url: https://github.com/tailscale/tsidp.git
     volumes:
       tsidp:
         var: VOL_TSIDP_TSIDP
@@ -1266,6 +1276,10 @@ containers:
     category: home
     uses_tailscale: true
     start_order: z100
+    git_repos:
+      valheim-server-docker:
+        url: https://github.com/JustinTArthur/valheim-server-docker.git
+        branch: update-libdoorstop-env-var-scheme
     variables:
       SERVER_NAME:
         type: string
