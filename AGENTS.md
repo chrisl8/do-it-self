@@ -124,8 +124,7 @@ docker compose pull       # Update images
 ├── valheim/valheim-server-docker/
 │   └── env2cfg/         # Python config tool
 ├── <service>/           # Individual Docker services
-│   ├── compose.yaml
-│   └── 1password_credential_paths.env
+│   └── compose.yaml
 └── scripts/             # Shared shell scripts
 ```
 
@@ -146,6 +145,6 @@ docker compose pull       # Update images
 ## Notes
 
 - No Cursor or Copilot rules found in `.cursor/rules/`, `.cursorrules`, or `.github/copilot-instructions.md`
-- Some services use 1Password for credentials (see `*_credential_paths.env`)
+- Credentials are loaded from Infisical at runtime; see `scripts/borg-backup.sh:40-64` for the canonical shell pattern
 - Tailscale configuration in `<service>/tailscale-config/tailscale-config.json`
 - SSL certificates managed via Traefik ACME in `<service>/tailscale-state/certs/`
