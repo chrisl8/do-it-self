@@ -821,6 +821,27 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           continue
         fi
 
+        # Export Infisical /shared into the environment BEFORE the pre-start
+        # hooks run. merge-homepage-config.js needs HOST_NAME / TS_DOMAIN from
+        # /shared to substitute the placeholders in homepage/config-defaults/.
+        # Without this, the merge produces literal `${HOST_NAME}.${TS_DOMAIN}`
+        # in the rendered config and the homepage greeting/links break.
+        # The container-specific /${CONTAINER_DIR} export still happens later,
+        # right before docker compose up.
+        INFISICAL_AVAILABLE=false
+        INFISICAL_ARGS=""
+        set +e
+        if [[ -x "$(command -v infisical)" ]] && [[ "$(docker ps --filter "name=infisical" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/infisical.env" ]]; then
+          # shellcheck disable=SC1091
+          source "${HOME}/credentials/infisical.env"
+          export INFISICAL_TOKEN INFISICAL_API_URL
+          INFISICAL_ARGS="--token=${INFISICAL_TOKEN} --projectId=${INFISICAL_PROJECT_ID} --env=prod --domain=${INFISICAL_API_URL}"
+          # shellcheck disable=SC2086
+          eval "$(infisical export ${INFISICAL_ARGS} --path="/shared" --format=dotenv-export 2>/dev/null)"
+          INFISICAL_AVAILABLE=true
+        fi
+        set -e
+
         # Per-container pre-start hooks.
         # homepage and beszel get their monitoring mounts regenerated from
         # user-config.yaml (writes a gitignored compose.override.yaml that
@@ -843,24 +864,15 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           apply_mount_permissions "mount-permissions.yaml"
         fi
 
-        # If Infisical is available, export secrets into the environment before starting.
-        # Otherwise fall back to plain .env (non-secret config only).
+        # If Infisical is available, also export the per-container secrets
+        # before starting. /shared was already exported above.
         set +e
-        if [[ -x "$(command -v infisical)" ]] && [[ "$(docker ps --filter "name=infisical" --filter "status=running" -q)" != "" ]] && [[ -f "${HOME}/credentials/infisical.env" ]]; then
+        if [[ "${INFISICAL_AVAILABLE}" = "true" ]]; then
           printf "${YELLOW}  Injecting secrets via Infisical...${NC}\n"
-          # shellcheck disable=SC1091
-          source "${HOME}/credentials/infisical.env"
-          export INFISICAL_TOKEN INFISICAL_API_URL
-          # Export shared secrets + container-specific secrets into environment
-          INFISICAL_ARGS="--token=${INFISICAL_TOKEN} --projectId=${INFISICAL_PROJECT_ID} --env=prod --domain=${INFISICAL_API_URL}"
-          # shellcheck disable=SC2086
-          eval "$(infisical export ${INFISICAL_ARGS} --path="/shared" --format=dotenv-export 2>/dev/null)"
           # shellcheck disable=SC2086
           eval "$(infisical export ${INFISICAL_ARGS} --path="/${CONTAINER_DIR}" --format=dotenv-export 2>/dev/null)"
-          docker compose up -d --wait
-        else
-          docker compose up -d --wait
         fi
+        docker compose up -d --wait
         COMPOSE_EXIT_CODE=$?
         set -e
         if [[ ${COMPOSE_EXIT_CODE} -ne 0 ]]; then

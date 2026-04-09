@@ -61,13 +61,23 @@ async function readYaml(path) {
 }
 
 async function readUserConfig() {
+  // Shared template variables (HOST_NAME, TS_DOMAIN) live in Infisical at
+  // /shared, not in user-config.yaml. The caller (scripts/all-containers.sh)
+  // is responsible for exporting them into the environment via
+  // `infisical export --path=/shared` before running this script. We read
+  // them from process.env here, falling back to user-config.yaml.shared for
+  // backward compat with older deployments that still keep a `shared:` block.
+  const sharedFromEnv = {};
+  for (const key of ["HOST_NAME", "TS_DOMAIN"]) {
+    if (process.env[key]) sharedFromEnv[key] = process.env[key];
+  }
   if (!existsSync(USER_CONFIG_PATH)) {
-    return { mounts: [], shared: {} };
+    return { mounts: [], shared: sharedFromEnv };
   }
   const cfg = (await readYaml(USER_CONFIG_PATH)) || {};
   return {
     mounts: Array.isArray(cfg.mounts) ? cfg.mounts : [],
-    shared: cfg.shared || {},
+    shared: { ...(cfg.shared || {}), ...sharedFromEnv },
   };
 }
 
