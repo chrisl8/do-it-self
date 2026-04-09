@@ -102,7 +102,15 @@ const App = () => {
             />
           }
         />
-        <Route path="/container-config" element={<ContainerConfig />} />
+        <Route
+          path="/container-config"
+          element={
+            <ContainerConfig
+              tailscalePreflightStatus={tailscalePreflightStatus}
+              runTailscalePreflight={runTailscalePreflight}
+            />
+          }
+        />
         <Route path="/backup-status" element={<BackupStatus />} />
       </Routes>
     </BrowserRouter>
