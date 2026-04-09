@@ -57,6 +57,8 @@ const App = () => {
     startAllEnabled,
     cancelStartAll,
     dismissStartAll,
+    tailscalePreflightStatus,
+    runTailscalePreflight,
     connectionState,
     isLoading,
     releaseNotes,
@@ -89,6 +91,8 @@ const App = () => {
               startAllEnabled={startAllEnabled}
               cancelStartAll={cancelStartAll}
               dismissStartAll={dismissStartAll}
+              tailscalePreflightStatus={tailscalePreflightStatus}
+              runTailscalePreflight={runTailscalePreflight}
               connectionState={connectionState}
               isLoading={isLoading}
               releaseNotes={releaseNotes}

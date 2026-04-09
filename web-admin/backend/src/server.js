@@ -1251,6 +1251,59 @@ async function webserver() {
         }
       } else if (message.type === "dismissStartAll") {
         updateStatus("startAllStatus", null);
+      } else if (message.type === "runTailscalePreflight") {
+        // Spawn the preflight helper with --json, reading TS_API_TOKEN
+        // from Infisical /shared. Soft-skip if the token isn't there.
+        try {
+          const secrets = await listSecrets("/shared").catch(() => []);
+          const tokenSecret = secrets.find((s) => s.key === "TS_API_TOKEN");
+          if (!tokenSecret?.value) {
+            updateStatus("tailscalePreflightStatus", {
+              status: "unavailable",
+              message:
+                "TS_API_TOKEN not set in Infisical /shared. Add it via Configuration → Shared secrets.",
+              checks: [],
+            });
+          } else {
+            updateStatus("tailscalePreflightStatus", { status: "running", checks: [] });
+            const childEnv = { ...process.env };
+            childEnv.TS_API_TOKEN = tokenSecret.value;
+            for (const s of secrets) {
+              if (s.key && s.value) childEnv[s.key] = s.value;
+            }
+            const preflightPath = join(
+              os.homedir(),
+              "containers/scripts/lib/tailscale-preflight.js",
+            );
+            const child = spawn("node", [preflightPath, "--json"], { env: childEnv });
+            let output = "";
+            child.stdout.on("data", (d) => (output += d.toString()));
+            child.stderr.on("data", (d) => (output += d.toString()));
+            child.on("close", (code) => {
+              try {
+                const result = JSON.parse(output);
+                updateStatus("tailscalePreflightStatus", {
+                  status: result.ok ? "passed" : "failed",
+                  checks: result.checks || [],
+                  error: result.error || null,
+                });
+              } catch {
+                updateStatus("tailscalePreflightStatus", {
+                  status: "failed",
+                  checks: [],
+                  error: `Preflight script exited ${code}, output: ${output.slice(0, 500)}`,
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.error("[Tailscale Preflight] Error:", e);
+          updateStatus("tailscalePreflightStatus", {
+            status: "failed",
+            checks: [],
+            error: e?.message || "Failed to run preflight",
+          });
+        }
       } else if (message.type === "getReleaseNotes") {
         const stackName = message.payload?.stackName;
         if (!stackName) {

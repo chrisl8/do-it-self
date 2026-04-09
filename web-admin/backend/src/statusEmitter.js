@@ -8,6 +8,7 @@ const trackedStatus = {
   restartStatus: {},
   updateAllStatus: null,
   startAllStatus: null,
+  tailscalePreflightStatus: null,
 };
 
 const debouncedEmit = _.debounce(() => {
