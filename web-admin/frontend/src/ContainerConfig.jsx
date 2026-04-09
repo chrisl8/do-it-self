@@ -20,6 +20,8 @@ import IconButton from "@mui/material/IconButton";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import SaveIcon from "@mui/icons-material/Save";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import AlertTitle from "@mui/material/AlertTitle";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import Select from "@mui/material/Select";
@@ -373,7 +375,7 @@ function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdat
   );
 }
 
-function ContainerConfig() {
+function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
   const {
     registry,
     userConfig,
@@ -476,6 +478,83 @@ function ContainerConfig() {
         onSave={handleSaveShared}
         saving={saving}
       />
+
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+          <Typography variant="h6">Tailscale Preflight</Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={
+              tailscalePreflightStatus?.status === "running" ? (
+                <CircularProgress size={16} />
+              ) : (
+                <RefreshIcon />
+              )
+            }
+            disabled={tailscalePreflightStatus?.status === "running"}
+            onClick={runTailscalePreflight}
+          >
+            {tailscalePreflightStatus?.status === "running"
+              ? "Checking..."
+              : tailscalePreflightStatus
+                ? "Re-check"
+                : "Run Check"}
+          </Button>
+        </Box>
+        {!tailscalePreflightStatus && (
+          <Alert severity="info">
+            Validates your tailnet configuration (ACL tags, auth key, HTTPS).
+            Save your Tailscale credentials above, then click Run Check.
+          </Alert>
+        )}
+        {tailscalePreflightStatus?.status === "passed" && (
+          <Alert severity="success">
+            <AlertTitle>All checks passed</AlertTitle>
+            {tailscalePreflightStatus.checks?.map((c) => (
+              <Typography key={c.name} variant="body2" color="text.secondary">
+                {c.name}: {c.message}
+              </Typography>
+            ))}
+          </Alert>
+        )}
+        {tailscalePreflightStatus?.status === "failed" && (
+          <Alert severity="error">
+            <AlertTitle>Issues found</AlertTitle>
+            {tailscalePreflightStatus.error && (
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                {tailscalePreflightStatus.error}
+              </Typography>
+            )}
+            {tailscalePreflightStatus.checks
+              ?.filter((c) => !c.ok)
+              .map((c) => (
+                <Typography key={c.name} variant="body2" sx={{ mt: 0.5 }}>
+                  <strong>{c.name}:</strong> {c.message}
+                  {c.fixUrl && (
+                    <>
+                      {" "}
+                      <a
+                        href={c.fixUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Fix
+                      </a>
+                    </>
+                  )}
+                </Typography>
+              ))}
+          </Alert>
+        )}
+        {tailscalePreflightStatus?.status === "unavailable" && (
+          <Alert severity="warning">
+            <Typography variant="body2">
+              {tailscalePreflightStatus.message}
+            </Typography>
+          </Alert>
+        )}
+      </Box>
 
       <Typography variant="h6" sx={{ mb: 1, mt: 3 }}>
         Containers
