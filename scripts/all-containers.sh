@@ -968,7 +968,14 @@ elif [[ ${START_ACTION} = true ]];then
 fi
 
 # Run my check script to go ahead and let everyone know we are back up.
-if [[ ${START_ACTION} = true && ${NO_HEALTH_CHECK} = false && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
+# The system health check is a global concern (whole-tailnet status,
+# container count drift, healthchecks.io ping). When starting a single
+# container it just produces noise from unrelated state — and worse,
+# any offline tailnet device elsewhere causes it to exit non-zero,
+# which under set -e fails the whole script and causes the caller
+# (web admin "Start All", per-container restart) to mark a perfectly
+# healthy start as failed. Skip it in single-container mode.
+if [[ ${START_ACTION} = true && ${NO_HEALTH_CHECK} = false && -z "${SINGLE_CONTAINER}" && -e "${HOME}/containers/scripts/system-health-check.sh" ]];then
   "${HOME}/containers/scripts/system-health-check.sh" --run-health-check
 fi
 
