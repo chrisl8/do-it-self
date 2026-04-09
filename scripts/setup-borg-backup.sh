@@ -106,8 +106,7 @@ if [ -d "${BORG_REPO}" ]; then
 else
     if [ -z "${BORG_PASSPHRASE}" ]; then
         printf "${YELLOW}[WARN]${NC} Cannot initialize borg repo — BORG_PASSPHRASE not available\n"
-        printf "       Create the 1Password item Docker/borgbackup with a BORG_PASSPHRASE field,\n"
-        printf "       then re-run this script\n"
+        printf "       Set BORG_PASSPHRASE in Infisical at /borgbackup, then re-run this script\n"
     else
         echo "Initializing borg repository at ${BORG_REPO}..."
         borg init --encryption=repokey-blake2 "${BORG_REPO}"
@@ -117,7 +116,7 @@ else
         KEY_FILE="${HOME}/credentials/borg-repo-key.txt"
         borg key export "${BORG_REPO}" "${KEY_FILE}"
         chmod 600 "${KEY_FILE}"
-        done_msg "Exported borg key to ${KEY_FILE} (store a copy in 1Password!)"
+        done_msg "Exported borg key to ${KEY_FILE} (store a copy somewhere safe!)"
     fi
 fi
 echo ""
@@ -138,16 +137,15 @@ else
     else
         done_msg "SSH connectivity to ${REMOTE_HOST}"
 
-        # Load remote passphrase
+        # Load remote passphrase from Infisical
         BORG_REMOTE_PASSPHRASE=""
-        if [ "${OP_AVAILABLE}" = "true" ]; then
-            BORG_REMOTE_PASSPHRASE=$(op read "op://Docker/borgbackup/BORG_REMOTE_PASSPHRASE" 2>/dev/null) || true
+        if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+            BORG_REMOTE_PASSPHRASE=$(infisical secrets get BORG_REMOTE_PASSPHRASE --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" --path="/borgbackup" --env=prod --domain="${INFISICAL_API_URL}" --silent --plain 2>/dev/null) || true
         fi
 
         if [ -z "${BORG_REMOTE_PASSPHRASE}" ]; then
             printf "${YELLOW}[WARN]${NC} Cannot initialize remote repo — BORG_REMOTE_PASSPHRASE not available\n"
-            printf "       Add a BORG_REMOTE_PASSPHRASE field to 1Password item Docker/borgbackup,\n"
-            printf "       then re-run this script\n"
+            printf "       Set BORG_REMOTE_PASSPHRASE in Infisical at /borgbackup, then re-run this script\n"
         elif BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg info "${BORG_REMOTE_REPO}" &>/dev/null; then
             skip_msg "Remote borg repo at ${BORG_REMOTE_REPO}"
         else
@@ -159,7 +157,7 @@ else
             REMOTE_KEY_FILE="${HOME}/credentials/borg-remote-repo-key.txt"
             BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg key export "${BORG_REMOTE_REPO}" "${REMOTE_KEY_FILE}"
             chmod 600 "${REMOTE_KEY_FILE}"
-            done_msg "Exported remote borg key to ${REMOTE_KEY_FILE} (store a copy in 1Password!)"
+            done_msg "Exported remote borg key to ${REMOTE_KEY_FILE} (store a copy somewhere safe!)"
         fi
     fi
 fi
@@ -229,7 +227,7 @@ echo "=========================================="
 echo ""
 BORG_REPO="/mnt/22TB/borg-repo"
 echo "Next steps:"
-echo "  1. Create a 1Password item in the Docker vault named 'borgbackup' with:"
+echo "  1. In Infisical at path /borgbackup, set the following secrets:"
 echo "     - BORG_PASSPHRASE: a strong passphrase"
 echo "     - BORG_HEALTHCHECK_URL: healthchecks.io URL (add later)"
 echo "     - BORG_REMOTE_PASSPHRASE: a separate passphrase for the offsite repo"
