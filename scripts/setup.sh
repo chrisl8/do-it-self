@@ -192,21 +192,36 @@ if [[ -f "${HOME}/credentials/infisical.env" ]]; then
   INFISICAL_BOOTSTRAPPED=true
 fi
 
-# Try to fetch TS_AUTHKEY from Infisical if it's bootstrapped, the container
-# is running, and the env var isn't already set. Cheap and harmless to try.
-if [[ -z "${TS_AUTHKEY:-}" ]] && [[ "$INFISICAL_BOOTSTRAPPED" = true ]]; then
+# Try to fetch TS_AUTHKEY and TS_API_TOKEN from Infisical if it's
+# bootstrapped, the container is running, and the env vars aren't already
+# set. Cheap and harmless to try.
+if [[ "$INFISICAL_BOOTSTRAPPED" = true ]]; then
   if docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
     # shellcheck disable=SC1091
     source "${HOME}/credentials/infisical.env"
-    FETCHED_KEY=$(infisical secrets get TS_AUTHKEY \
-      --token="${INFISICAL_TOKEN}" \
-      --projectId="${INFISICAL_PROJECT_ID}" \
-      --path=/shared --env=prod \
-      --domain="${INFISICAL_API_URL}" \
-      --silent --plain 2>/dev/null) || true
-    if [[ -n "$FETCHED_KEY" ]]; then
-      TS_AUTHKEY="$FETCHED_KEY"
-      ok "Fetched TS_AUTHKEY from Infisical"
+    if [[ -z "${TS_AUTHKEY:-}" ]]; then
+      FETCHED_KEY=$(infisical secrets get TS_AUTHKEY \
+        --token="${INFISICAL_TOKEN}" \
+        --projectId="${INFISICAL_PROJECT_ID}" \
+        --path=/shared --env=prod \
+        --domain="${INFISICAL_API_URL}" \
+        --silent --plain 2>/dev/null) || true
+      if [[ -n "$FETCHED_KEY" ]]; then
+        TS_AUTHKEY="$FETCHED_KEY"
+        ok "Fetched TS_AUTHKEY from Infisical"
+      fi
+    fi
+    if [[ -z "${TS_API_TOKEN:-}" ]]; then
+      FETCHED_TOKEN=$(infisical secrets get TS_API_TOKEN \
+        --token="${INFISICAL_TOKEN}" \
+        --projectId="${INFISICAL_PROJECT_ID}" \
+        --path=/shared --env=prod \
+        --domain="${INFISICAL_API_URL}" \
+        --silent --plain 2>/dev/null) || true
+      if [[ -n "$FETCHED_TOKEN" ]]; then
+        TS_API_TOKEN="$FETCHED_TOKEN"
+        ok "Fetched TS_API_TOKEN from Infisical"
+      fi
     fi
   fi
 fi
@@ -226,33 +241,58 @@ if [[ "$INFISICAL_BOOTSTRAPPED" = true ]] && [[ -z "${TS_AUTHKEY:-}" ]]; then
   TS_AUTHKEY_NEEDED=true
 fi
 
-# If we need it and still don't have it, prompt or bail.
-if [[ "$TS_AUTHKEY_NEEDED" = true ]] && [[ -z "${TS_AUTHKEY:-}" ]]; then
+# TS_API_TOKEN follows the same pattern: needed if Infisical doesn't have
+# it yet, OR the env var wasn't provided and the fetch came back empty.
+TS_API_TOKEN_NEEDED=false
+if [[ "$INFISICAL_BOOTSTRAPPED" = false ]]; then
+  TS_API_TOKEN_NEEDED=true
+fi
+if [[ -z "${TS_API_TOKEN:-}" ]]; then
+  TS_API_TOKEN_NEEDED=true
+fi
+
+# If we need credentials and still don't have them, prompt or bail.
+# Both are created on the same Tailscale admin page.
+TS_KEYS_URL="https://login.tailscale.com/admin/settings/keys"
+if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]] || \
+   [[ "$TS_API_TOKEN_NEEDED" = true && -z "${TS_API_TOKEN:-}" ]]; then
   if [[ -t 0 ]]; then
-    printf "\n${YELLOW}Tailscale auth key required.${NC}\n"
-    printf "Mint a reusable auth key tagged 'tag:container' at:\n"
-    printf "  https://login.tailscale.com/admin/settings/keys\n"
+    printf "\n${YELLOW}Tailscale credentials required.${NC}\n"
+    printf "Both are created at: ${TS_KEYS_URL}\n\n"
+    printf "  1. Auth key: click 'Generate auth key'\n"
+    printf "     Reusable=ON, Tags=tag:container\n"
+    printf "  2. API token: scroll to 'API access tokens', click 'Generate'\n"
+    printf "     (used for preflight checks that catch misconfigurations)\n\n"
     printf "Your tailnet ACL must define tag:container, and HTTPS Certificates\n"
-    printf "must be enabled in the tailnet admin console for Tailscale Serve to\n"
-    printf "issue Let's Encrypt certs. See docs/TESTING.md for the details.\n\n"
-    read -r -s -p "Tailscale auth key (input hidden): " TS_AUTHKEY
-    echo
-    if [[ -z "$TS_AUTHKEY" ]]; then
-      printf "${RED}No key provided. Aborting.${NC}\n"
-      exit 1
+    printf "must be enabled (DNS → HTTPS Certificates). See docs/TESTING.md.\n\n"
+    if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]]; then
+      read -r -s -p "Tailscale auth key (input hidden): " TS_AUTHKEY
+      echo
+      if [[ -z "$TS_AUTHKEY" ]]; then
+        printf "${RED}No auth key provided. Aborting.${NC}\n"
+        exit 1
+      fi
+    fi
+    if [[ "$TS_API_TOKEN_NEEDED" = true && -z "${TS_API_TOKEN:-}" ]]; then
+      read -r -s -p "Tailscale API token (input hidden): " TS_API_TOKEN
+      echo
+      if [[ -z "$TS_API_TOKEN" ]]; then
+        printf "${RED}No API token provided. Aborting.${NC}\n"
+        exit 1
+      fi
     fi
   else
-    printf "${RED}TS_AUTHKEY is required but not available.${NC}\n"
+    printf "${RED}Tailscale credentials required but not available.${NC}\n"
     printf "\n"
     printf "This project routes all service ingress through Tailscale.\n"
-    printf "Mint a reusable auth key tagged 'tag:container' at:\n"
-    printf "  https://login.tailscale.com/admin/settings/keys\n"
+    printf "Both credentials are created at: ${TS_KEYS_URL}\n\n"
+    printf "  1. Auth key: Reusable=ON, Tags=tag:container\n"
+    printf "  2. API token: scroll to 'API access tokens', generate one\n\n"
     printf "Your tailnet ACL must define tag:container, and HTTPS Certificates\n"
-    printf "must be enabled in the tailnet admin console for Tailscale Serve to\n"
-    printf "issue Let's Encrypt certs. See docs/TESTING.md for the details.\n"
+    printf "must be enabled (DNS → HTTPS Certificates). See docs/TESTING.md.\n"
     printf "\n"
-    printf "Then re-run this script with TS_AUTHKEY in your environment, e.g.:\n"
-    printf "  TS_AUTHKEY=tskey-auth-... bash %s\n" "$0"
+    printf "Then re-run with both in your environment, e.g.:\n"
+    printf "  TS_AUTHKEY=tskey-auth-... TS_API_TOKEN=tskey-api-... bash %s\n" "$0"
     exit 1
   fi
 fi
@@ -426,10 +466,30 @@ if [[ -f "${HOME}/credentials/infisical.env" ]]; then
   # shellcheck disable=SC1091
   source "${HOME}/credentials/infisical.env"
 
-  seed_shared TS_AUTHKEY "${TS_AUTHKEY:-}"
-  seed_shared TS_DOMAIN  "${TS_DOMAIN:-}"
-  seed_shared HOST_NAME  "${DETECTED_HOSTNAME}"
-  seed_shared DOCKER_GID "${DETECTED_DOCKER_GID}"
+  seed_shared TS_AUTHKEY   "${TS_AUTHKEY:-}"
+  seed_shared TS_API_TOKEN "${TS_API_TOKEN:-}"
+  seed_shared TS_DOMAIN    "${TS_DOMAIN:-}"
+  seed_shared HOST_NAME    "${DETECTED_HOSTNAME}"
+  seed_shared DOCKER_GID   "${DETECTED_DOCKER_GID}"
+fi
+
+# ── Tailscale preflight ────────────────────────────────────────────────
+# Run API-based checks BEFORE starting any container. Catches the most
+# common Tailscale-side misconfigurations (ACL missing tag:container,
+# auth key not reusable / expired / wrong-tag) with specific error
+# messages and admin-console fix URLs.
+if [[ -n "${TS_API_TOKEN:-}" ]]; then
+  step "Running Tailscale preflight checks"
+  export TS_API_TOKEN TS_AUTHKEY TS_DOMAIN
+  set +e
+  node "${SCRIPT_DIR}/scripts/lib/tailscale-preflight.js"
+  PREFLIGHT_EXIT=$?
+  set -e
+  if [[ $PREFLIGHT_EXIT -ne 0 ]]; then
+    printf "${RED}Fix the above Tailscale issues and re-run setup.${NC}\n"
+    exit 1
+  fi
+  ok "Tailscale preflight passed"
 fi
 
 # ── Step 12: Start default-enabled containers ───────────────────────────
