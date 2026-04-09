@@ -313,10 +313,22 @@ async function checkHttpsRoundTrip(domain) {
 function printHuman(checks, quiet) {
   const GREEN = "\x1b[32m";
   const RED = "\x1b[31m";
+  const YELLOW = "\x1b[33m";
   const RESET = "\x1b[0m";
   for (const c of checks) {
     if (c.ok) {
       if (!quiet) console.log(`  ${GREEN}✓${RESET} ${c.name}: ${c.message}`);
+    } else if (c.advisory) {
+      // Advisory checks (e.g. HTTPS round-trip) are warnings, not failures.
+      if (!quiet) {
+        console.log(`  ${YELLOW}⚠${RESET} ${c.name}: ${c.message}`);
+        if (c.fix) {
+          for (const line of c.fix.split("\n")) {
+            console.log(`      ${line}`);
+          }
+        }
+        if (c.fixUrl) console.log(`      Open: ${c.fixUrl}`);
+      }
     } else {
       console.error(`  ${RED}✗${RESET} ${c.name}: ${c.message}`);
       if (c.fix) {
@@ -356,10 +368,16 @@ async function main() {
   checks.push(await checkAclTag(token));
   checks.push(await checkAuthKey(token, authKey));
   if (domain) {
-    checks.push(await checkHttpsRoundTrip(domain));
+    // The HTTPS round-trip is best-effort / informational. It fails when no
+    // sidecar has started yet (fresh install, first all-containers.sh run),
+    // which is a normal transient state — not a config problem. Only ACL and
+    // auth-key checks are hard gates that affect the exit code.
+    const httpsCheck = await checkHttpsRoundTrip(domain);
+    httpsCheck.advisory = true;
+    checks.push(httpsCheck);
   }
 
-  const allOk = checks.every((c) => c.ok);
+  const allOk = checks.filter((c) => !c.advisory).every((c) => c.ok);
 
   if (json) {
     console.log(JSON.stringify({ ok: allOk, checks }, null, 2));
