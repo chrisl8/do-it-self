@@ -11,6 +11,7 @@ function useDockerStatus() {
   const [restartStatus, setRestartStatus] = useState({});
   const [updateAllStatus, setUpdateAllStatus] = useState(null);
   const [startAllStatus, setStartAllStatus] = useState(null);
+  const [tailscalePreflightStatus, setTailscalePreflightStatus] = useState(null);
   const [releaseNotes, setReleaseNotes] = useState(null);
   const [releaseNotesLoading, setReleaseNotesLoading] = useState(false);
   const socketRef = useRef(null);
@@ -71,6 +72,9 @@ function useDockerStatus() {
           }
           if (data.startAllStatus !== undefined) {
             setStartAllStatus(data.startAllStatus);
+          }
+          if (data.tailscalePreflightStatus !== undefined) {
+            setTailscalePreflightStatus(data.tailscalePreflightStatus);
           }
           if (data.docker.running || data.docker.stacks) {
             setIsLoading(false);
@@ -214,6 +218,14 @@ function useDockerStatus() {
     setStartAllStatus(null);
   }, []);
 
+  const runTailscalePreflight = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "runTailscalePreflight" }),
+      );
+    }
+  }, []);
+
   const fetchReleaseNotes = useCallback((stackName) => {
     setReleaseNotesLoading(true);
     setReleaseNotes(null);
@@ -258,6 +270,8 @@ function useDockerStatus() {
     startAllEnabled,
     cancelStartAll,
     dismissStartAll,
+    tailscalePreflightStatus,
+    runTailscalePreflight,
     connectionState,
     isLoading,
     releaseNotes,

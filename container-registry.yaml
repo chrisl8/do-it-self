@@ -7,6 +7,9 @@ shared_variables:
     type: secret
     description: Tailscale authentication key for container networking. Stored in Infisical at /shared/TS_AUTHKEY only -- never written to user-config.yaml or any container .env file. Injected into the shell env at container start time by scripts/all-containers.sh.
     required: true
+  TS_API_TOKEN:
+    type: secret
+    description: Tailscale API access token (tskey-api-...) for preflight checks. Used by setup.sh, all-containers.sh, and the web admin to validate ACL, auth key, and tailnet config before starting sidecars.
   TS_DOMAIN:
     type: string
     description: Your Tailscale domain (e.g. tail1234.ts.net). Stored in Infisical at /shared/TS_DOMAIN only -- never written to user-config.yaml or any container .env file. Injected into the shell env at container start time by scripts/all-containers.sh.

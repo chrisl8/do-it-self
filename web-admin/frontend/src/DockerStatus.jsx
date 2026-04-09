@@ -19,6 +19,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import UpgradeIcon from "@mui/icons-material/Upgrade";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import WarningIcon from "@mui/icons-material/Warning";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -192,6 +193,8 @@ const DockerStatus = ({
   startAllEnabled,
   cancelStartAll,
   dismissStartAll,
+  tailscalePreflightStatus,
+  runTailscalePreflight,
   connectionState,
   isLoading,
   releaseNotes,
@@ -386,6 +389,87 @@ const DockerStatus = ({
       )}
 
       <h2 style={{ marginTop: 0 }}>Docker Stacks</h2>
+
+      {tailscalePreflightStatus &&
+        tailscalePreflightStatus.status !== "running" && (
+          <Alert
+            severity={
+              tailscalePreflightStatus.status === "passed"
+                ? "success"
+                : tailscalePreflightStatus.status === "unavailable"
+                  ? "info"
+                  : "error"
+            }
+            sx={{ mb: 2 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                startIcon={<RefreshIcon />}
+                onClick={runTailscalePreflight}
+              >
+                Re-check
+              </Button>
+            }
+          >
+            <AlertTitle>
+              {tailscalePreflightStatus.status === "passed" &&
+                "Tailscale Preflight: OK"}
+              {tailscalePreflightStatus.status === "unavailable" &&
+                "Tailscale Preflight: Unavailable"}
+              {tailscalePreflightStatus.status === "failed" &&
+                "Tailscale Preflight: Issues Found"}
+            </AlertTitle>
+            {tailscalePreflightStatus.status === "unavailable" && (
+              <Typography variant="body2">
+                {tailscalePreflightStatus.message}
+              </Typography>
+            )}
+            {tailscalePreflightStatus.status === "failed" &&
+              tailscalePreflightStatus.error && (
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  {tailscalePreflightStatus.error}
+                </Typography>
+              )}
+            {tailscalePreflightStatus.status === "failed" &&
+              tailscalePreflightStatus.checks
+                ?.filter((c) => !c.ok)
+                .map((c) => (
+                  <Typography key={c.name} variant="body2" sx={{ mt: 0.5 }}>
+                    <strong>{c.name}:</strong> {c.message}
+                    {c.fixUrl && (
+                      <>
+                        {" "}
+                        <a
+                          href={c.fixUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Fix
+                        </a>
+                      </>
+                    )}
+                  </Typography>
+                ))}
+            {tailscalePreflightStatus.status === "passed" &&
+              tailscalePreflightStatus.checks?.map((c) => (
+                <Typography
+                  key={c.name}
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5 }}
+                >
+                  {c.name}: {c.message}
+                </Typography>
+              ))}
+          </Alert>
+        )}
+
+      {tailscalePreflightStatus?.status === "running" && (
+        <Alert severity="info" icon={<Spinner size={20} />} sx={{ mb: 2 }}>
+          Running Tailscale preflight checks...
+        </Alert>
+      )}
 
       {dockerStatus.invalidPendingUpdates?.length > 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
