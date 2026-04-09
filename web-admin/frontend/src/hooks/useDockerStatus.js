@@ -219,6 +219,7 @@ function useDockerStatus() {
   }, []);
 
   const runTailscalePreflight = useCallback(() => {
+    setTailscalePreflightStatus({ status: "running", checks: [] });
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(
         JSON.stringify({ type: "runTailscalePreflight" }),
