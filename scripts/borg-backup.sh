@@ -96,7 +96,6 @@ exec > >(tee -a "${BORG_LOG_FILE}") 2>&1
 export BORG_PASSPHRASE
 export BORG_REPO
 export BORG_RSH
-export OP_AVAILABLE
 
 echo "=========================================="
 echo "BorgBackup starting at $(date)"
