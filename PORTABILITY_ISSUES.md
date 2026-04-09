@@ -39,10 +39,9 @@ Partial mitigation in place: `scripts/setup.sh` Step 13 (and `scripts/test-fresh
 - SSH keys at `/root/.ssh/borg-offsite` must be manually created
 - `scripts/borg-backup.conf` hardcodes remote host and paths
 
-### Host-Specific Project References
+### ~~Host-Specific Project References~~ (DONE)
 
-- `scripts/system-cron-startup.sh` references `~/Metatron/start-pm2.sh` and `~/Kryten/scripts/start-pm2.sh` (personal projects)
-- These are guarded with `if [[ -e ... ]]` so they won't crash, but they're confusing
+Replaced the hardcoded `~/Metatron` and `~/Kryten` references in `system-cron-startup.sh` with a generic `scripts/post-startup-hook.sh` hook (gitignored, runs after containers and web-admin are up). Personal startup calls now live in the hook file.
 
 ### Some Host Package Dependencies Not Checked by Setup Scripts
 
