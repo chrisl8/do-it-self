@@ -77,14 +77,11 @@ Repo URLs, branches, and shallow-clone flags now live in `container-registry.yam
 
 ## Further Notes
 
-### Need to fully remove 1Password CLI dependency
+### ~~Need to fully remove 1Password CLI dependency~~ (DONE in repo)
 
-Borg has been migrated to Infisical (`scripts/setup-borg-backup.sh` is Infisical-only) and `scripts/all-containers.sh` itself contains zero `op://` references. What's still left:
+Everything inside this repo is now Infisical-only: `kopia-backup-check.sh` and `setup-borg-backup.sh` were migrated, the `1password/` container entry and 54 orphan `1password_credential_paths.env` files were removed, and the bootstrap migration scripts (`migrate-1password-to-infisical.sh`, `migrate-to-registry.sh`, `generate-registry.js`) were deleted.
 
-- The `1password/` container itself still exists in the repo (currently `default_disabled`).
-- `scripts/kopia-backup-check.sh:41-58` still has a 1Password fallback path.
-- **54 containers** still ship a `1password_credential_paths.env` file (run `find . -name 1password_credential_paths.env` for the current list). These are unused on Infisical-based deploys but should be removed for clarity.
-- Other tools on the host (outside `~/containers`) that use 1Password should be migrated so the final "deploy" doesn't need to include the 1Password container at all.
+- Still on the user side (outside `~/containers`): other host-level tools that use 1Password should be migrated so the maintainer no longer needs `op` installed at all.
 
 ### Need a full README rewrite
 
@@ -151,5 +148,6 @@ New users should be guided to the web UI as their default entry point, with the 
 - Could the setup.sh also know if it is in a non-interactive situation, check to see if it WILL need to escalate and bail if it is going to fail?
 - While we are here, I notice when setup.sh is run on a pre-built system, it still always pulls down the infisical containers during the core service start. Why does that happen if infisical is literally already running?
 - The web admin's isAvailable() check (infisicalClient.js:39) only verifies the credentials file is parseable — it does not test connectivity. So if the infisical container is down but ~/credentials/infisical.env exists, PUT /api/config/shared returns 500 (from the catch block) instead of the intended 503. This is pre-existing behavior — the OLD secrets-only guard had the same flaw — and the doc accepts the existing semantic. Worth a follow-up but not part of this work.
-- Pre-existing data issue I noticed but didn't touch: user-config.yaml still has 1password: enabled: true even though 1password/ directory has been deleted. Causes node scripts/generate-env.js --all to fail (web admin's writeAllContainerEnvs skips it correctly via the compose.yaml existence check). Cleanup belongs with the broader 1Password removal item in PORTABILITY_ISSUES.md.
+- `scripts/generate-env.js --all` doesn't skip containers whose `compose.yaml` is missing (the web admin's `writeAllContainerEnvs` does, via `configRegistry.js:165`). Today nothing trips this because the only offender (`1password`) was removed from `user-config.yaml`, but a future stale entry would crash the CLI while the web admin keeps working. Belt-and-braces: add the same `fileExists(compose.yaml)` skip to `generate-env.js`.
 - dawarich uses pre-built images — no clone needed. The .gitignore entry and README instructions are stale
+- How should I track/back up the parts of containers that are not part of the public repo, like personal homepage bits?
