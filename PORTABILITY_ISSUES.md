@@ -6,7 +6,7 @@ This document catalogs issues that would affect someone cloning this repository 
 
 ## Open Issues
 
-### Tailscale Setup Needs a Guide
+### Tailscale Setup Needs a Guide (DO SECOND-TO-LAST — write alongside the README rewrite)
 
 - 40+ services use the Tailscale sidecar pattern requiring `TS_AUTHKEY` and `TS_DOMAIN`
 - Both are now configurable via the web-admin and stored in Infisical, but there's no general user-facing documentation on how to _get_ them. The Tailscale-specific bits in `docs/TESTING.md` are testing-focused, not a general onboarding guide.
@@ -74,7 +74,7 @@ Everything inside this repo is now Infisical-only: `kopia-backup-check.sh` and `
 
 - Still on the user side (outside `~/containers`): other host-level tools that use 1Password should be migrated so the maintainer no longer needs `op` installed at all.
 
-### Need a full README rewrite
+### Need a full README rewrite (DO LAST — document after the product is final)
 
 The current README still tells users to manually clone, edit mounts, and run `all-containers.sh --start`, with no mention of `setup.sh` or the web admin. It should open with a quickstart along the lines of: "curl|bash `scripts/setup.sh` → open `http://<host>:3333` → Configuration tab → enable containers → start them" — and move the existing maintainer-specific notes lower.
 
@@ -111,10 +111,10 @@ Not urgent — first-pass defaults are landing with the homepage refactor and wo
 
 ### Directing user to CLI instead of web admin
 
-New users should be guided to the web UI as their default entry point, with the CLI kept as an "advanced" option. Two gaps remain:
+New users should be guided to the web UI as their default entry point, with the CLI kept as an "advanced" option.
 
 - **README — still mixed.** Tracked under the "Need a full README rewrite" item above.
-- **"Start All Enabled" button — still missing.** The web admin has an "Update All" endpoint but no equivalent for starting all enabled containers in one click. Until this exists, a user who follows setup.sh's advice and enables additional containers via the Configuration tab still has to drop to the CLI to bring them up.
+- ~~**"Start All Enabled" button — still missing.**~~ (DONE) The web admin now has a "Start All Enabled" button on the Docker Status tab that starts every enabled, ready, stopped container in start_order.
 
 ### Document and/or automate maintenance tasks
 
