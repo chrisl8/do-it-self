@@ -38,29 +38,30 @@ if ! command -v jq &>/dev/null; then
     exit 1
 fi
 
-# Load credentials from 1Password via Connect API
-load_op_secret() {
-    local op_path="$1"
-    if [ "${OP_AVAILABLE}" = "true" ]; then
-        op read "${op_path}" 2>/dev/null && return 0
+# Load credentials from Infisical
+load_secret() {
+    local container="$1"
+    local key="$2"
+    if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+        infisical secrets get "${key}" --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" --path="/${container}" --env=prod --domain="${INFISICAL_API_URL}" --silent --plain 2>/dev/null && return 0
     fi
     return 1
 }
 
-OP_AVAILABLE=false
-if command -v op &>/dev/null && \
-   [ -f "${HOME}/credentials/1password-connect.env" ] && \
-   docker ps --filter "name=1password-connect-api" --filter "status=running" -q | grep -q .; then
-    export OP_CONNECT_HOST="http://127.0.0.1:9980/"
-    OP_CONNECT_TOKEN=$(grep "OP_CONNECT_TOKEN=" "${HOME}/credentials/1password-connect.env" | cut -d "=" -f 2-)
-    export OP_CONNECT_TOKEN
-    OP_AVAILABLE=true
+SECRETS_AVAILABLE=false
+if command -v infisical &>/dev/null && \
+   [ -f "${HOME}/credentials/infisical.env" ] && \
+   docker ps --filter "name=infisical" --filter "status=running" -q | grep -q .; then
+    # shellcheck disable=SC1091
+    source "${HOME}/credentials/infisical.env"
+    export INFISICAL_TOKEN INFISICAL_API_URL
+    SECRETS_AVAILABLE=true
 fi
 
 HEALTHCHECK_URL=""
-if [ "${OP_AVAILABLE}" = "true" ]; then
-    HEALTHCHECK_URL=$(load_op_secret "op://Docker/kopia-backup-check/HEALTHCHECK_URL") || true
-    TS_DOMAIN=$(load_op_secret "op://Docker/tailscale/TS_DOMAIN") || true
+if [ "${SECRETS_AVAILABLE}" = "true" ]; then
+    HEALTHCHECK_URL=$(load_secret "kopia-backup-check" "HEALTHCHECK_URL") || true
+    TS_DOMAIN=$(load_secret "shared" "TS_DOMAIN") || true
 fi
 
 # Build web admin URL from hostname and TS_DOMAIN if available
