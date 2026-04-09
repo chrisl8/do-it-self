@@ -30,7 +30,7 @@ Approaches worth considering:
 2. **`all-containers.sh --start` check** — before starting any container with `uses_tailscale: true`, run `tailscale status --json` and verify the host node is registered, then sample one sidecar's logs for known failure phrases after the first start attempt.
 3. **Web admin health panel** — surface the same checks as live status indicators on the dashboard, with links to the relevant Tailscale admin page for each fix.
 
-Partial mitigation in place: `scripts/setup.sh` Step 13 (and `scripts/test-fresh-install.sh` Phase 6b) run a real HTTPS round-trip to `https://admin.<tailnet>.ts.net` after setup, with diagnostics that list "HTTPS Certificates not enabled in your tailnet" and the other failure modes above as suspects when the probe fails. So the user no longer silently gets a broken dashboard URL — they get a setup-time failure with a hint. A proper pre-flight that *identifies* which specific prerequisite is wrong (rather than "one of these") would still be better.
+Partial mitigation in place: `scripts/setup.sh` Step 13 (and `scripts/test-fresh-install.sh` Phase 6b) run a real HTTPS round-trip to `https://admin.<tailnet>.ts.net` after setup, with diagnostics that list "HTTPS Certificates not enabled in your tailnet" and the other failure modes above as suspects when the probe fails. So the user no longer silently gets a broken dashboard URL — they get a setup-time failure with a hint. A proper pre-flight that _identifies_ which specific prerequisite is wrong (rather than "one of these") would still be better.
 
 ### External Backup Infrastructure Assumed
 
@@ -65,10 +65,9 @@ Most cron entries are still manual. `scripts/setup-borg-backup.sh` installs its 
 - WireGuard/VPN provider credentials (for recon/gluetun stack)
 - Various service-specific API keys (Spotify, etc.)
 
-### Git-Cloned Subprojects Are Excluded from Repo
+### ~~Git-Cloned Subprojects Are Excluded from Repo~~ (DONE)
 
-- `.gitignore` excludes `tsidp/tsidp/`, `valheim/valheim-server-docker/`, `dawarich/dawarich/`, `minecraft/docker-minecraft-bedrock-server/`
-- `scripts/all-containers.sh --update-git-repos` clones them, but `setup.sh` does not call it on first run, so a fresh install can't start any of these containers without a manual extra step.
+Repo URLs, branches, and shallow-clone flags now live in `container-registry.yaml` under each container's `git_repos` field. `all-containers.sh --update-git-repos` reads the registry via `scripts/list-git-repos.js` and clones missing repos or pulls existing ones. Works standalone or combined with `--start`/`--stop`. `setup.sh` calls it before starting containers. Note: `dawarich/dawarich/` was a stale entry — dawarich uses pre-built images and doesn't need a clone.
 
 ### `AGENTS.md` and `CLAUDE.md` Are Developer-Facing, Not User-Facing
 
@@ -153,3 +152,4 @@ New users should be guided to the web UI as their default entry point, with the 
 - While we are here, I notice when setup.sh is run on a pre-built system, it still always pulls down the infisical containers during the core service start. Why does that happen if infisical is literally already running?
 - The web admin's isAvailable() check (infisicalClient.js:39) only verifies the credentials file is parseable — it does not test connectivity. So if the infisical container is down but ~/credentials/infisical.env exists, PUT /api/config/shared returns 500 (from the catch block) instead of the intended 503. This is pre-existing behavior — the OLD secrets-only guard had the same flaw — and the doc accepts the existing semantic. Worth a follow-up but not part of this work.
 - Pre-existing data issue I noticed but didn't touch: user-config.yaml still has 1password: enabled: true even though 1password/ directory has been deleted. Causes node scripts/generate-env.js --all to fail (web admin's writeAllContainerEnvs skips it correctly via the compose.yaml existence check). Cleanup belongs with the broader 1Password removal item in PORTABILITY_ISSUES.md.
+- dawarich uses pre-built images — no clone needed. The .gitignore entry and README instructions are stale

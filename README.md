@@ -44,21 +44,16 @@ sudo apt-get update && sudo apt-get install -y infisical
 
 ### Git Repos
 
-A few folders require a git repo to be pulled in to build the image.
-
-Here is the current list as a set of commands to run.
+Some containers build from external git repos (tsidp, valheim, minecraft) and
+homepage needs dashboard-icons for its tiles. These are cloned automatically
+by `setup.sh` and can be updated any time via:
 
 ```bash
-cd dawarich
-git clone https://github.com/Freika/dawarich.git
-cd ..
-cd minecraft
-git clone https://github.com/itzg/docker-minecraft-bedrock-server.git
-cd ..
+scripts/all-containers.sh --update-git-repos
 ```
 
-It will be on you to keep up with updating those repos.
-I typically subscribe to their releases in github so that I know when to do so.
+Repo URLs, branches, and shallow-clone settings are defined in
+`container-registry.yaml` under each container's `git_repos` field.
 
 ### Mounts
 

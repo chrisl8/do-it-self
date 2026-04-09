@@ -36,7 +36,7 @@ Mirrored at [Codeberg](https://codeberg.org/Chris10/do-it-self) and [GitHub](htt
 
 ### External Git Repos
 
-Some services embed cloned git repos (e.g., `dawarich/dawarich/`, `minecraft/docker-minecraft-bedrock-server/`). These are updated via `all-containers.sh --update-git-repos`.
+Some services build from cloned git repos (e.g., `tsidp/tsidp/`, `valheim/valheim-server-docker/`, `minecraft/docker-minecraft-bedrock-server/`). Repo URLs, branches, and shallow-clone flags are defined in `container-registry.yaml` under each container's `git_repos` field. Cloned automatically by `setup.sh`; updated via `all-containers.sh --update-git-repos`. The helper `scripts/list-git-repos.js` reads the registry and outputs repo metadata.
 
 ## Key Scripts (scripts/)
 

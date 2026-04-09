@@ -100,7 +100,7 @@ if [[ ${TEST_FAIL} = true ]];then
   exit 1
 fi
 
-if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} = false && ${LIST_MOUNTS} = false ]];then
+if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} = false && ${LIST_MOUNTS} = false && ${UPDATE_GIT_REPOS} = false ]];then
   echo ""
   echo "Containers are enabled/disabled via the web admin Configuration tab (or by editing user-config.yaml directly)."
   echo ""
@@ -636,6 +636,44 @@ if [[ ${LIST_MOUNTS} = true && ${START_ACTION} = false ]]; then
   exit 0
 fi
 
+# Standalone --update-git-repos: clone missing repos or pull existing ones,
+# then exit. When combined with --start/--stop the per-container logic below
+# handles it instead.
+GIT_REPOS_HELPER="${SCRIPT_DIR}/scripts/list-git-repos.js"
+if [[ ${UPDATE_GIT_REPOS} = true && ${START_ACTION} = false && ${STOP_ACTION} = false ]]; then
+  printf "${YELLOW}Cloning/updating external git repositories...${NC}\n"
+  if [[ -x "$(command -v node)" ]] && [[ -f "${GIT_REPOS_HELPER}" ]]; then
+    while IFS=$'\t' read -r REPO_CONTAINER REPO_SUBDIR REPO_URL REPO_BRANCH REPO_SHALLOW; do
+      REPO_DIR="${SCRIPT_DIR}/${REPO_CONTAINER}/${REPO_SUBDIR}"
+      if [[ -d "${REPO_DIR}/.git" ]]; then
+        printf "${YELLOW}  Updating %s/%s${NC}\n" "${REPO_CONTAINER}" "${REPO_SUBDIR}"
+        cd "${REPO_DIR}"
+        git pull || printf "${RED}  Failed to update %s/%s${NC}\n" "${REPO_CONTAINER}" "${REPO_SUBDIR}"
+        cd "${SCRIPT_DIR}"
+      else
+        printf "${YELLOW}  Cloning %s into %s/%s${NC}\n" "${REPO_URL}" "${REPO_CONTAINER}" "${REPO_SUBDIR}"
+        CLONE_ARGS=()
+        if [[ "${REPO_SHALLOW}" = "true" ]]; then
+          CLONE_ARGS+=(--depth 1)
+        fi
+        if git clone "${CLONE_ARGS[@]}" "${REPO_URL}" "${REPO_DIR}"; then
+          if [[ -n "${REPO_BRANCH}" ]]; then
+            cd "${REPO_DIR}"
+            git checkout "${REPO_BRANCH}"
+            cd "${SCRIPT_DIR}"
+          fi
+        else
+          printf "${RED}  Failed to clone %s/%s${NC}\n" "${REPO_CONTAINER}" "${REPO_SUBDIR}"
+        fi
+      fi
+    done < <(node "${GIT_REPOS_HELPER}" 2>/dev/null)
+  else
+    printf "${RED}  Node.js or list-git-repos.js not available, skipping.${NC}\n"
+  fi
+  printf "${YELLOW}Git repository update complete.${NC}\n"
+  exit 0
+fi
+
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
   CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
@@ -688,15 +726,33 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         fi
 
         if [[ ${UPDATE_GIT_REPOS} = true ]];then
-        # Update any git repositories in the directory
-          set +e
-          find . -name ".git" -type d -exec sh -c '
-            printf "${YELLOW}  Updating git repository in ${1%/*}${NC}\n"
-            cd "${1%/*}" || continue
-            git pull
-            cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
-          ' sh {} \; 2>/dev/null;
-          set -e
+          # Clone or update git repos defined in container-registry.yaml
+          if [[ -x "$(command -v node)" ]] && [[ -f "${GIT_REPOS_HELPER}" ]]; then
+            while IFS=$'\t' read -r _REPO_CONTAINER REPO_SUBDIR REPO_URL REPO_BRANCH REPO_SHALLOW; do
+              if [[ -d "${REPO_SUBDIR}/.git" ]]; then
+                printf "${YELLOW}  Updating git repository in ${REPO_SUBDIR}${NC}\n"
+                cd "${REPO_SUBDIR}"
+                git pull || printf "${RED}  Failed to update ${REPO_SUBDIR}${NC}\n"
+                cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
+              else
+                printf "${YELLOW}  Cloning ${REPO_URL} into ${REPO_SUBDIR}${NC}\n"
+                CLONE_ARGS=()
+                if [[ "${REPO_SHALLOW}" = "true" ]]; then
+                  CLONE_ARGS+=(--depth 1)
+                fi
+                if git clone "${CLONE_ARGS[@]}" "${REPO_URL}" "${REPO_SUBDIR}"; then
+                  if [[ -n "${REPO_BRANCH}" ]]; then
+                    cd "${REPO_SUBDIR}"
+                    git checkout "${REPO_BRANCH}"
+                    cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
+                  fi
+                else
+                  printf "${RED}  Failed to clone ${REPO_SUBDIR}${NC}\n"
+                fi
+              fi
+            done < <(node "${GIT_REPOS_HELPER}" --container "${CONTAINER_DIR}" 2>/dev/null)
+          fi
+          # Special case: caddy/site/my-digital-garden requires npm rebuild after pull
           if [[ -e site/my-digital-garden/.git ]];then
             printf "${YELLOW}  Updating git repository in site/my-digital-garden${NC}\n"
             cd site/my-digital-garden || continue

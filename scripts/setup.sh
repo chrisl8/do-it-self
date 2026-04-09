@@ -376,21 +376,17 @@ else
   ok "scripts/package.json not found, skipping"
 fi
 
-# ── Step 10: Homepage dashboard-icons library ───────────────────────────
-# The homepage dashboard uses icons from homarr-labs/dashboard-icons for
-# the container tiles (referenced in compose.yaml labels as
-# homepage.icon=/dashboard-icons/...). Cloned shallow so it's smaller than
-# the full 2GB repo. Updated on subsequent runs via
-# `scripts/all-containers.sh --update-git-repos`.
+# ── Step 10: Clone external git repositories ─────────────────────────────
+# Some containers build from external git repos (e.g. tsidp, valheim,
+# minecraft) and homepage needs dashboard-icons for its tiles. These are
+# gitignored and must be cloned before the containers can start. Repo URLs,
+# branches, and shallow-clone flags are defined in container-registry.yaml
+# under each container's git_repos field. Idempotent: existing repos get a
+# `git pull` instead of a fresh clone.
 
-DASHBOARD_ICONS_DIR="${SCRIPT_DIR}/homepage/dashboard-icons"
-if [[ ! -d "${DASHBOARD_ICONS_DIR}/.git" ]]; then
-  step "Cloning dashboard-icons (for homepage)"
-  git clone --depth 1 https://github.com/homarr-labs/dashboard-icons.git "${DASHBOARD_ICONS_DIR}" 2>&1 | tail -2
-  ok "dashboard-icons cloned to ${DASHBOARD_ICONS_DIR}"
-else
-  ok "dashboard-icons already present"
-fi
+step "Cloning external git repositories for enabled containers"
+"${SCRIPT_DIR}/scripts/all-containers.sh" --update-git-repos
+ok "External git repositories ready"
 
 # ── Step 11: Infisical secret manager ───────────────────────────────────
 
