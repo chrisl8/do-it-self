@@ -82,9 +82,11 @@ Not urgent — revisit once closer to "public."
 
 **Full design document: [docs/MODULES.md](docs/MODULES.md)**
 
-Containers become installable modules (git repos) instead of living in the platform repo. Each module ships a `module.yaml` declaring its containers' metadata. The platform generates `container-registry.yaml` by merging all installed modules. `user-config.yaml` remains the user's override layer. Personal containers live flat in `~/containers/` with `source: personal`.
+Module repos (git repos containing Docker Compose stacks + metadata) are cloned into a persistent `.modules/` catalog directory. Individual containers are **installed** by copying their folder from `.modules/` to the platform root, and **uninstalled** by deleting that folder. Container folders are ephemeral — all persistent data lives in `~/container-mounts/`, `~/credentials/`, and `user-config.yaml`, so uninstall is a clean `rm -rf` with no data loss.
 
-The 66 current containers will be split into ~10 category-based module repos (core, productivity, media, tools, monitoring, desktop, network, social, backup, personal). The maintainer's personal stacks (caddy, witchazzan, etc.) move to a private repo.
+This pattern (persistent catalog, copy-to-activate, separate data) is well-established: Runtipi and Umbrel use it for Docker app management, Nix uses it for system packages, GNU Stow uses it for dotfiles.
+
+The platform root stays clean — only actively-used containers appear as top-level folders. The web admin gets reorganized: My Containers (installed), Browse (available from `.modules/`), and Sources (manage module repos).
 
 Implementation phases: module infrastructure, repo split, web admin UI, side effects (cron/host-deps), developer tooling.
 
@@ -102,7 +104,13 @@ Have Claude do a thorough review of the entire codebase for security issues. Sho
 
 ### README rewrite (last)
 
-The current README still tells users to manually clone, edit mounts, and run `all-containers.sh --start`, with no mention of `setup.sh` or the web admin. Should open with a quickstart: `curl|bash setup.sh` → open web admin → Configuration tab → enable containers → Start All Enabled. Move maintainer-specific notes lower.
+The current README still tells users to manually clone, edit mounts, and run `all-containers.sh --start`, with no mention of `setup.sh` or the web admin. The README needs two distinct sections:
+
+1. **How to set this up** — Quickstart: `curl|bash setup.sh` → open web admin → browse available containers → install and enable → Start All Enabled. This is what a new user reads.
+
+2. **How and why this works the way it does** — Architecture overview: the module/catalog system, why container folders are ephemeral, the three-layer config merge, the Tailscale sidecar pattern, how credentials flow through Infisical. This is what someone reads before deciding to trust and adopt the platform, or before contributing.
+
+Move maintainer-specific notes lower.
 
 ### AGENTS.md and CLAUDE.md are developer-facing
 
