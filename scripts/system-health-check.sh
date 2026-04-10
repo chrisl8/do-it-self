@@ -124,6 +124,38 @@ if [ -e /usr/bin/tailscale ]; then
   fi
 fi
 
+# Check Tailscale auth key expiry. Uses the preflight helper to query the
+# Tailscale API for the key's expiration date. If the key expires within
+# 14 days, treat it as an error so healthchecks.io fires a notification.
+PREFLIGHT_SCRIPT="$(dirname "$0")/lib/tailscale-preflight.js"
+INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
+if command -v node &>/dev/null && \
+   [ -f "$PREFLIGHT_SCRIPT" ] && \
+   command -v infisical &>/dev/null && \
+   [ -f "$INFISICAL_CRED_FILE" ] && \
+   docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+  # shellcheck disable=SC1090
+  source "$INFISICAL_CRED_FILE"
+  export INFISICAL_TOKEN INFISICAL_API_URL
+  INFISICAL_ARGS="--token=${INFISICAL_TOKEN} --projectId=${INFISICAL_PROJECT_ID} --env=prod --domain=${INFISICAL_API_URL}"
+  # shellcheck disable=SC2086
+  eval "$(infisical export ${INFISICAL_ARGS} --path="/shared" --format=dotenv-export 2>/dev/null)"
+  if [ -n "${TS_API_TOKEN:-}" ]; then
+    PREFLIGHT_JSON=$(TS_API_TOKEN="$TS_API_TOKEN" TS_AUTHKEY="${TS_AUTHKEY:-}" node "$PREFLIGHT_SCRIPT" --json 2>/dev/null) || true
+    if [ -n "$PREFLIGHT_JSON" ]; then
+      EXPIRY_DAYS=$(echo "$PREFLIGHT_JSON" | jq -r '.checks[] | select(.name == "Auth key expiry") | .expiresInDays // empty' 2>/dev/null)
+      if [ -n "$EXPIRY_DAYS" ]; then
+        echo ""
+        echo "Tailscale auth key expiry warning:"
+        echo "  Key expires in ${EXPIRY_DAYS} days. Mint a new one at:"
+        echo "  https://login.tailscale.com/admin/settings/keys"
+        echo ""
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+      fi
+    fi
+  fi
+fi
+
 if [ $ERROR_COUNT -gt 0 ]; then
   if [ -n "$HEALTHCHECK_PING_KEY" ]; then
     curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_PING_KEY/fail" > /dev/null

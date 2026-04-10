@@ -511,13 +511,37 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
         {tailscalePreflightStatus?.status === "passed" && (
           <Alert severity="success">
             <AlertTitle>All checks passed</AlertTitle>
-            {tailscalePreflightStatus.checks?.map((c) => (
-              <Typography key={c.name} variant="body2" color="text.secondary">
-                {c.name}: {c.message}
-              </Typography>
-            ))}
+            {tailscalePreflightStatus.checks
+              ?.filter((c) => !c.advisory)
+              .map((c) => (
+                <Typography key={c.name} variant="body2" color="text.secondary">
+                  {c.name}: {c.message}
+                </Typography>
+              ))}
           </Alert>
         )}
+        {tailscalePreflightStatus?.checks
+          ?.filter((c) => c.advisory && !c.ok)
+          .map((c) => (
+            <Alert key={c.name} severity="warning" sx={{ mt: 1 }}>
+              <AlertTitle>{c.name}</AlertTitle>
+              <Typography variant="body2">
+                {c.message}
+                {c.fixUrl && (
+                  <>
+                    {" "}
+                    <a
+                      href={c.fixUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Renew key
+                    </a>
+                  </>
+                )}
+              </Typography>
+            </Alert>
+          ))}
         {tailscalePreflightStatus?.status === "failed" && (
           <Alert severity="error">
             <AlertTitle>Issues found</AlertTitle>

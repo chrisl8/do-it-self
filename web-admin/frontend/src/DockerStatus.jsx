@@ -471,6 +471,29 @@ const DockerStatus = ({
         </Alert>
       )}
 
+      {tailscalePreflightStatus?.checks
+        ?.filter((c) => c.advisory && !c.ok)
+        .map((c) => (
+          <Alert key={c.name} severity="warning" sx={{ mb: 2 }}>
+            <AlertTitle>{c.name}</AlertTitle>
+            <Typography variant="body2">
+              {c.message}
+              {c.fixUrl && (
+                <>
+                  {" — "}
+                  <a
+                    href={c.fixUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Renew key
+                  </a>
+                </>
+              )}
+            </Typography>
+          </Alert>
+        ))}
+
       {dockerStatus.invalidPendingUpdates?.length > 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           <AlertTitle>Invalid Stack Names in Updates File</AlertTitle>
