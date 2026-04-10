@@ -18,9 +18,9 @@ Upfront sudo check, skip base packages when installed, skip Infisical setup when
 
 `isAvailable()` now makes a real GET to the Infisical API with a 5-second timeout, cached 30s/5s (success/failure). PUT /api/config/shared correctly returns 503 when Infisical is down.
 
-### Personal content backup strategy
+### ~~Personal content backup strategy~~ (NON-ISSUE)
 
-How should the maintainer track/back up the parts of containers that are not part of the public repo? (Personal homepage config, compose.override.yaml files for GPU, personal cron scripts, etc.) These are all gitignored — they need a separate backup strategy.
+Borg already backs up `~/` which includes all gitignored personal files (user-config.yaml, compose.override.yaml, config-personal/, etc.). For other users: integrating borg backup into setup.sh (so every install gets backups out of the box) is a post-README "phase 2" item. The README should mention that host-level backups cover personal config.
 
 ---
 
