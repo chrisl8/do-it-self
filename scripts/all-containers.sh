@@ -682,6 +682,7 @@ fi
 # (existing installs that predate this feature won't have one yet).
 PREFLIGHT_SCRIPT="${SCRIPT_DIR}/scripts/lib/tailscale-preflight.js"
 if [[ ${START_ACTION} = true ]] && \
+   [[ "${SKIP_PREFLIGHT:-}" != "true" ]] && \
    [[ -x "$(command -v infisical)" ]] && \
    [[ -x "$(command -v node)" ]] && \
    [[ -f "${PREFLIGHT_SCRIPT}" ]] && \
