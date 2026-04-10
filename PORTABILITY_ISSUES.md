@@ -80,26 +80,13 @@ Not urgent — revisit once closer to "public."
 
 ### Modules system / personal stacks separation
 
-This is the biggest open architectural question. Several problems converge on the same need for a "modules" or "optional stacks" system:
+**Full design document: [docs/MODULES.md](docs/MODULES.md)**
 
-**The Caddy problem:**
-- Caddy is `default_disabled` but embeds hardcoded `lofland.com` healthcheck and `voidship_ephemeral` mount
-- `caddy/mount-permissions.yaml:2` is the only file still hardcoding `/mnt/2000/...`
-- The maintainer's personal website shouldn't be in the public repo at all
-- Several other personal stacks are served by Caddy
+Containers become installable modules (git repos) instead of living in the platform repo. Each module ships a `module.yaml` declaring its containers' metadata. The platform generates `container-registry.yaml` by merging all installed modules. `user-config.yaml` remains the user's override layer. Personal containers live flat in `~/containers/` with `source: personal`.
 
-**What a modules system would solve:**
-- Personal stacks live outside the repo (in separate git repos or private module sets)
-- Optional host-level dependencies (NVIDIA GPU, specific hardware) get handled per-module. The `compose.override.yaml` pattern (used for GPU containers now) is the interim solution.
-- Container-specific cron jobs (nextcloud every 5 min, update-reminder weekly, actual-budget-sync hourly) get installed/removed when the container is enabled/disabled
-- Per-container setup hooks (initial config, migrations, first-run wizards)
-- Breaking the monorepo into chooseable sets instead of shipping ALL stacks to everyone
+The 66 current containers will be split into ~10 category-based module repos (core, productivity, media, tools, monitoring, desktop, network, social, backup, personal). The maintainer's personal stacks (caddy, witchazzan, etc.) move to a private repo.
 
-**Design questions:**
-- Should each stack be a "module"?
-- Can modules be git repos that the system pulls in?
-- How do private module sets work?
-- How does this interact with the web admin's Configuration tab?
+Implementation phases: module infrastructure, repo split, web admin UI, side effects (cron/host-deps), developer tooling.
 
 ### Security review
 
