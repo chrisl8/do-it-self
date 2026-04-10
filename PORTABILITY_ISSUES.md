@@ -34,13 +34,13 @@ Expired Tailscale auth keys are a recurring pain point: the key works, then a co
 
 Replaced the hardcoded `~/Metatron` and `~/Kryten` references in `system-cron-startup.sh` with a generic `scripts/post-startup-hook.sh` hook (gitignored, runs after containers and web-admin are up). Personal startup calls now live in the hook file.
 
-### Some Host Package Dependencies Not Checked by Setup Scripts
+### ~~Some Host Package Dependencies Not Checked by Setup Scripts~~ (MOSTLY DONE)
 
-`setup.sh` checks for / installs docker, node, npm, pm2, infisical CLI, and tailscale. The following are not checked and not documented in one place:
+`setup.sh` now installs: git, curl, jq, unzip, ca-certificates, yq (Mike Farah's Go binary), Docker, Node.js/npm, PM2, Infisical CLI, Tailscale. It also auto-configures passwordless sudo for `/usr/bin/chown` and `/usr/sbin/shutdown` via `/etc/sudoers.d/` drop-in files.
 
-- BorgBackup CLI (`borg`) -- only needed if using backup scripts
-- NVIDIA Docker runtime (for jellyfin, obsidian, mame, retroarch, secure-browser)
-- Passwordless `sudo` for `/usr/bin/chown` and `/usr/sbin/shutdown` (`scripts/all-containers.sh` and `scripts/system-graceful-shutdown.sh` test for it and print sudoers instructions, but neither configures it)
+NVIDIA GPU config has been moved from committed compose.yaml files to gitignored `compose.override.yaml` files (jellyfin, mame, obsidian, retroarch, secure-browser). Base compose works on any system without a GPU. Users with NVIDIA hardware create the override. This is the interim pattern until a proper "modules" system handles optional host-level dependencies.
+
+Remaining: BorgBackup CLI (`borg`) and `sqlite3` are installed by `setup-borg-backup.sh` (separate, optional). SSH is pre-installed on Ubuntu. These don't need to be in setup.sh.
 
 ### Cron Jobs Must Be Manually Created
 
@@ -88,6 +88,7 @@ The current README still tells users to manually clone, edit mounts, and run `al
 - I wonder about the idea of "modules" as in, sets of containers that are not part of this repo, but can be chosen from some menu and told to pull in. Have them based on git repos and even allow private modules sets?
   - This could also allow breaking down this set into modules instead of ALL stacks here no matter what.
   - Should EACH stack be a "module"?!
+  - **Additional driver:** containers with optional host-level dependencies (NVIDIA GPU, specific hardware) need the modules system too. The compose.override.yaml pattern (used for GPU containers now) is the interim solution, but a proper modules system could auto-detect hardware and generate the right overrides.
 
 ### Several other PERSONAL stacks that are for Caddy to serve
 
