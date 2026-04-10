@@ -14,13 +14,6 @@ services:
     shm_size: "1gb"
     networks:
       - mame-net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [compute, video, graphics, utility]
     labels:
       # For homepage
       - homepage.group=Desktop Apps

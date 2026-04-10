@@ -13,7 +13,6 @@ services:
       - ${VOL_JELLYFIN_DATA:-~/container-data}/container-mounts/jellyfin:/media/downloads
       - ${VOL_JELLYFIN_AUDIOBOOKS:-~/container-data}/container-mounts/jellyfin/audiobooks:/media/audiobooks
       - ${VOL_JELLYFIN_RECON_DATA_MEDIA:-~/container-data}/container-mounts/recon/data/media:/media/recon
-    runtime: nvidia
     ports:
       - 8096:8096
       - 8920:8920
@@ -34,13 +33,9 @@ services:
       - homepage.widget.url=https://jellyfin.${TS_DOMAIN}
       - homepage.widget.enableBlocks=true
       - homepage.widget.fields=["movies", "songs"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # GPU acceleration: if you have an NVIDIA GPU and nvidia-container-toolkit
+    # installed, create a compose.override.yaml with the GPU config. See
+    # docs or the gitignored compose.override.yaml on the maintainer's system.
     restart: on-failure
   ts:
     container_name: jellyfin-ts

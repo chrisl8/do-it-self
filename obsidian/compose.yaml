@@ -19,13 +19,6 @@ services:
       - homepage.weight=100
       - homepage.icon=obsidian
       - homepage.href=https://obsidian.${TS_DOMAIN}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [compute, video, graphics, utility]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       start_period: 120s
