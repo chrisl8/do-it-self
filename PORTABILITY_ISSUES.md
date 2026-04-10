@@ -42,12 +42,11 @@ NVIDIA GPU config has been moved from committed compose.yaml files to gitignored
 
 Remaining: BorgBackup CLI (`borg`) and `sqlite3` are installed by `setup-borg-backup.sh` (separate, optional). SSH is pre-installed on Ubuntu. These don't need to be in setup.sh.
 
-### Cron Jobs Must Be Manually Created
+### ~~Cron Jobs Must Be Manually Created~~ (DONE for core system crons)
 
-Most cron entries are still manual. `scripts/setup-borg-backup.sh` installs its own borg cron entries; the rest do not:
+`setup.sh` now auto-installs: `@reboot system-cron-startup.sh`, `*/15 * * * * system-health-check.sh`, `0 */6 * * * kopia-backup-check.sh`. Borg crons are installed by `setup-borg-backup.sh`.
 
-- `@reboot` for `system-cron-startup.sh`
-- Periodic for `system-health-check.sh` and `kopia-backup-check.sh`
+Container-specific crons (nextcloud-cron-job.sh, container-update-reminder.sh, actual-budget-sync) are NOT yet automated — these should be installed when the user enables the relevant container, which is part of the modules design.
 
 ### External Service Accounts Required
 
@@ -89,6 +88,7 @@ The current README still tells users to manually clone, edit mounts, and run `al
   - This could also allow breaking down this set into modules instead of ALL stacks here no matter what.
   - Should EACH stack be a "module"?!
   - **Additional driver:** containers with optional host-level dependencies (NVIDIA GPU, specific hardware) need the modules system too. The compose.override.yaml pattern (used for GPU containers now) is the interim solution, but a proper modules system could auto-detect hardware and generate the right overrides.
+  - **Container-specific cron jobs:** some containers need host cron entries (nextcloud-cron-job.sh every 5 min, container-update-reminder.sh weekly, actual-budget-sync hourly). These should be installed/removed when the container is enabled/disabled — another thing a modules system would handle.
 
 ### Several other PERSONAL stacks that are for Caddy to serve
 

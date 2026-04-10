@@ -542,6 +542,27 @@ step "Starting default-enabled containers"
 "${SCRIPT_DIR}/scripts/all-containers.sh" --start
 ok "Default-enabled containers started"
 
+# ── Install system cron jobs ────────────────────────────────────────────
+# Core cron entries that every installation needs. Uses the same
+# idempotent install_cron pattern as setup-borg-backup.sh: appends
+# the line to crontab only if not already present.
+install_cron() {
+  local schedule="$1"
+  local command="$2"
+  local description="$3"
+  if crontab -l 2>/dev/null | grep -qF "${command}"; then
+    ok "Cron already installed: ${description}"
+  else
+    (crontab -l 2>/dev/null; echo "${schedule} ${command}") | crontab -
+    ok "Installed cron: ${description}"
+  fi
+}
+
+step "Installing system cron jobs"
+install_cron "@reboot" "${SCRIPT_DIR}/scripts/system-cron-startup.sh" "Start containers on boot"
+install_cron "*/15 * * * *" "${SCRIPT_DIR}/scripts/system-health-check.sh" "Health check every 15 minutes"
+install_cron "0 */6 * * *" "${SCRIPT_DIR}/scripts/kopia-backup-check.sh" "Kopia backup freshness check every 6 hours"
+
 # ── Step 13: End-to-end web admin reachability check ────────────────────
 # Architectural regression guard. The web-admin backend listens on a Unix
 # domain socket inside web-admin/backend/sockets/ and the Tailscale Serve
