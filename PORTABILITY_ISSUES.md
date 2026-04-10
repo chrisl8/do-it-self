@@ -4,26 +4,6 @@ This document catalogs issues that would affect someone cloning this repository 
 
 ---
 
-## Small (hours each)
-
-### ~~Auth key expiry tracking~~ (DONE)
-
-Three channels: (1) preflight helper returns `expiresInDays` and adds an advisory "Auth key expiry" warning when < 14 days, (2) `system-health-check.sh` parses it and pings healthchecks.io `/fail` so the user gets notified even off the dashboard, (3) web admin shows a persistent orange banner on both Docker Status and Configuration tabs with a "Renew key" link.
-
-### ~~setup.sh polish~~ (DONE)
-
-Upfront sudo check, skip base packages when installed, skip Infisical setup when already running, fixed step numbering, removed redundant package installs, updated next-steps text to mention web admin button, eliminated double preflight run.
-
-### ~~Web admin Infisical connectivity check~~ (DONE)
-
-`isAvailable()` now makes a real GET to the Infisical API with a 5-second timeout, cached 30s/5s (success/failure). PUT /api/config/shared correctly returns 503 when Infisical is down.
-
-### ~~Personal content backup strategy~~ (NON-ISSUE)
-
-Borg already backs up `~/` which includes all gitignored personal files (user-config.yaml, compose.override.yaml, config-personal/, etc.). For other users: integrating borg backup into setup.sh (so every install gets backups out of the box) is a post-README "phase 2" item. The README should mention that host-level backups cover personal config.
-
----
-
 ## Medium (a day each)
 
 ### External Service Accounts Required
@@ -36,10 +16,6 @@ Several containers need external accounts that aren't documented in one place:
 - Various service-specific API keys (Spotify, etc.)
 
 These should be documented per-container (in the registry or a doc) so users know what they need before enabling a container.
-
-### ~~Config embedded in mounts~~ (DONE)
-
-Audit found 3 containers (filez, the-lounge, obsidian-babel-livesync) with config files missing on fresh clone. All now ship `config-defaults/` with sensible defaults. A generic pre-start hook in `all-containers.sh` copies defaults to the mount target, with `config-personal/` (gitignored) taking precedence. Homepage keeps its specialized YAML merge script. 61 other containers needed no changes.
 
 ### External Backup Infrastructure Assumed
 
@@ -115,41 +91,3 @@ Move maintainer-specific notes lower.
 ### AGENTS.md and CLAUDE.md are developer-facing
 
 These files help AI tools work with the repo but don't help human newcomers. Update after the product is final so they accurately describe the system.
-
----
-
-## Completed
-
-Items kept for historical context. Collapsed summaries only.
-
-### ~~Pre-flight checks for Tailscale prerequisites~~ (DONE)
-
-API-based preflight checks now run in setup.sh (required), all-containers.sh (soft-skip), and the web admin (health panel). Checks ACL tag, auth key reusable/tagged/expired. HTTPS has no API — covered by Step 13 HTTPS probe.
-
-### ~~1Password CLI dependency~~ (DONE)
-
-Everything in-repo is Infisical-only. 54 orphan env files, migration scripts, and the 1password container entry removed. Host-side tools outside `~/containers` still need migration.
-
-### ~~Host-Specific Project References~~ (DONE)
-
-Replaced with generic `scripts/post-startup-hook.sh` (gitignored).
-
-### ~~Host Package Dependencies~~ (MOSTLY DONE)
-
-setup.sh installs all needed packages including yq. Passwordless sudo auto-configured. GPU config moved to gitignored compose.override.yaml. BorgBackup stays in its separate setup script.
-
-### ~~Cron Jobs~~ (DONE for core system crons)
-
-setup.sh auto-installs @reboot startup, health check, and kopia check. Borg crons handled by setup-borg-backup.sh. Container-specific crons deferred to modules.
-
-### ~~Git-Cloned Subprojects~~ (DONE)
-
-Registry's `git_repos` field + `all-containers.sh --update-git-repos`.
-
-### ~~Start All Enabled button~~ (DONE)
-
-Web admin Docker Status tab: starts every enabled, ready, stopped container in start_order.
-
-### ~~Directing user to web admin~~ (PARTIALLY DONE)
-
-Start All Enabled button shipped. README still directs to CLI — tracked under README rewrite.
