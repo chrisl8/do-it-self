@@ -6,9 +6,9 @@ This document catalogs issues that would affect someone cloning this repository 
 
 ## Small (hours each)
 
-### Auth key expiry tracking
+### ~~Auth key expiry tracking~~ (DONE)
 
-Expired Tailscale auth keys are a recurring pain point: the key works, then a container restarts weeks later and silently fails to re-register. A banner in the web admin warning "your auth key expires in N days" and/or a periodic healthchecks.io ping would catch this proactively. The preflight helper (`scripts/lib/tailscale-preflight.js`) already reads the key's `expires` field — this is about surfacing it as a persistent, visible countdown rather than a one-shot check.
+Three channels: (1) preflight helper returns `expiresInDays` and adds an advisory "Auth key expiry" warning when < 14 days, (2) `system-health-check.sh` parses it and pings healthchecks.io `/fail` so the user gets notified even off the dashboard, (3) web admin shows a persistent orange banner on both Docker Status and Configuration tabs with a "Renew key" link.
 
 ### setup.sh polish
 
