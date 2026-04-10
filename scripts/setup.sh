@@ -64,6 +64,45 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq git curl ca-certificates unzip jq
 ok "Base packages installed"
 
+# yq (Mike Farah's Go version) is used by all-containers.sh for reliable
+# YAML parsing of mount-permissions.yaml. The apt "yq" package is a
+# different tool (Python jq wrapper), so install the Go binary directly.
+if ! command -v yq &>/dev/null; then
+  step "Installing yq"
+  YQ_ARCH="amd64"
+  if [[ "$(uname -m)" == "aarch64" ]]; then YQ_ARCH="arm64"; fi
+  sudo curl -fsSL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${YQ_ARCH}" -o /usr/local/bin/yq
+  sudo chmod +x /usr/local/bin/yq
+  ok "yq installed ($(yq --version))"
+else
+  ok "yq already installed"
+fi
+
+# ── Passwordless sudo for container operations ──────────────────────────
+# all-containers.sh needs passwordless chown (mount permissions) and
+# system-graceful-shutdown.sh needs passwordless shutdown. Use sudoers.d
+# drop-in files — safer than editing /etc/sudoers, idempotent, easy to
+# remove.
+SUDOERS_CHOWN="/etc/sudoers.d/containers-chown"
+SUDOERS_SHUTDOWN="/etc/sudoers.d/containers-shutdown"
+CURRENT_USER=$(whoami)
+if [[ ! -f "$SUDOERS_CHOWN" ]]; then
+  step "Configuring passwordless sudo for chown"
+  echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/chown" | sudo tee "$SUDOERS_CHOWN" > /dev/null
+  sudo chmod 0440 "$SUDOERS_CHOWN"
+  ok "Passwordless sudo for /usr/bin/chown configured"
+else
+  ok "Passwordless sudo for chown already configured"
+fi
+if [[ ! -f "$SUDOERS_SHUTDOWN" ]]; then
+  step "Configuring passwordless sudo for shutdown"
+  echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/shutdown" | sudo tee "$SUDOERS_SHUTDOWN" > /dev/null
+  sudo chmod 0440 "$SUDOERS_SHUTDOWN"
+  ok "Passwordless sudo for /usr/sbin/shutdown configured"
+else
+  ok "Passwordless sudo for shutdown already configured"
+fi
+
 # ── Step 2: Docker ───────────────────────────────────────────────────────
 
 if ! command -v docker &>/dev/null; then
