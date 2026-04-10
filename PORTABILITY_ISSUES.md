@@ -14,9 +14,9 @@ Three channels: (1) preflight helper returns `expiresInDays` and adds an advisor
 
 Upfront sudo check, skip base packages when installed, skip Infisical setup when already running, fixed step numbering, removed redundant package installs, updated next-steps text to mention web admin button, eliminated double preflight run.
 
-### Web admin Infisical connectivity check
+### ~~Web admin Infisical connectivity check~~ (DONE)
 
-The web admin's `isAvailable()` check (`infisicalClient.js:39`) only verifies the credentials file is parseable — it does not test connectivity. If the Infisical container is down but `~/credentials/infisical.env` exists, `PUT /api/config/shared` returns 500 instead of 503. Worth fixing for clarity.
+`isAvailable()` now makes a real GET to the Infisical API with a 5-second timeout, cached 30s/5s (success/failure). PUT /api/config/shared correctly returns 503 when Infisical is down.
 
 ### Personal content backup strategy
 
