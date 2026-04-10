@@ -894,6 +894,23 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           node "${SCRIPT_DIR}/scripts/merge-homepage-config.js" --quiet
           set -e
         fi
+        # Generic config-defaults handler: any container (except homepage,
+        # which has its own YAML merge script) that ships a config-defaults/
+        # directory gets its files copied to the matching paths. Files in
+        # config-personal/ take precedence, so users can override defaults
+        # without touching git-tracked files.
+        if [[ -d "config-defaults" ]] && [[ "${CONTAINER_DIR}" != "homepage" ]]; then
+          while IFS= read -r -d '' default_file; do
+            rel_path="${default_file#config-defaults/}"
+            target_dir="$(dirname "$rel_path")"
+            [[ "$target_dir" != "." ]] && mkdir -p "$target_dir"
+            if [[ -f "config-personal/${rel_path}" ]]; then
+              cp "config-personal/${rel_path}" "$rel_path"
+            else
+              cp "$default_file" "$rel_path"
+            fi
+          done < <(find config-defaults -type f -print0)
+        fi
 
         # Apply mount permissions before starting containers
         if [[ -f "mount-permissions.yaml" ]]; then

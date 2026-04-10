@@ -15,6 +15,13 @@ obsidian/compose.override.yaml
 retroarch/compose.override.yaml
 secure-browser/compose.override.yaml
 
+# Per-container personal config overrides (gitignored, defaults in config-defaults/)
+*/config-personal/
+
+# Generated config targets (built from config-defaults + config-personal at start)
+the-lounge/config/
+filez/copyparty.conf
+
 # Application Configuration Files
 forgejo/app.ini
 obsidian-babel-livesync/docker.ini
