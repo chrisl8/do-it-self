@@ -10,11 +10,9 @@ This document catalogs issues that would affect someone cloning this repository 
 
 Three channels: (1) preflight helper returns `expiresInDays` and adds an advisory "Auth key expiry" warning when < 14 days, (2) `system-health-check.sh` parses it and pings healthchecks.io `/fail` so the user gets notified even off the dashboard, (3) web admin shows a persistent orange banner on both Docker Status and Configuration tabs with a "Renew key" link.
 
-### setup.sh polish
+### ~~setup.sh polish~~ (DONE)
 
-- setup.sh tries to install packages even if they are already installed. A tiny check would avoid unnecessary root escalations.
-- setup.sh could detect non-interactive situations, check whether it WILL need to escalate, and bail early if it's going to fail.
-- On a pre-built system, setup.sh still always pulls down the Infisical containers during the core service start even if Infisical is already running. Why?
+Upfront sudo check, skip base packages when installed, skip Infisical setup when already running, fixed step numbering, removed redundant package installs, updated next-steps text to mention web admin button, eliminated double preflight run.
 
 ### Web admin Infisical connectivity check
 
