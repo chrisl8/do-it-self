@@ -37,9 +37,9 @@ Several containers need external accounts that aren't documented in one place:
 
 These should be documented per-container (in the registry or a doc) so users know what they need before enabling a container.
 
-### Config embedded in mounts
+### ~~Config embedded in mounts~~ (DONE)
 
-Some containers have config buried in bind-mounted directories. New users get nothing in those dirs and the container either fails to start or starts useless. Homepage was solved with the dual-config pattern (`config-defaults/` + `config-personal/` merged by `merge-homepage-config.js`). Audit other containers for the same problem and apply the pattern where needed.
+Audit found 3 containers (filez, the-lounge, obsidian-babel-livesync) with config files missing on fresh clone. All now ship `config-defaults/` with sensible defaults. A generic pre-start hook in `all-containers.sh` copies defaults to the mount target, with `config-personal/` (gitignored) taking precedence. Homepage keeps its specialized YAML merge script. 61 other containers needed no changes.
 
 ### External Backup Infrastructure Assumed
 
