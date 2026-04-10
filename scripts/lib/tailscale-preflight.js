@@ -114,13 +114,20 @@ function isKeyValid(keyData) {
   if (!Array.isArray(cap.tags) || !cap.tags.includes("tag:container")) {
     return { ok: false, reason: "key does not have tag:container in its tags" };
   }
+  // Compute expiry info for all return paths.
+  let expires = null;
+  let expiresInDays = null;
   if (keyData.expires) {
     const exp = new Date(keyData.expires);
-    if (!isNaN(exp.getTime()) && exp < new Date()) {
-      return { ok: false, reason: `key expired on ${keyData.expires}` };
+    if (!isNaN(exp.getTime())) {
+      expires = keyData.expires;
+      expiresInDays = Math.floor((exp - new Date()) / (1000 * 60 * 60 * 24));
+      if (exp < new Date()) {
+        return { ok: false, reason: `key expired on ${keyData.expires}`, expires, expiresInDays };
+      }
     }
   }
-  return { ok: true };
+  return { ok: true, expires, expiresInDays };
 }
 
 // ─── Checks ──────────────────────────────────────────────────────────
@@ -177,6 +184,8 @@ async function checkAuthKey(token, authKey) {
           name: "Auth key",
           ok: true,
           message: `OK (validated by ID ${parsed.id}, kind=${parsed.kind})`,
+          expires: v.expires,
+          expiresInDays: v.expiresInDays,
         };
       }
       return {
@@ -185,6 +194,8 @@ async function checkAuthKey(token, authKey) {
         message: `Your TS_AUTHKEY (id=${parsed.id}, kind=${parsed.kind}) is invalid: ${v.reason}.`,
         fix: "Mint a new auth key with Reusable=ON and Tags=tag:container.",
         fixUrl: KEYS_ADMIN_URL,
+        expires: v.expires,
+        expiresInDays: v.expiresInDays,
       };
     } catch (err) {
       if (err.statusCode !== 404) {
@@ -218,6 +229,8 @@ async function checkAuthKey(token, authKey) {
             name: "Auth key",
             ok: true,
             message: `OK (fallback: found valid key id=${keyRef.id} in tailnet)`,
+            expires: v.expires,
+            expiresInDays: v.expiresInDays,
           };
         }
       } catch {
@@ -364,9 +377,34 @@ async function main() {
   const authKey = process.env.TS_AUTHKEY;
   const domain = process.env.TS_DOMAIN;
 
+  const EXPIRY_WARNING_DAYS = 14;
+
   const checks = [];
   checks.push(await checkAclTag(token));
-  checks.push(await checkAuthKey(token, authKey));
+  const authKeyResult = await checkAuthKey(token, authKey);
+  checks.push(authKeyResult);
+
+  // If the key is valid but expiring soon, add an advisory warning.
+  // This is separate from the auth key check itself (which only fails on
+  // expired/invalid keys). The advisory surfaces in the web admin as a
+  // persistent banner and in system-health-check.sh as a healthchecks.io
+  // failure so the user gets notified even when not on the dashboard.
+  if (
+    authKeyResult.ok &&
+    authKeyResult.expiresInDays !== null &&
+    authKeyResult.expiresInDays <= EXPIRY_WARNING_DAYS
+  ) {
+    checks.push({
+      name: "Auth key expiry",
+      ok: false,
+      advisory: true,
+      message: `Your auth key expires in ${authKeyResult.expiresInDays} day${authKeyResult.expiresInDays === 1 ? "" : "s"} (${authKeyResult.expires}). Mint a new one before it expires.`,
+      fixUrl: KEYS_ADMIN_URL,
+      expiresInDays: authKeyResult.expiresInDays,
+      expires: authKeyResult.expires,
+    });
+  }
+
   if (domain) {
     // The HTTPS round-trip is best-effort / informational. It fails when no
     // sidecar has started yet (fresh install, first all-containers.sh run),
