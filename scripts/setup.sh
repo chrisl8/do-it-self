@@ -20,6 +20,17 @@ CONTAINERS_DIR="${HOME}/containers"
 # Avoid interactive prompts during apt installs (works in cloud-init contexts)
 export DEBIAN_FRONTEND=noninteractive
 
+# ── Upfront sudo check ────────────────────────────────────────────────
+# The script needs sudo for package installation, docker group changes,
+# sudoers configuration, etc. Verify access once upfront instead of
+# failing piecemeal at each sudo call. In non-interactive contexts
+# (cloud-init), sudo is typically passwordless for the provisioned user.
+if ! sudo -v 2>/dev/null; then
+  printf "${RED}This script requires sudo access.${NC}\n"
+  printf "Either run as a user with sudo privileges, or configure sudoers.\n"
+  exit 1
+fi
+
 step() {
   printf "\n${YELLOW}=== %s ===${NC}\n" "$1"
 }
@@ -59,10 +70,22 @@ echo "============================================"
 # ca-certificates and curl, etc. Install everything up front so failures
 # happen early and clearly.
 
-step "Installing base packages"
-sudo apt-get update -qq
-sudo apt-get install -y -qq git curl ca-certificates unzip jq
-ok "Base packages installed"
+BASE_PACKAGES=(git curl ca-certificates unzip jq)
+ALL_PRESENT=true
+for pkg in "${BASE_PACKAGES[@]}"; do
+  if ! dpkg -s "$pkg" &>/dev/null; then
+    ALL_PRESENT=false
+    break
+  fi
+done
+if [[ "$ALL_PRESENT" = false ]]; then
+  step "Installing base packages"
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq "${BASE_PACKAGES[@]}"
+  ok "Base packages installed"
+else
+  ok "Base packages already installed"
+fi
 
 # yq (Mike Farah's Go version) is used by all-containers.sh for reliable
 # YAML parsing of mount-permissions.yaml. The apt "yq" package is a
@@ -78,7 +101,7 @@ else
   ok "yq already installed"
 fi
 
-# ── Passwordless sudo for container operations ──────────────────────────
+# ── Step 1b: Passwordless sudo for container operations ─────────────────
 # all-containers.sh needs passwordless chown (mount permissions) and
 # system-graceful-shutdown.sh needs passwordless shutdown. Use sudoers.d
 # drop-in files — safer than editing /etc/sudoers, idempotent, easy to
@@ -107,8 +130,6 @@ fi
 
 if ! command -v docker &>/dev/null; then
   step "Installing Docker"
-  sudo apt-get update -qq
-  sudo apt-get install -y -qq ca-certificates curl
   sudo install -m 0755 -d /etc/apt/keyrings
   sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
   sudo chmod a+r /etc/apt/keyrings/docker.asc
@@ -469,8 +490,16 @@ ok "External git repositories ready"
 
 # ── Step 11: Infisical secret manager ───────────────────────────────────
 
-step "Setting up Infisical"
-"${SCRIPT_DIR}/scripts/setup-infisical.sh"
+# Skip Infisical bootstrap if it's already running and credentials exist.
+# On a pre-built system, re-running setup-infisical.sh is slow (docker
+# compose up -d checks images, waits for API) and unnecessary.
+if [[ -f "${HOME}/credentials/infisical.env" ]] && \
+   docker ps --filter "name=infisical" --filter "status=running" -q 2>/dev/null | grep -q .; then
+  ok "Infisical already running with credentials"
+else
+  step "Setting up Infisical"
+  "${SCRIPT_DIR}/scripts/setup-infisical.sh"
+fi
 
 # Seed shared variables into Infisical only if they aren't already the
 # same value there. Infisical is the canonical (and ONLY) store for these
@@ -512,7 +541,7 @@ if [[ -f "${HOME}/credentials/infisical.env" ]]; then
   seed_shared DOCKER_GID   "${DETECTED_DOCKER_GID}"
 fi
 
-# ── Tailscale preflight ────────────────────────────────────────────────
+# ── Step 11b: Tailscale preflight ──────────────────────────────────────
 # Run API-based checks BEFORE starting any container. Catches the most
 # common Tailscale-side misconfigurations (ACL missing tag:container,
 # auth key not reusable / expired / wrong-tag) with specific error
@@ -539,10 +568,12 @@ fi
 # containers can be enabled later via the web admin's Configuration tab.
 
 step "Starting default-enabled containers"
-"${SCRIPT_DIR}/scripts/all-containers.sh" --start
+# SKIP_PREFLIGHT: setup.sh already ran the Tailscale preflight above,
+# so tell all-containers.sh not to run it again.
+SKIP_PREFLIGHT=true "${SCRIPT_DIR}/scripts/all-containers.sh" --start
 ok "Default-enabled containers started"
 
-# ── Install system cron jobs ────────────────────────────────────────────
+# ── Step 12b: Install system cron jobs ──────────────────────────────────
 # Core cron entries that every installation needs. Uses the same
 # idempotent install_cron pattern as setup-borg-backup.sh: appends
 # the line to crontab only if not already present.
@@ -681,6 +712,5 @@ echo "Next steps:"
 echo "  1. Open https://admin.${TS_DOMAIN:-<your-tailnet>} in your browser"
 echo "  2. Configuration tab → enable any additional containers you want and"
 echo "     fill in their per-container variables"
-echo "  3. Bring newly-enabled containers up via the web admin or by running"
-echo "     'bash ~/containers/scripts/all-containers.sh --start'"
+echo "  3. Docker Status tab → click 'Start All Enabled' to bring them up"
 echo ""
