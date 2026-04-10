@@ -36,9 +36,43 @@ export function clearCache() {
   cachedCreds = null;
 }
 
+// Real connectivity check: credentials exist AND the Infisical API is
+// reachable. Cached briefly to avoid hammering the API on every web admin
+// request (30s on success, 5s on failure so recovery is quick).
+let cachedAvailability = null;
+let cachedAt = 0;
+const CACHE_TTL_OK = 30000;
+const CACHE_TTL_FAIL = 5000;
+
 export async function isAvailable() {
+  const now = Date.now();
+  if (cachedAvailability !== null) {
+    const ttl = cachedAvailability ? CACHE_TTL_OK : CACHE_TTL_FAIL;
+    if (now - cachedAt < ttl) return cachedAvailability;
+  }
+
   const creds = await loadCredentials();
-  return creds !== null;
+  if (!creds) {
+    cachedAvailability = false;
+    cachedAt = now;
+    return false;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const url = `${creds.INFISICAL_API_URL}/api/v3/secrets/raw?environment=prod&workspaceId=${creds.INFISICAL_PROJECT_ID}&secretPath=/`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${creds.INFISICAL_TOKEN}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    cachedAvailability = res.ok;
+  } catch {
+    cachedAvailability = false;
+  }
+  cachedAt = now;
+  return cachedAvailability;
 }
 
 async function apiRequest(method, path, body) {
