@@ -8,6 +8,13 @@ tailscale-state/
 user-config.yaml
 infisical/infisical-secrets.env
 
+# GPU compose overrides (only present on systems with NVIDIA GPUs)
+jellyfin/compose.override.yaml
+mame/compose.override.yaml
+obsidian/compose.override.yaml
+retroarch/compose.override.yaml
+secure-browser/compose.override.yaml
+
 # Application Configuration Files
 forgejo/app.ini
 obsidian-babel-livesync/docker.ini
