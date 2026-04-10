@@ -2,6 +2,18 @@
 
 This document describes the module system for the do-it-self container platform: what it is, why it exists, how it works, and how to implement it.
 
+## Prior art and inspiration
+
+This design did not emerge in a vacuum. Several existing systems use the same core pattern (persistent local catalog, copy-to-activate, separate data storage):
+
+- **Runtipi** — Self-hosted app platform. Clones app-store repos into `repos/`, copies individual apps to `apps/` for installation, keeps runtime data in `app-data/`. Uninstall deletes from `apps/`; catalog persists in `repos/`. Essentially identical to this design.
+- **Umbrel** — Self-hosted app store. Syncs app-store repos to a local `app-stores/` directory, copies to activate. Same pattern at scale.
+- **Nix/NixOS** — Package manager. `/nix/store` is an immutable content-addressed catalog; profiles create symlinked environments referencing items from the store. The purest implementation of this pattern in the package management world.
+- **GNU Stow** — Symlink farm manager. The original "catalog directory to target directory" tool. Stow directory holds packages; `stow` creates symlinks in the target. We copy instead of symlink, but the concept is identical.
+- **Homebrew** — macOS package manager. Cellar holds versioned packages; symlinks activate them into `/usr/local/bin`.
+
+We don't use any of these directly. Runtipi and Umbrel are complete platforms that would replace our orchestration layer, Tailscale integration, and web admin. Nix and Stow are general-purpose tools, not Docker Compose managers. But the architectural pattern they all converged on — **immutable catalog, ephemeral activation, separate persistent data** — is well-proven and is the foundation of this design.
+
 ## Why modules?
 
 The platform repo currently ships 66 container stacks alongside the platform code (scripts, web admin, setup). This creates several problems:
@@ -16,23 +28,22 @@ The platform repo currently ships 66 container stacks alongside the platform cod
 
 ## What is a module?
 
-A module is a git repository containing one or more container stacks plus metadata describing what those containers need. When installed, the module's containers appear in the platform alongside any other containers — they're first-class, indistinguishable from built-in ones.
+A module is a git repository containing one or more container stacks plus metadata describing what those containers need. Modules are cloned into a persistent local catalog (`.modules/`). Individual containers from a module can be installed (copied to the platform root) independently of other containers in the same module.
 
 A module repo looks like:
 
 ```
-do-it-self-core/
+do-it-self-media/
   module.yaml           # metadata: what containers this module provides
-  infisical/
-    compose.yaml
-    tailscale-config/
-    .start-order
-  homepage/
+  jellyfin/
     compose.yaml
     config-defaults/
     tailscale-config/
     .start-order
-  kopia/
+  immich/
+    compose.yaml
+    ...
+  your-spotify/
     compose.yaml
     ...
 ```
@@ -40,70 +51,137 @@ do-it-self-core/
 And its `module.yaml`:
 
 ```yaml
-name: do-it-self-core
-description: Core platform services (secret manager, dashboard, backup)
+name: do-it-self-media
+description: Media services (Jellyfin, Immich, Spotify, Seerr)
 maintainer: chrisl8
-url: https://github.com/chrisl8/do-it-self-core.git
+url: https://github.com/chrisl8/do-it-self-media.git
 
 containers:
-  infisical:
-    description: Self-hosted secret manager for credential injection
-    category: uncategorized
-    uses_tailscale: false
-    start_order: "000"
+  jellyfin:
+    description: Media server with live TV and DVR
+    category: media
+    uses_tailscale: true
+    start_order: "010"
     volumes:
-      db:
-        var: VOL_INFISICAL_DB
-        host_subpath: container-mounts/infisical/db
-        container_path: /var/lib/postgresql/data
+      config:
+        var: VOL_JELLYFIN_CONFIG
+        host_subpath: container-mounts/jellyfin/config
+        container_path: /config
     # ... full registry entry for this container
 
-  homepage:
-    description: Self-hosted dashboard
-    category: uncategorized
+  immich:
+    description: Self-hosted photo and video backup
+    category: media
     uses_tailscale: true
-    start_order: "002"
-    # ...
-
-  kopia:
-    description: Backup solution with web UI
+    start_order: "010"
     # ...
 ```
 
-## How modules interact with the platform
+## Core architectural invariant
 
-### Three-layer configuration merge
+**Container folders are ephemeral.** A container's folder at the platform root (`~/containers/jellyfin/`) contains only compose configuration and platform metadata — never user state. All persistent data lives elsewhere:
 
-The platform resolves container configuration by merging three layers:
+| What | Where | Survives uninstall? |
+|------|-------|---------------------|
+| Volume data | `~/container-mounts/<name>/` | Yes |
+| Credentials | `~/credentials/<name>.env` | Yes |
+| User overrides (enable/disable, variables) | `user-config.yaml` | Yes |
+| Compose file, config-defaults, tailscale-config | `~/containers/<name>/` | **No — deleted on uninstall** |
 
-1. **Module's `module.yaml`** — the author's defaults. Defines what the container IS: its description, category, volumes, variables, default_disabled state, tailscale usage, cron jobs, host dependencies.
+This means uninstalling a container is a simple `rm -rf` of its folder. No confirmation prompt, no "keep config?" dialog. If the user reinstalls later, `user-config.yaml` still has their settings and volume data is untouched. The compose files are trivially re-copied from the module catalog.
 
-2. **`container-registry.yaml`** — generated by the platform by merging all installed modules' metadata. This is the merged view that the web admin, `generate-env.js`, and `all-containers.sh` read. Regenerated on every `install-module` and `update-module`. Users should not hand-edit this file.
+All future development must preserve this invariant. Never store user-created state inside a container's folder. If a container needs user-customizable config files, use `config-personal/` (which is backed up by borg as part of `~/`) — but even that is a convenience copy, not the source of truth.
 
-3. **`user-config.yaml`** — the user's overrides. Defines how they USE the container: enabled/disabled, variable values, volume mount assignments, category overrides, any field they want to customize. User-controlled, never overwritten by module updates.
+## The `.modules/` catalog
 
-This is how the system already works for `enabled` and `variables`. The module system extends it so the BASE registry comes from modules instead of a hand-edited file.
+Module repos are cloned into `.modules/` at the platform root:
 
-### Container lifecycle
+```
+~/containers/
+  .modules/                              # persistent local catalog (gitignored)
+    do-it-self-media/                    # git clone of the media module
+      .git/
+      module.yaml
+      jellyfin/
+      immich/
+      your-spotify/
+      seerr/
+    do-it-self-tools/                    # git clone of the tools module
+      .git/
+      module.yaml
+      portainer/
+      searxng/
+      stirling-pdf/
+      ...
+  jellyfin/                              # installed (copied from .modules/)
+  searxng/                               # installed
+  scripts/                               # platform code (in git)
+  web-admin/                             # platform code (in git)
+  ...
+```
 
-**Installing a module:**
-1. Clone the module repo to a temp directory
-2. Copy each container directory to `~/containers/`
-3. Merge the module's `module.yaml` entries into `container-registry.yaml`
-4. Record the module name, URL, and commit hash in `installed-modules.yaml`
-5. If any container has `cron_jobs` in its metadata, install them
-6. If any container has `host_packages`, check/install them
+The `.modules/` directory is:
+- **Gitignored** by the platform repo
+- **Persistent** — survives reboots, stays between sessions
+- **Updated** via `git pull` inside each clone (not re-cloned from scratch)
+- **Read-only in normal operation** — only module install/update scripts write here
 
-**Enabling a container (unchanged from today):**
-1. User toggles the switch in the web admin Configuration tab
-2. `user-config.yaml` is updated
-3. On next `all-containers.sh --start`, the container is started
+The platform root stays clean: only containers the user has actively installed appear as top-level folders.
 
-**Updating a module:**
-1. Clone the module repo to a temp directory
-2. Compare the new commit against the recorded commit hash
-3. For each container in the module:
-   - Copy updated files from the module to `~/containers/` (compose.yaml, config-defaults/, tailscale-config/, etc.)
+## Container lifecycle
+
+A container moves through four states:
+
+| State | Meaning | Analogy |
+|-------|---------|---------|
+| **Available** | Exists in a cloned module under `.modules/` | `apt list` shows it |
+| **Installed** | Folder copied to platform root, container is configured | `apt install` — files on disk |
+| **Enabled** | Container will start with `all-containers.sh --start` | `systemctl enable` |
+| **Running** | Container is currently up | `systemctl status` |
+
+### Adding a module source
+
+1. User provides a git URL (from the catalog or manually)
+2. `git clone` into `.modules/<module-name>/`
+3. Record the module name, URL, and commit hash in `installed-modules.yaml`
+4. The module's containers are now **available** — visible in the web admin's Browse page but not installed
+
+### Installing a container
+
+1. User clicks "Install" on a container in the Browse page (or runs a CLI command)
+2. Copy the container's directory from `.modules/<module-name>/<container>/` to `~/containers/<container>/`
+3. Merge the container's `module.yaml` entry into `container-registry.yaml`
+4. The container is now **installed** — appears in My Containers, defaults to disabled
+5. If the container has `host_packages`, check/install them
+6. If the container has `setup_hooks`, run them
+
+### Enabling a container (unchanged from today)
+
+1. User toggles the switch in the web admin or edits `user-config.yaml`
+2. On next `all-containers.sh --start`, the container starts
+3. If the container has `cron_jobs`, they're installed
+
+### Disabling a container (unchanged from today)
+
+1. User toggles the switch off
+2. Container stops on next `--start` or `--stop` run
+3. Cron jobs removed if any
+4. Container folder stays on disk — quick re-enable without reinstalling
+
+### Uninstalling a container
+
+1. If running, stop it
+2. Remove cron jobs if any
+3. Delete the container directory from the platform root
+4. Remove the container's entry from `container-registry.yaml`
+5. Volume data, credentials, and `user-config.yaml` entries are **not touched**
+
+### Updating a module
+
+1. `git -C .modules/<module-name> pull`
+2. Compare the new HEAD against the recorded commit hash
+3. For each **installed** container in the module:
+   - Copy updated files from `.modules/` to `~/containers/` (compose.yaml, config-defaults/, tailscale-config/, etc.)
    - Preserve `config-personal/` (never overwritten — user's personal overrides)
    - Preserve `compose.override.yaml` (never overwritten — hardware-specific)
    - Preserve `.env` (regenerated by `generate-env.js`, not from the module)
@@ -111,15 +189,27 @@ This is how the system already works for `enabled` and `variables`. The module s
 5. Update the commit hash in `installed-modules.yaml`
 6. Restart any running containers whose compose.yaml changed
 
-**Uninstalling a module:**
-1. For each container in the module:
-   - If running, stop it
-   - Remove the container directory (but warn about data in `${VOL_*}` paths — those are NOT removed)
-   - Remove cron jobs
-2. Remove the module's entries from `container-registry.yaml`
+Available-but-not-installed containers are updated automatically (they live in the clone).
+
+### Removing a module source
+
+1. For each installed container from this module: uninstall it (with warning about running containers)
+2. `rm -rf .modules/<module-name>/`
 3. Remove from `installed-modules.yaml`
 
-### Personal containers
+## Three-layer configuration merge
+
+The platform resolves container configuration by merging three layers:
+
+1. **Module's `module.yaml`** — the author's defaults. Defines what the container IS: its description, category, volumes, variables, default_disabled state, tailscale usage, cron jobs, host dependencies.
+
+2. **`container-registry.yaml`** — generated by the platform by merging all installed containers' metadata from their modules. This is the merged view that the web admin, `generate-env.js`, and `all-containers.sh` read. Regenerated on every install/update/uninstall. Users should not hand-edit this file.
+
+3. **`user-config.yaml`** — the user's overrides. Defines how they USE the container: enabled/disabled, variable values, volume mount assignments, category overrides, any field they want to customize. User-controlled, never overwritten by module updates.
+
+This is how the system already works for `enabled` and `variables`. The module system extends it so the base registry comes from modules instead of a hand-edited file.
+
+## Personal containers
 
 Users can create containers directly in `~/containers/` without any module. They create a directory with a `compose.yaml`, then either:
 - Add a registry entry via the web admin's "Add Custom Container" UI
@@ -144,7 +234,7 @@ catalogs:
 
   do-it-self-media:
     url: https://github.com/chrisl8/do-it-self-media.git
-    description: Media services (Jellyfin, Spotify, Seerr)
+    description: Media services (Jellyfin, Spotify, Seerr, Immich)
 
   do-it-self-tools:
     url: https://github.com/chrisl8/do-it-self-tools.git
@@ -167,7 +257,13 @@ catalogs:
     description: Communication and social (The Lounge, FreshRSS, Wallabag, Ghost)
 ```
 
-Users can add their own catalog entries (community modules, private repos). The web admin's module management UI browses the catalog for discovery.
+Users can add their own catalog entries (community modules, private repos). The web admin's Sources page manages catalog entries.
+
+### Repo count guidance
+
+The catalog above shows 8 repos, split by category. This is a reasonable starting point, but the exact number doesn't matter much — modules live in `.modules/` and users never interact with the repo structure directly. Start with fewer larger repos and split later if needed. Splitting one repo into two is easy; consolidating many into fewer is painful.
+
+The minimum viable split is 2 repos: one public (all generally-useful containers) and one private (the maintainer's personal stacks). The category split can happen later based on actual usage patterns.
 
 ### Proposed category split
 
@@ -195,99 +291,40 @@ The current 66 containers split roughly as:
 
 Some containers don't fit neatly and will need judgment calls. The exact split is finalized during implementation.
 
-## Platform files and git structure
+## Web admin changes
 
-After the module system is implemented:
+The web admin gets reorganized around the module lifecycle:
 
-```
-~/containers/                        # platform git repo
-  .gitignore                         # ignores all container directories
-  scripts/
-    all-containers.sh
-    setup.sh
-    install-module.sh                # NEW
-    update-module.sh                 # NEW
-    uninstall-module.sh              # NEW
-    list-modules.sh                  # NEW
-    dev-sync.sh                      # NEW (developer helper)
-    lib/
-      tailscale-preflight.js
-    ...
-  web-admin/
-    ...
-  docs/
-    MODULES.md                       # this document
-    TESTING.md
-  module-catalog.yaml                # known module repos
-  container-registry.yaml            # GENERATED from installed modules
-  user-config.yaml                   # user overrides (gitignored)
-  installed-modules.yaml             # what's installed (gitignored)
+### My Containers (replaces current Configuration tab scope)
 
-  # Container directories (gitignored, installed by modules):
-  infisical/
-  homepage/
-  jellyfin/
-  nextcloud/
-  ...
-```
+Shows only **installed** containers. Each entry shows:
+- Container name, description, category, source module
+- Enable/disable toggle
+- Running status
+- "Uninstall" button (no confirmation needed — folders are ephemeral)
 
-The platform `.gitignore` uses a whitelist approach:
+This page is focused and clean. If you have 12 containers installed, you see 12 entries.
 
-```gitignore
-# Ignore everything at the top level
-/*
+### Browse
 
-# Except platform directories and files
-!scripts/
-!web-admin/
-!docs/
-!module-catalog.yaml
-!.gitignore
-!CLAUDE.md
-!AGENTS.md
-!README.md
-!PORTABILITY_ISSUES.md
-!LICENSE
-```
+Shows **available** containers from all cloned modules that aren't currently installed. Organized by category. Each entry shows:
+- Container name, description, source module
+- "Install" button
 
-Container directories are invisible to the platform's git. Each module's git history lives in the module repo, not the platform repo.
+This is the "app store" experience. Browsing is free — nothing gets installed until you click.
 
-## Developer workflow
+### Sources
 
-For the maintainer or contributors who need to modify a module's containers:
-
-1. **Edit live:** Make changes to `~/containers/jellyfin/compose.yaml` as normal. Test it on the running system.
-
-2. **Sync back to module repo:** Run `dev-sync do-it-self-media jellyfin`:
-   - Clones `do-it-self-media` repo to a temp directory
-   - Copies `~/containers/jellyfin/` into the clone (excluding `config-personal/`, `.env`, `tailscale-state/`, `compose.override.yaml`)
-   - Opens a diff for review
-   - Prompts to commit + push
-
-3. **Other users update:** They run `update-module do-it-self-media` and get the changes.
-
-The developer doesn't need a separate development environment. They work on their live system and sync changes back to the module repo when ready.
-
-## Web admin module management
-
-The web admin gets a new "Modules" tab (or section in the Configuration tab) with:
-
-**Installed modules list:**
-- Module name, description, installed version (commit short hash), last updated date
-- "Update" button per module (checks for new commits)
+Manages module repos:
+- List of added module sources with name, URL, commit hash, last updated
+- "Update" button per source (runs `git pull`)
 - "Update All" button
-- "Uninstall" button (with confirmation, warns about running containers)
+- "Remove" button (with warning if containers from this source are installed)
+- "Add Source" field for git URLs not in the catalog
+- Browse the built-in catalog for sources to add
 
-**Available modules (from catalog):**
-- Browse catalog entries not yet installed
-- "Install" button per module
-- Shows description, container count, maintainer
+### Personal Containers
 
-**Custom module install:**
-- Text field for a git URL not in the catalog
-- "Install from URL" button
-
-**Personal containers:**
 - List of containers with `source: personal`
 - "Add Custom Container" button (scaffolds a directory with compose.yaml template)
 
@@ -313,28 +350,99 @@ When a container with cron_jobs is ENABLED, `all-containers.sh` installs the cro
 
 Host packages are checked at install time and on container enable. If missing, the user is warned (or they're auto-installed with confirmation, like setup.sh does for base packages).
 
+## Platform files and git structure
+
+After the module system is implemented:
+
+```
+~/containers/                        # platform git repo
+  .gitignore                         # whitelist approach (see below)
+  .modules/                          # persistent local catalog (gitignored)
+    do-it-self-media/                # git clone
+    do-it-self-tools/                # git clone
+    ...
+  scripts/
+    all-containers.sh
+    setup.sh
+    module.sh                        # NEW: install/update/uninstall/list subcommands
+    dev-sync.sh                      # NEW (developer helper)
+    lib/
+      tailscale-preflight.js
+    ...
+  web-admin/
+    ...
+  docs/
+    MODULES.md                       # this document
+    TESTING.md
+  module-catalog.yaml                # known module repos
+  container-registry.yaml            # GENERATED from installed modules
+  user-config.yaml                   # user overrides (gitignored)
+  installed-modules.yaml             # what's installed (gitignored)
+
+  # Container directories (gitignored, installed from .modules/):
+  jellyfin/
+  searxng/
+  ...
+```
+
+The platform `.gitignore` uses a whitelist approach:
+
+```gitignore
+# Ignore everything at the top level
+/*
+
+# Except platform directories and files
+!scripts/
+!web-admin/
+!docs/
+!module-catalog.yaml
+!.gitignore
+!CLAUDE.md
+!AGENTS.md
+!README.md
+!PORTABILITY_ISSUES.md
+!LICENSE
+```
+
+Container directories are invisible to the platform's git. Each module's git history lives in the module repo under `.modules/`, not the platform repo.
+
+## Developer workflow
+
+For the maintainer or contributors who need to modify a module's containers:
+
+1. **Edit live:** Make changes to `~/containers/jellyfin/compose.yaml` as normal. Test it on the running system.
+
+2. **Sync back to module repo:** Run `dev-sync do-it-self-media jellyfin`:
+   - Copies `~/containers/jellyfin/` into `.modules/do-it-self-media/jellyfin/` (excluding `config-personal/`, `.env`, `tailscale-state/`, `compose.override.yaml`)
+   - Shows a diff for review
+   - Prompts to commit + push
+
+3. **Other users update:** They run `module.sh update do-it-self-media` and get the changes.
+
+The developer doesn't need a separate development environment. They work on their live system and sync changes back to the module repo when ready.
+
 ## Implementation phases
 
 ### Phase 1: Module infrastructure (no container migration)
-- Create `install-module.sh`, `update-module.sh`, `uninstall-module.sh`, `list-modules.sh`
-- Create `module-catalog.yaml` with the default catalog entry
+- Create `module.sh` with subcommands: `add-source`, `install`, `uninstall`, `update`, `list`
+- Create `module-catalog.yaml` with the default catalog entries
 - Create `installed-modules.yaml` schema
-- Update `container-registry.yaml` generation to merge from module fragments
+- Update `container-registry.yaml` generation to merge from module `module.yaml` files
 - Update `.gitignore` to whitelist platform files only
-- Update `containerFolderScanner.js` if needed (should work unchanged since containers are still flat)
 - Add `source` field tracking to the registry
+- Document the ephemeral-folder invariant in CLAUDE.md
 
 ### Phase 2: Repo split
-- Create the module repos (one per category)
+- Create the module repos (start with 2-3, split further later)
 - Move container directories from the platform repo to module repos
 - Each module repo gets a `module.yaml` with its containers' registry entries
-- Update setup.sh to run `install-module` for the default set
+- Update setup.sh to run `module.sh add-source` + `module.sh install` for the default set
 - Write migration script for existing users
 
 ### Phase 3: Web admin UI
-- Add module management to the web admin (install, update, uninstall, browse catalog)
+- Reorganize into My Containers / Browse / Sources pages
 - Add "personal container" creation
-- Show module source in the Configuration tab per container
+- Show container state (available/installed/enabled/running) consistently
 
 ### Phase 4: Side effects
 - Add `cron_jobs` field to module.yaml spec
@@ -353,18 +461,17 @@ Users with existing installations need a smooth transition:
 1. User pulls the updated platform repo
 2. setup.sh detects "legacy mode" (container directories exist at top level but no `installed-modules.yaml`)
 3. Migration script:
-   - Creates `installed-modules.yaml` listing all existing containers as `source: legacy`
-   - Moves container directories to be gitignored (they're already on disk — just the platform's `.gitignore` changes)
-   - Runs `install-module do-it-self-core` (and other default modules) which:
-     - Finds the containers already on disk
-     - Updates `installed-modules.yaml` with proper source and commit hash
-     - Does NOT overwrite existing files (preserves user's running config)
+   - Creates `installed-modules.yaml`
+   - Runs `module.sh add-source` for the default catalog entries (clones into `.modules/`)
+   - For each existing container directory at the root, matches it to a module and records it as installed
+   - The container directories stay exactly where they are — they're already "installed"
+   - Updates `.gitignore` to whitelist platform files only
 4. Everything continues working. Containers are running, configs are preserved.
-5. User can then `update-module` to sync with latest module versions at their leisure
+5. User can then `module.sh update` to sync with latest module versions at their leisure
 
 ## What this does NOT include
 
 - **Dependency resolution between modules.** Containers are independent. If you need MariaDB for Nextcloud, the Nextcloud module's docs say "install do-it-self-core first" but there's no enforced dependency graph.
-- **Version pinning or semver.** Modules track by git commit hash, not version numbers. `update-module` always goes to latest. Rollback is `git checkout <old-hash>` in the module repo.
-- **A central registry/marketplace server.** The catalog is a YAML file, not a web service. Discovery is browsing GitHub repos.
+- **Version pinning or semver.** Modules track by git commit hash, not version numbers. `module.sh update` always goes to latest. Rollback is `git checkout <old-hash>` in the module's `.modules/` clone.
+- **A central registry/marketplace server.** The catalog is a YAML file, not a web service. Discovery is browsing git repos.
 - **Sandboxing or security isolation between modules.** All modules share the same Docker daemon, the same Tailscale network, the same Infisical instance. A malicious module could do anything. Only install modules you trust.
