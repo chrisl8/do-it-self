@@ -223,47 +223,24 @@ The platform ships a `module-catalog.yaml` listing known module repos:
 
 ```yaml
 catalogs:
-  do-it-self-core:
-    url: https://github.com/chrisl8/do-it-self-core.git
-    description: Core platform services (Infisical, Homepage, Kopia, MariaDB)
+  do-it-self-containers:
+    url: https://github.com/chrisl8/do-it-self-containers.git
+    description: All generally-useful self-hosted container stacks
     required: true
-
-  do-it-self-productivity:
-    url: https://github.com/chrisl8/do-it-self-productivity.git
-    description: Productivity apps (Nextcloud, Paperless, Forgejo, Kanboard, etc.)
-
-  do-it-self-media:
-    url: https://github.com/chrisl8/do-it-self-media.git
-    description: Media services (Jellyfin, Spotify, Seerr, Immich)
-
-  do-it-self-tools:
-    url: https://github.com/chrisl8/do-it-self-tools.git
-    description: Utility containers (Portainer, Searxng, Stirling-PDF, etc.)
-
-  do-it-self-monitoring:
-    url: https://github.com/chrisl8/do-it-self-monitoring.git
-    description: System monitoring (Beszel, Netdata, Uptime Kuma, Speedtest, Diun)
-
-  do-it-self-desktop:
-    url: https://github.com/chrisl8/do-it-self-desktop.git
-    description: Desktop apps via browser (Code Server, Obsidian, MAME, RetroArch)
-
-  do-it-self-network:
-    url: https://github.com/chrisl8/do-it-self-network.git
-    description: Network services (Cloudflared, Pi-hole, VPN/Recon, Meshtastic)
-
-  do-it-self-social:
-    url: https://github.com/chrisl8/do-it-self-social.git
-    description: Communication and social (The Lounge, FreshRSS, Wallabag, Ghost)
+  do-it-self-personal:
+    url: https://github.com/chrisl8/do-it-self-personal.git
+    description: Personal container stacks (maintainer-specific)
 ```
 
-Users can add their own catalog entries (community modules, private repos). The web admin's Sources page manages catalog entries.
+Users can add their own catalog entries (community modules, private repos). The web admin's Sources page will manage catalog entries (Phase 3).
 
-### Repo count guidance
+### Current repo structure
 
-The catalog above shows 8 repos, split by category. This is a reasonable starting point, but the exact number doesn't matter much — modules live in `.modules/` and users never interact with the repo structure directly. Start with fewer larger repos and split later if needed. Splitting one repo into two is easy; consolidating many into fewer is painful.
+The catalog currently has 2 repos: one public (56 generally-useful containers) and one private (8 personal stacks). This follows the "start with fewer, split later" principle. The category-based split (core, media, tools, monitoring, etc.) can happen later based on actual usage patterns. Splitting one repo into two is easy; consolidating many into fewer is painful.
 
-The minimum viable split is 2 repos: one public (all generally-useful containers) and one private (the maintainer's personal stacks). The category split can happen later based on actual usage patterns.
+`web-admin` is a special case: its container definition (compose.yaml, tailscale-config) lives in the platform repo alongside its source code, with `source: platform` in the registry. It is not part of any module.
+
+### Future category split
 
 ### Proposed category split
 
@@ -423,21 +400,21 @@ The developer doesn't need a separate development environment. They work on thei
 
 ## Implementation phases
 
-### Phase 1: Module infrastructure (no container migration)
-- Create `module.sh` with subcommands: `add-source`, `install`, `uninstall`, `update`, `list`
-- Create `module-catalog.yaml` with the default catalog entries
-- Create `installed-modules.yaml` schema
-- Update `container-registry.yaml` generation to merge from module `module.yaml` files
-- Update `.gitignore` to whitelist platform files only
-- Add `source` field tracking to the registry
-- Document the ephemeral-folder invariant in CLAUDE.md
+### Phase 1: Module infrastructure — DONE
+- `scripts/module.sh` + `scripts/module-helper.js`: CLI with subcommands `add-source`, `remove-source`, `install`, `uninstall`, `update`, `list`, `regenerate-registry`
+- `module-catalog.yaml` with default catalog entries
+- `installed-modules.yaml` tracks cloned modules and installed containers
+- `container-registry.yaml` has `source` field on every entry (`do-it-self-containers`, `do-it-self-personal`, or `platform`)
+- `.gitignore` switched to whitelist (only platform dirs tracked)
+- Ephemeral-folder invariant documented in CLAUDE.md
 
-### Phase 2: Repo split
-- Create the module repos (start with 2-3, split further later)
-- Move container directories from the platform repo to module repos
-- Each module repo gets a `module.yaml` with its containers' registry entries
-- Update setup.sh to run `module.sh add-source` + `module.sh install` for the default set
-- Write migration script for existing users
+### Phase 2: Repo split — DONE
+- Two module repos: `do-it-self-containers` (56 public) and `do-it-self-personal` (8 personal)
+- Container directories removed from platform git, live only in `.modules/` and platform root
+- `web-admin` stays in the platform repo with `source: platform`
+- `scripts/migrate-to-modules.sh` handles both fresh installs and legacy migrations
+- `setup.sh` calls migration script; fresh installs auto-install all containers from modules
+- Repos on Forgejo, mirrored to GitHub + Codeberg
 
 ### Phase 3: Web admin UI
 - Reorganize into My Containers / Browse / Sources pages
@@ -454,20 +431,18 @@ The developer doesn't need a separate development environment. They work on thei
 - `dev-sync.sh` for syncing live changes back to module repos
 - Documentation for module authors
 
-## Migration plan for existing users
+## Migration plan for existing users — IMPLEMENTED
 
-Users with existing installations need a smooth transition:
+Implemented in `scripts/migrate-to-modules.sh`, called by `setup.sh`. Idempotent.
 
 1. User pulls the updated platform repo
-2. setup.sh detects "legacy mode" (container directories exist at top level but no `installed-modules.yaml`)
-3. Migration script:
-   - Creates `installed-modules.yaml`
-   - Runs `module.sh add-source` for the default catalog entries (clones into `.modules/`)
-   - For each existing container directory at the root, matches it to a module and records it as installed
-   - The container directories stay exactly where they are — they're already "installed"
-   - Updates `.gitignore` to whitelist platform files only
+2. `setup.sh` calls `migrate-to-modules.sh`
+3. Script detects state:
+   - **Already migrated** (`installed-modules.yaml` exists): exits immediately
+   - **Legacy install** (container dirs exist, no `installed-modules.yaml`): clones module repos into `.modules/`, matches existing containers to modules, creates `installed-modules.yaml`, updates registry `source` fields
+   - **Fresh install** (no container dirs): clones module repos, installs all containers from every module, populates the registry
 4. Everything continues working. Containers are running, configs are preserved.
-5. User can then `module.sh update` to sync with latest module versions at their leisure
+5. User can run `module.sh update` to sync with latest module versions
 
 ## What this does NOT include
 

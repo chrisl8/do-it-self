@@ -4,17 +4,19 @@ This document catalogs issues that would affect someone cloning this repository 
 
 ---
 
-## 1. Modules system / personal stacks separation
+## ~~1. Modules system / personal stacks separation~~ DONE
 
 **Full design document: [docs/MODULES.md](docs/MODULES.md)**
 
-Module repos (git repos containing Docker Compose stacks + metadata) are cloned into a persistent `.modules/` catalog directory. Individual containers are **installed** by copying their folder from `.modules/` to the platform root, and **uninstalled** by deleting that folder. Container folders are ephemeral — all persistent data lives in `~/container-mounts/`, `~/credentials/`, and `user-config.yaml`, so uninstall is a clean `rm -rf` with no data loss.
+Phases 1-2 are implemented. Container stacks live in module repos cloned into `.modules/`, installed by copying to the platform root. CLI: `scripts/module.sh`. Container directories are no longer tracked in the platform git repo.
 
-This pattern (persistent catalog, copy-to-activate, separate data) is well-established: Runtipi and Umbrel use it for Docker app management, Nix uses it for system packages, GNU Stow uses it for dotfiles.
+Current repos (2): `do-it-self-containers` (56 public) and `do-it-self-personal` (8 personal). Module sources are on Forgejo, mirrored to GitHub and Codeberg.
 
-The platform root stays clean — only actively-used containers appear as top-level folders. The web admin gets reorganized: My Containers (installed), Browse (available from `.modules/`), and Sources (manage module repos).
-
-Implementation phases: module infrastructure, repo split, web admin UI, side effects (cron/host-deps), developer tooling.
+Remaining module work (lower priority, do after testing):
+- **Category split** — Break `do-it-self-containers` into category-based repos (media, tools, monitoring, etc.). Do this after real usage patterns emerge; splitting is easy, consolidating is hard.
+- **Web admin UI** (Phase 3) — Browse/Sources pages for installing containers via the UI instead of CLI.
+- **Side effects** (Phase 4) — `cron_jobs`, `host_packages`, `setup_hooks` in module.yaml.
+- **Developer tooling** (Phase 5) — `dev-sync.sh` for syncing live edits back to module repos.
 
 ## 2. External Service Accounts Required
 
