@@ -20,17 +20,6 @@ CONTAINERS_DIR="${HOME}/containers"
 # Avoid interactive prompts during apt installs (works in cloud-init contexts)
 export DEBIAN_FRONTEND=noninteractive
 
-# ── Upfront sudo check ────────────────────────────────────────────────
-# The script needs sudo for package installation, docker group changes,
-# sudoers configuration, etc. Verify access once upfront instead of
-# failing piecemeal at each sudo call. In non-interactive contexts
-# (cloud-init), sudo is typically passwordless for the provisioned user.
-if ! sudo true 2>/dev/null; then
-  printf "${RED}This script requires sudo access.${NC}\n"
-  printf "Either run as a user with sudo privileges, or configure sudoers.\n"
-  exit 1
-fi
-
 step() {
   printf "\n${YELLOW}=== %s ===${NC}\n" "$1"
 }
