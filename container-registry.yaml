@@ -1323,7 +1323,7 @@ containers:
     git_repos:
       valheim-server-docker:
         url: https://github.com/JustinTArthur/valheim-server-docker.git
-        branch: update-libdoorstop-env-var-scheme
+        branch: main
     variables:
       SERVER_NAME:
         type: string
