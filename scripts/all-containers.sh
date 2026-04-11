@@ -907,9 +907,18 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             target_dir="$(dirname "$rel_path")"
             [[ "$target_dir" != "." ]] && mkdir -p "$target_dir"
             if [[ -f "config-personal/${rel_path}" ]]; then
-              cp "config-personal/${rel_path}" "$rel_path"
+              source_file="config-personal/${rel_path}"
             else
-              cp "$default_file" "$rel_path"
+              source_file="$default_file"
+            fi
+            # Skip if destination already matches — handles the case where
+            # a container has taken ownership of the file (e.g. CouchDB
+            # UID 5984) but the content is already what we want.
+            if [[ -f "$rel_path" ]] && cmp -s "$source_file" "$rel_path"; then
+              continue
+            fi
+            if ! cp "$source_file" "$rel_path" 2>/dev/null; then
+              printf "${YELLOW}  warning: could not update %s in %s (destination owned by another user — manual resync required)${NC}\n" "$rel_path" "${CONTAINER_DIR}" >&2
             fi
           done < <(find config-defaults -type f -print0)
           set -e
