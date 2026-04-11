@@ -50,9 +50,9 @@ The `homepage/config-defaults/` files are opinionated first drafts:
 
 Revisit once the module-based container set is finalized.
 
-## 5. config-defaults handler fails on container-owned files
+## 5. ~~config-defaults handler fails on container-owned files~~ — **Done.**
 
-The generic `config-defaults` handler in `all-containers.sh` copies files from `config-defaults/` into the container directory at startup. If a container (e.g., CouchDB in obsidian-babel-livesync) has taken ownership of a bind-mounted file (UID 5984), the `cp` fails with `Permission denied`. The handler is now wrapped in `set +e` so it won't abort the startup loop, but the underlying copy still silently fails. The handler should either skip files that already exist with matching content, or use a strategy that handles non-user-owned files gracefully.
+The generic `config-defaults` handler in `all-containers.sh` now does a `cmp -s` content check before copying: if the destination already matches the source, the copy is skipped entirely, so a container-owned file (e.g. CouchDB's `docker.ini`, UID 5984 in `obsidian-babel-livesync`) no longer trips a `Permission denied` on every restart. When the content genuinely differs and the `cp` fails, the handler prints an explicit yellow warning naming the file and container so the user knows a manual resync is needed — no more silent failure.
 
 ## 6. Document and/or automate maintenance tasks
 
