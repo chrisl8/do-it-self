@@ -103,42 +103,35 @@ for DIR in "${CONTAINERS_DIR}"/*/; do
 done
 
 if [[ ${#EXISTING_CONTAINERS[@]} -eq 0 ]]; then
-  # New install — just record the module sources, no containers to migrate
-  step "New install detected — recording module sources"
+  # New install — install all containers from every cloned module.
+  # default_disabled in each container's module.yaml entry controls what
+  # actually starts; we install everything so the full catalog is on disk.
+  step "New install detected — installing containers from modules"
 
-  # Create minimal installed-modules.yaml with no installed containers
-  run_node -e '
-import { readFileSync, writeFileSync, readdirSync, statSync } from "fs";
-import { join } from "path";
-import { execSync } from "child_process";
+  for MODULE_DIR in "${MODULES_DIR}"/*/; do
+    MODULE_NAME="$(basename "${MODULE_DIR}")"
+    MODULE_YAML="${MODULE_DIR}/module.yaml"
+    [[ -f "${MODULE_YAML}" ]] || continue
+
+    # Get container names from this module's module.yaml
+    CONTAINER_NAMES=$(run_node -e '
+import { readFileSync } from "fs";
 import YAML from "yaml";
-
-const modulesDir = process.argv[1];
-const outPath = process.argv[2];
-const modules = {};
-
-for (const name of readdirSync(modulesDir)) {
-  const modPath = join(modulesDir, name);
-  if (!statSync(modPath).isDirectory()) continue;
-  const yamlPath = join(modPath, "module.yaml");
-  try {
-    const meta = YAML.parse(readFileSync(yamlPath, "utf8"));
-    const commit = execSync(`git -C "${modPath}" rev-parse HEAD`, { encoding: "utf8" }).trim();
-    modules[name] = {
-      url: meta.url || "",
-      commit,
-      added: new Date().toISOString(),
-      updated: new Date().toISOString(),
-      installed_containers: [],
-    };
-  } catch { /* skip modules without valid module.yaml */ }
+const meta = YAML.parse(readFileSync(process.argv[1], "utf8"));
+for (const name of Object.keys(meta.containers || {})) {
+  console.log(name);
 }
+' "${MODULE_YAML}" 2>/dev/null) || continue
 
-writeFileSync(outPath, YAML.stringify({ modules }, { lineWidth: 0 }));
-console.log(`Recorded ${Object.keys(modules).length} module sources`);
-' "${MODULES_DIR}" "${INSTALLED_MODULES}" 2>/dev/null
+    while IFS= read -r CONTAINER_NAME; do
+      [[ -z "${CONTAINER_NAME}" ]] && continue
+      step "Installing ${CONTAINER_NAME} from ${MODULE_NAME}"
+      run_node "${SCRIPT_DIR}/module-helper.js" install "${MODULE_NAME}" "${CONTAINER_NAME}" 2>/dev/null || \
+        warn "Failed to install ${CONTAINER_NAME}"
+    done <<< "${CONTAINER_NAMES}"
+  done
 
-  ok "Module system initialized for new install"
+  ok "All module containers installed"
   exit 0
 fi
 
