@@ -1,29 +1,14 @@
 # Known module repositories for the do-it-self container platform.
 # Users can add custom sources via `scripts/module.sh add-source <url>`.
 # See docs/MODULES.md for the full module system design.
+#
+# These two repos contain all containers. They may be split into
+# category-based repos (core, media, tools, etc.) in the future.
 catalogs:
-  do-it-self-core:
-    url: https://github.com/chrisl8/do-it-self-core.git
-    description: Core platform services (Infisical, Homepage, Kopia, MariaDB)
+  do-it-self-containers:
+    url: https://github.com/chrisl8/do-it-self-containers.git
+    description: All generally-useful self-hosted container stacks
     required: true
-  do-it-self-productivity:
-    url: https://github.com/chrisl8/do-it-self-productivity.git
-    description: Productivity apps (Nextcloud, Paperless, Forgejo, Kanboard, etc.)
-  do-it-self-media:
-    url: https://github.com/chrisl8/do-it-self-media.git
-    description: Media services (Jellyfin, Spotify, Seerr, Immich)
-  do-it-self-tools:
-    url: https://github.com/chrisl8/do-it-self-tools.git
-    description: Utility containers (Portainer, Searxng, Stirling-PDF, etc.)
-  do-it-self-monitoring:
-    url: https://github.com/chrisl8/do-it-self-monitoring.git
-    description: System monitoring (Beszel, Netdata, Uptime Kuma, Speedtest, Diun)
-  do-it-self-desktop:
-    url: https://github.com/chrisl8/do-it-self-desktop.git
-    description: Desktop apps via browser (Code Server, Obsidian, MAME, RetroArch)
-  do-it-self-network:
-    url: https://github.com/chrisl8/do-it-self-network.git
-    description: Network services (Cloudflared, Pi-hole, VPN/Recon, Meshtastic)
-  do-it-self-social:
-    url: https://github.com/chrisl8/do-it-self-social.git
-    description: Communication and social (The Lounge, FreshRSS, Wallabag, Ghost)
+  do-it-self-personal:
+    url: https://github.com/chrisl8/do-it-self-personal.git
+    description: Personal container stacks (maintainer-specific)
