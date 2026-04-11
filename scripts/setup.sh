@@ -25,7 +25,7 @@ export DEBIAN_FRONTEND=noninteractive
 # sudoers configuration, etc. Verify access once upfront instead of
 # failing piecemeal at each sudo call. In non-interactive contexts
 # (cloud-init), sudo is typically passwordless for the provisioned user.
-if ! sudo -v 2>/dev/null; then
+if ! sudo true 2>/dev/null; then
   printf "${RED}This script requires sudo access.${NC}\n"
   printf "Either run as a user with sudo privileges, or configure sudoers.\n"
   exit 1
