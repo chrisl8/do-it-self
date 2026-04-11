@@ -1103,6 +1103,10 @@ containers:
         var: VOL_RECON_BAZARR_CONFIG
         host_subpath: container-mounts/recon/bazarr/config
         container_path: /config
+      mylar3_config:
+        var: VOL_RECON_MYLAR3_CONFIG
+        host_subpath: container-mounts/recon/mylar3/config
+        container_path: /config
       lazylibrarian_config:
         var: VOL_RECON_LAZYLIBRARIAN_CONFIG
         host_subpath: container-mounts/recon/lazylibrarian/config
