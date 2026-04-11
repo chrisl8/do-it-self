@@ -514,9 +514,7 @@ for DIR in *;do
   if [[ -d "${SCRIPT_DIR}/${DIR}" ]] && [[ -e "${SCRIPT_DIR}/${DIR}/compose.yaml" ]];then
     STRIPPED_DIR=${DIR%*/}
     # Skip containers not in the enabled list (only if we have a list).
-    # During --restart-unhealthy we still process all containers so we
-    # can recover any that may have been temporarily down.
-    if [[ ${RESTART_UNHEALTHY} = false ]] && [[ -n "${ENABLED_LIST}" ]]; then
+    if [[ -n "${ENABLED_LIST}" ]]; then
       if ! echo "${ENABLED_LIST}" | grep -qx "${STRIPPED_DIR}"; then
         continue
       fi
