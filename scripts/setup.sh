@@ -476,7 +476,17 @@ else
   ok "scripts/package.json not found, skipping"
 fi
 
-# ── Step 10: Clone external git repositories ─────────────────────────────
+# ── Step 10: Module system setup ───────────────────────────────────────
+# Clone default module sources and migrate existing containers if this is
+# a legacy install. On a fresh install, this makes containers available to
+# install via the web admin. On a legacy install, it records existing
+# container directories as module-sourced. Idempotent.
+
+step "Setting up module system"
+"${SCRIPT_DIR}/scripts/migrate-to-modules.sh"
+ok "Module system ready"
+
+# ── Step 10b: Clone external git repositories ─────────────────────────
 # Some containers build from external git repos (e.g. tsidp, valheim,
 # minecraft) and homepage needs dashboard-icons for its tiles. These are
 # gitignored and must be cloned before the containers can start. Repo URLs,
