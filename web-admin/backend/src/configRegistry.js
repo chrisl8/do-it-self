@@ -104,6 +104,20 @@ export function buildEnvForContainer(registry, userConfig, containerName) {
     }
   }
 
+  // Homepage group for dashboard organization — injected so compose.yaml
+  // can use homepage.group=${HOMEPAGE_GROUP} instead of hardcoding it.
+  if (containerDef.homepage_group) {
+    env.HOMEPAGE_GROUP = containerDef.homepage_group;
+  }
+
+  // Tailscale state directory — keeps node identity out of the ephemeral
+  // container directory by placing it on the primary mount at
+  // <mount[0]>/tailscale-state/<container-name>/.
+  if (containerDef.uses_tailscale) {
+    const basePath = getMountPath(mounts, 0);
+    env.TS_STATE_HOST_DIR = join(basePath, "tailscale-state", containerName);
+  }
+
   return { env, errors, warnings };
 }
 
@@ -390,7 +404,7 @@ export async function getConfigStatus() {
       ready: errors.length === 0,
       missing: errors,
       enabled,
-      category: def.category,
+      homepage_group: def.homepage_group,
       description: def.description,
     };
   }

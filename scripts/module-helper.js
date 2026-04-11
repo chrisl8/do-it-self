@@ -76,7 +76,7 @@ async function atomicWriteYaml(path, data) {
 // Read the registry, preserving the Document for comment-safe writes when possible.
 async function readRegistry() {
   if (!(await fileExists(REGISTRY_PATH))) {
-    return { shared_variables: {}, categories: {}, containers: {} };
+    return { shared_variables: {}, containers: {} };
   }
   return await readYaml(REGISTRY_PATH);
 }
@@ -272,16 +272,6 @@ async function installContainer(args) {
   registry.containers = registry.containers || {};
   registry.containers[containerName] = { source: moduleName, ...containerDef };
 
-  // Merge categories from module
-  if (moduleYaml.categories) {
-    registry.categories = registry.categories || {};
-    for (const [key, val] of Object.entries(moduleYaml.categories)) {
-      if (!registry.categories[key]) {
-        registry.categories[key] = val;
-      }
-    }
-  }
-
   // Sort containers alphabetically
   const sorted = {};
   for (const key of Object.keys(registry.containers).sort()) {
@@ -376,12 +366,13 @@ async function uninstallContainer(args) {
   console.log("Volume data (~container-mounts/), credentials (~credentials/), and user-config.yaml entries are preserved.");
 }
 
-// Files/dirs to preserve in the target during update (never overwritten from module source)
+// Files/dirs to preserve in the target during update (never overwritten from module source).
+// Note: tailscale-state is NOT here — it lives outside container dirs on the primary
+// mount at <mount[0]>/tailscale-state/<container-name>/, managed via TS_STATE_DIR env var.
 const PRESERVE_ON_UPDATE = [
   "config-personal",
   "compose.override.yaml",
   ".env",
-  "tailscale-state",
 ];
 
 async function updateModules(args) {
@@ -602,7 +593,6 @@ async function regenerateRegistry() {
   // Preserve shared_variables and personal containers
   const newRegistry = {
     shared_variables: registry.shared_variables || {},
-    categories: { ...(registry.categories || {}) },
     containers: {},
   };
 
@@ -620,15 +610,6 @@ async function regenerateRegistry() {
 
     const moduleYaml = await readYaml(join(modulePath, "module.yaml"));
     if (!moduleYaml) continue;
-
-    // Merge categories
-    if (moduleYaml.categories) {
-      for (const [key, val] of Object.entries(moduleYaml.categories)) {
-        if (!newRegistry.categories[key]) {
-          newRegistry.categories[key] = val;
-        }
-      }
-    }
 
     // Add installed containers from this module
     for (const containerName of entry.installed_containers || []) {
