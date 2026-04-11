@@ -293,10 +293,15 @@ apply_mount_permissions() {
     # so we don't have to substitute the path back into a yq query (which
     # would mis-handle paths containing $, : etc).
     local entries
-    entries=$(yq e '.mounts | to_entries | .[] | (.key + "\t" + (.value.mode // "") + "\t" + (.value.owner // "") + "\t" + ((.value.recursive // false) | tostring))' "$config_file" 2>/dev/null)
+    # Use "-" as placeholder for empty fields so bash read doesn't collapse
+    # consecutive tab delimiters (which would shift fields left).
+    entries=$(yq e '.mounts | to_entries | .[] | (.key + "\t" + (.value.mode // "-") + "\t" + (.value.owner // "-") + "\t" + ((.value.recursive // false) | tostring))' "$config_file" 2>/dev/null)
 
     while IFS=$'\t' read -r mount_path mode owner recursive; do
       [[ -z "$mount_path" ]] && continue
+      # Convert placeholder back to empty
+      [[ "$mode" == "-" ]] && mode=""
+      [[ "$owner" == "-" ]] && owner=""
 
       # Resolve ~/$HOME/${VOL_*} variables in the path
       local resolved_path
