@@ -4,7 +4,7 @@ This document catalogs issues that would affect someone cloning this repository 
 
 ---
 
-## ~~1. Modules system / personal stacks separation~~ DONE
+## 1. Modules system / personal stacks separation
 
 **Full design document: [docs/MODULES.md](docs/MODULES.md)**
 
@@ -12,8 +12,9 @@ Phases 1-2 are implemented. Container stacks live in module repos cloned into `.
 
 Current repos (2): `do-it-self-containers` (56 public) and `do-it-self-personal` (8 personal). Module sources are on Forgejo, mirrored to GitHub and Codeberg.
 
-Remaining module work (lower priority, do after testing):
-- **Category split** — Break `do-it-self-containers` into category-based repos (media, tools, monitoring, etc.). Do this after real usage patterns emerge; splitting is easy, consolidating is hard.
+Remaining module work:
+
+- ~~**Category cleanup**~~ — **Done.** Replaced single `category` slug with two new fields: `homepage_group` (freeform display name for dashboard grouping, injected via `${HOMEPAGE_GROUP}` env var) and `tags` (empty array, for future discovery UI). All 65 containers assigned to meaningful groups: Productivity, Finance, Development, Media, Tools, System Monitoring, Reading, Gaming, Desktop Apps, Infrastructure, Communication, Personal Projects. Removed the `categories:` registry section, `--category` CLI flag, and slug-to-label indirection. Tailscale node state moved out of ephemeral container dirs to `<mount[0]>/tailscale-state/<name>/` via `TS_STATE_HOST_DIR` env var.
 - **Web admin UI** (Phase 3) — Browse/Sources pages for installing containers via the UI instead of CLI.
 - **Side effects** (Phase 4) — `cron_jobs`, `host_packages`, `setup_hooks` in module.yaml.
 - **Developer tooling** (Phase 5) — `dev-sync.sh` for syncing live edits back to module repos.
@@ -49,13 +50,17 @@ The `homepage/config-defaults/` files are opinionated first drafts:
 
 Revisit once the module-based container set is finalized.
 
-## 5. Document and/or automate maintenance tasks
+## 5. config-defaults handler fails on container-owned files
+
+The generic `config-defaults` handler in `all-containers.sh` copies files from `config-defaults/` into the container directory at startup. If a container (e.g., CouchDB in obsidian-babel-livesync) has taken ownership of a bind-mounted file (UID 5984), the `cp` fails with `Permission denied`. The handler is now wrapped in `set +e` so it won't abort the startup loop, but the underlying copy still silently fails. The handler should either skip files that already exist with matching content, or use a strategy that handles non-user-owned files gracefully.
+
+## 6. Document and/or automate maintenance tasks
 
 - Rebooting procedure
 - Patching and rebooting
 - What else needs documenting?
 
-## 6. Testing improvements
+## 7. Testing improvements
 
 - Add info to TESTING.md about how to add yourself to the test tailnet to fully test
 - Add output to the test that provides clickable links to the testing site
@@ -64,7 +69,7 @@ Revisit once the module-based container set is finalized.
 
 Test the final module-based architecture end-to-end.
 
-## 7. Security review
+## 8. Security review
 
 Have Claude do a thorough review of the entire codebase for security issues. Should be done after the code is stable and tested, before going public.
 
@@ -72,11 +77,11 @@ Have Claude do a thorough review of the entire codebase for security issues. Sho
 
 ## Documentation (DO LAST — write about the final product)
 
-### 8. Tailscale Setup Guide
+### 9. Tailscale Setup Guide
 
 40+ services use the Tailscale sidecar pattern. `docs/TESTING.md` covers the prerequisites but is testing-focused, not a general onboarding guide. New users need a step-by-step guide: create a tailnet, configure ACL with `tag:container`, enable HTTPS Certificates, generate auth key (reusable, tagged) and API token. Write alongside the README rewrite.
 
-### 9. README rewrite
+### 10. README rewrite
 
 The current README still tells users to manually clone, edit mounts, and run `all-containers.sh --start`, with no mention of `setup.sh` or the web admin. The README needs two distinct sections:
 
@@ -86,6 +91,6 @@ The current README still tells users to manually clone, edit mounts, and run `al
 
 Move maintainer-specific notes lower.
 
-### 10. AGENTS.md and CLAUDE.md are developer-facing
+### 11. AGENTS.md and CLAUDE.md are developer-facing
 
 These files help AI tools work with the repo but don't help human newcomers. Update after the product is final so they accurately describe the system.

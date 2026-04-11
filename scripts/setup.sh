@@ -91,11 +91,12 @@ else
 fi
 
 # ── Step 1b: Passwordless sudo for container operations ─────────────────
-# all-containers.sh needs passwordless chown (mount permissions) and
+# all-containers.sh needs passwordless chown and chmod (mount permissions) and
 # system-graceful-shutdown.sh needs passwordless shutdown. Use sudoers.d
 # drop-in files — safer than editing /etc/sudoers, idempotent, easy to
 # remove.
 SUDOERS_CHOWN="/etc/sudoers.d/containers-chown"
+SUDOERS_CHMOD="/etc/sudoers.d/containers-chmod"
 SUDOERS_SHUTDOWN="/etc/sudoers.d/containers-shutdown"
 CURRENT_USER=$(whoami)
 if [[ ! -f "$SUDOERS_CHOWN" ]]; then
@@ -105,6 +106,14 @@ if [[ ! -f "$SUDOERS_CHOWN" ]]; then
   ok "Passwordless sudo for /usr/bin/chown configured"
 else
   ok "Passwordless sudo for chown already configured"
+fi
+if [[ ! -f "$SUDOERS_CHMOD" ]]; then
+  step "Configuring passwordless sudo for chmod"
+  echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/chmod" | sudo tee "$SUDOERS_CHMOD" > /dev/null
+  sudo chmod 0440 "$SUDOERS_CHMOD"
+  ok "Passwordless sudo for /usr/bin/chmod configured"
+else
+  ok "Passwordless sudo for chmod already configured"
 fi
 if [[ ! -f "$SUDOERS_SHUTDOWN" ]]; then
   step "Configuring passwordless sudo for shutdown"

@@ -12,7 +12,6 @@ START_ACTION=false
 STOP_ACTION=false
 SLEEP_TIME=10
 MOUNT=""
-CATEGORY=""
 CONTAINER_LIST_FILE=""
 SINGLE_CONTAINER=""
 
@@ -49,10 +48,6 @@ do
                 --mount)
                   shift
                   MOUNT=$1
-                  ;;
-                --category)
-                  shift
-                  CATEGORY="$1"
                   ;;
                 --container-list)
                   shift
@@ -117,9 +112,6 @@ if [[ ${START_ACTION} = false && ${STOP_ACTION} = false && ${RESTART_UNHEALTHY} 
   echo ""
   echo "You can also specify to only STOP containers which reference a given mount text in their compose.yaml files."
   echo "all-containers.sh --stop --mount 250a"
-  echo ""
-  echo "You can also specify to only STOP containers which reference a given category in their compose.yaml files based on the homepage.group tag."
-  echo "all-containers.sh --stop --category \"System Monitoring\""
   echo ""
   echo "You can also specify a file containing a list of container directories to process."
   echo "all-containers.sh --start --container-list my-containers.txt"
@@ -393,8 +385,7 @@ apply_single_mount_permission() {
     if ! mkdir -p "$mount_path" 2>/dev/null; then
       if ! sudo mkdir -p "$mount_path" 2>/dev/null; then
         printf "${RED}ERROR: Failed to create mount path $mount_path${NC}\n"
-        printf "${RED}Aborting.${NC}\n"
-        exit 1
+        return 1
       fi
     fi
   fi
@@ -425,9 +416,11 @@ apply_single_mount_permission() {
     printf "\n"
     
     if ! $chmod_cmd "$chmod_args" "$mount_path" 2>/dev/null; then
-      printf "${RED}ERROR: Failed to set mode $chmod_args on $mount_path${NC}\n"
-      printf "${RED}Aborting.${NC}\n"
-      exit 1
+      # Retry with sudo — Docker often creates mount subdirs as root
+      if ! sudo $chmod_cmd "$chmod_args" "$mount_path" 2>/dev/null; then
+        printf "${RED}WARNING: Failed to set mode $chmod_args on $mount_path, continuing...${NC}\n"
+        return 1
+      fi
     fi
   fi
   
@@ -445,9 +438,8 @@ apply_single_mount_permission() {
     printf "\n"
     
     if ! $chown_cmd "$chown_args" "$mount_path" 2>/dev/null; then
-      printf "${RED}ERROR: Failed to set owner $chown_args on $mount_path${NC}\n"
-      printf "${RED}Aborting.${NC}\n"
-      exit 1
+      printf "${RED}WARNING: Failed to set owner $chown_args on $mount_path, continuing...${NC}\n"
+      return 1
     fi
   fi
   
@@ -464,23 +456,27 @@ verify_mount_permission() {
     return
   fi
   
-  # Get actual permissions
-  local actual_owner
-  actual_owner=$(stat -c "%U:%G" "$mount_path" 2>/dev/null)
-  
+  # Get actual permissions — both name and numeric forms so the check
+  # works regardless of whether mount-permissions.yaml uses "1000:1000"
+  # or "chrisl8:chrisl8".
+  local actual_owner_name actual_owner_numeric
+  actual_owner_name=$(stat -c "%U:%G" "$mount_path" 2>/dev/null)
+  actual_owner_numeric=$(stat -c "%u:%g" "$mount_path" 2>/dev/null)
+
   local actual_mode
   actual_mode=$(stat -c "%a" "$mount_path" 2>/dev/null)
-  
+
   local mode_ok=true
   local owner_ok=true
-  
+
   if [[ -n "$expected_mode" && "$actual_mode" != "$expected_mode" ]]; then
     mode_ok=false
   fi
-  
-  if [[ -n "$expected_owner" && "$actual_owner" != "$expected_owner" ]]; then
+
+  if [[ -n "$expected_owner" && "$actual_owner_name" != "$expected_owner" && "$actual_owner_numeric" != "$expected_owner" ]]; then
     owner_ok=false
   fi
+  local actual_owner="$actual_owner_name"
   
   if [[ "$mode_ok" == false || "$owner_ok" == false ]]; then
     printf "  ${RED}WARNING: Permission mismatch on $mount_path${NC}\n"
@@ -604,8 +600,6 @@ elif [[ ${START_ACTION} = true ]];then
 elif [[ ${STOP_ACTION} = true ]];then
   if [[ ${MOUNT} != "" ]];then
     printf "${YELLOW}Stopping containers that reference /mnt/${MOUNT}...${NC}\n"
-  elif [[ ${CATEGORY} != "" ]];then
-    printf "${YELLOW}Stopping containers that reference the category ${CATEGORY}...${NC}\n"
   else
     printf "${YELLOW}Stopping ${RESTART_LIST_TEXT}...${NC}\n"
   fi
@@ -723,10 +717,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
       if [[ $(grep -v for-homepage "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" | grep -v ScanHere | grep -c "/mnt/${MOUNT}/") -eq 0 ]];then
         continue
       fi
-    elif [[ ${CATEGORY} != "" ]];then
-      if [[ $(grep -c "homepage.group=${CATEGORY}" "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml") -eq 0 ]];then
-        continue
-      fi
     fi
     cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
     if [[ ${RESTART_UNHEALTHY} = true ]];then
@@ -810,8 +800,16 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         fi
         if [[ ${GET_UPDATES} = true ]];then
           printf "${YELLOW}  Pulling updates and rebuilding...${NC}\n"
+          set +e
           docker --log-level ERROR compose pull
+          PULL_EXIT=$?
+          set -e
+          if [[ ${PULL_EXIT} -ne 0 ]]; then
+            printf "${RED}  WARNING: pull failed for ${CONTAINER_DIR} (exit code ${PULL_EXIT}), continuing with existing images...${NC}\n"
+          fi
+          set +e
           docker --log-level ERROR compose build
+          set -e
         fi
 
         # Generate .env file from registry + user config (non-secret config like volume paths)
@@ -905,6 +903,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         # config-personal/ take precedence, so users can override defaults
         # without touching git-tracked files.
         if [[ -d "config-defaults" ]] && [[ "${CONTAINER_DIR}" != "homepage" ]]; then
+          set +e
           while IFS= read -r -d '' default_file; do
             rel_path="${default_file#config-defaults/}"
             target_dir="$(dirname "$rel_path")"
@@ -915,11 +914,14 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
               cp "$default_file" "$rel_path"
             fi
           done < <(find config-defaults -type f -print0)
+          set -e
         fi
 
         # Apply mount permissions before starting containers
         if [[ -f "mount-permissions.yaml" ]]; then
+          set +e
           apply_mount_permissions "mount-permissions.yaml"
+          set -e
         fi
 
         # If Infisical is available, also export the per-container secrets
