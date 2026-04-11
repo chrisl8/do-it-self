@@ -131,6 +131,12 @@ for (const name of Object.keys(meta.containers || {})) {
     done <<< "${CONTAINER_NAMES}"
   done
 
+  # Rebuild the registry from only what's actually installed. The committed
+  # registry may have entries for modules that failed to clone (e.g. private
+  # repos without credentials), so regenerating drops orphaned entries.
+  step "Regenerating registry from installed containers"
+  run_node "${SCRIPT_DIR}/module-helper.js" regenerate-registry 2>/dev/null || true
+
   ok "All module containers installed"
   exit 0
 fi
