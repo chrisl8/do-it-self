@@ -23,7 +23,7 @@ services:
     # other than this sidecar's MagicDNS hostname, or any other docker
     # container can reach the backend.
     volumes:
-      - ./tailscale-state:/var/lib/tailscale
+      - ${TS_STATE_HOST_DIR}:/var/lib/tailscale
       - ./tailscale-config:/config
       - ./backend/sockets:/sockets
       - /dev/net/tun:/dev/net/tun
