@@ -1,7 +1,3 @@
-# Container Configuration Registry
-# Source of truth for what each container needs to run.
-# User-specific values go in user-config.yaml (gitignored).
-
 shared_variables:
   TS_AUTHKEY:
     type: secret
@@ -43,22 +39,11 @@ categories:
     label: Tools
   uncategorized:
     label: Uncategorized
+  test:
+    label: Test
 containers:
-  infisical:
-    description: Self-hosted secret manager for credential injection
-    category: uncategorized
-    uses_tailscale: false
-    start_order: "000"
-    volumes:
-      db:
-        var: VOL_INFISICAL_DB
-        host_subpath: container-mounts/infisical/db
-        container_path: /var/lib/postgresql/data
-      redis:
-        var: VOL_INFISICAL_REDIS
-        host_subpath: container-mounts/infisical/redis
-        container_path: /data
   actual-budget:
+    source: do-it-self-containers
     description: Privacy-focused personal budgeting app
     category: my-stuff
     uses_tailscale: true
@@ -69,6 +54,7 @@ containers:
         container_path: /data
     default_disabled: true
   actual-budget-api:
+    source: do-it-self-containers
     description: Actual Budget API server
     category: uncategorized
     uses_tailscale: true
@@ -92,10 +78,12 @@ containers:
         container_path: /data
     default_disabled: true
   adminer:
+    source: do-it-self-containers
     description: Lightweight database management web UI
     category: uncategorized
     default_disabled: true
   beszel:
+    source: do-it-self-containers
     description: Server monitoring dashboard
     category: system-monitoring
     uses_docker_gid: true
@@ -125,6 +113,7 @@ containers:
         container_path: /beszel_data
     default_disabled: true
   borgitory:
+    source: do-it-self-containers
     description: Web UI for browsing BorgBackup repositories
     category: tools
     uses_tailscale: true
@@ -139,6 +128,7 @@ containers:
         container_path: /mnt/repos/local
     default_disabled: true
   caddy:
+    source: do-it-self-personal
     description: Reverse proxy and web server with automatic HTTPS
     category: uncategorized
     start_order: "030"
@@ -195,6 +185,7 @@ containers:
         container_path: /var/log/caddy
     default_disabled: true
   changedetection:
+    source: do-it-self-containers
     description: Website change detection and notification
     category: reading
     uses_tailscale: true
@@ -210,6 +201,7 @@ containers:
         container_path: /datastore
     default_disabled: true
   cloudflared:
+    source: do-it-self-containers
     description: Cloudflare Tunnel for external access without port forwarding
     category: uncategorized
     start_order: "029"
@@ -225,6 +217,7 @@ containers:
         container_path: /home/nonroot/.cloudflared
     default_disabled: true
   code:
+    source: do-it-self-containers
     description: VS Code Server in the browser
     category: my-stuff
     uses_tailscale: true
@@ -235,6 +228,7 @@ containers:
         container_path: /home/coder
     default_disabled: true
   crater-manipulator:
+    source: do-it-self-personal
     description: Crater Manipulator game server component
     category: uncategorized
     start_order: "031"
@@ -245,6 +239,7 @@ containers:
         container_path: /crater-manipulator
     default_disabled: true
   dawarich:
+    source: do-it-self-containers
     description: Self-hosted location history and tracking
     category: favorites
     uses_tailscale: true
@@ -295,6 +290,7 @@ containers:
         container_path: /var/app/storage
     default_disabled: true
   diun:
+    source: do-it-self-containers
     description: Docker Image Update Notifier
     category: uncategorized
     uses_docker_gid: true
@@ -309,6 +305,7 @@ containers:
         container_path: /script
     default_disabled: true
   factorio:
+    source: do-it-self-containers
     description: Factorio dedicated game server
     category: uncategorized
     uses_tailscale: true
@@ -319,6 +316,7 @@ containers:
         container_path: /factorio
     default_disabled: true
   filez:
+    source: do-it-self-containers
     description: Simple file browser and manager
     category: my-stuff
     uses_tailscale: true
@@ -333,6 +331,7 @@ containers:
         container_path: /data/downloads
     default_disabled: true
   forgejo:
+    source: do-it-self-containers
     description: Self-hosted Git forge (Gitea fork)
     category: my-stuff
     uses_tailscale: true
@@ -344,6 +343,7 @@ containers:
         container_path: /data
     default_disabled: true
   formbricks:
+    source: do-it-self-containers
     description: Open-source survey and feedback platform
     category: uncategorized
     variables:
@@ -385,6 +385,7 @@ containers:
         container_path: /home/nextjs/apps/web/saml-connection
     default_disabled: true
   freshrss:
+    source: do-it-self-containers
     description: Self-hosted RSS feed reader
     category: reading
     uses_tailscale: true
@@ -408,6 +409,7 @@ containers:
         container_path: /var/www/FreshRSS/extensions
     default_disabled: true
   geomyidae:
+    source: do-it-self-personal
     description: Gopher protocol server
     category: uncategorized
     start_order: "031"
@@ -418,6 +420,7 @@ containers:
         container_path: /geomyidae
     default_disabled: true
   homarr:
+    source: do-it-self-containers
     description: Customizable dashboard for self-hosted services
     category: tools
     uses_tailscale: true
@@ -442,6 +445,7 @@ containers:
         container_path: /appdata
     default_disabled: true
   homepage:
+    source: do-it-self-containers
     description: Application dashboard with service widgets
     category: uncategorized
     uses_tailscale: true
@@ -453,6 +457,7 @@ containers:
         url: https://github.com/homarr-labs/dashboard-icons.git
         shallow: true
   immich:
+    source: do-it-self-containers
     description: Self-hosted photo and video backup
     category: my-stuff
     uses_tailscale: true
@@ -477,7 +482,23 @@ containers:
         host_subpath: container-mounts/immich/db
         container_path: /var/lib/postgresql/data
     default_disabled: true
+  infisical:
+    source: do-it-self-containers
+    description: Self-hosted secret manager for credential injection
+    category: uncategorized
+    uses_tailscale: false
+    start_order: "000"
+    volumes:
+      db:
+        var: VOL_INFISICAL_DB
+        host_subpath: container-mounts/infisical/db
+        container_path: /var/lib/postgresql/data
+      redis:
+        var: VOL_INFISICAL_REDIS
+        host_subpath: container-mounts/infisical/redis
+        container_path: /data
   jellyfin:
+    source: do-it-self-containers
     description: Media server for movies, TV, music, and audiobooks
     category: my-stuff
     uses_tailscale: true
@@ -522,6 +543,7 @@ containers:
         container_path: /media/recon
     default_disabled: true
   kanboard:
+    source: do-it-self-containers
     description: Kanban project management board
     category: kanboard
     uses_tailscale: true
@@ -540,6 +562,7 @@ containers:
         container_path: /etc/nginx/ssl
     default_disabled: true
   karakeep:
+    source: do-it-self-containers
     description: Bookmark and read-it-later manager
     category: reading
     uses_tailscale: true
@@ -574,6 +597,7 @@ containers:
         container_path: /meili_data
     default_disabled: true
   kopia:
+    source: do-it-self-containers
     description: Backup repository server with web UI
     category: favorites
     variables:
@@ -620,47 +644,8 @@ containers:
         host_subpath: container-mounts/kopia/tmp
         container_path: /tmp:shared
     default_disabled: true
-  kopia-tr0n:
-    description: Secondary Kopia backup instance
-    category: uncategorized
-    uses_tailscale: true
-    default_disabled: true
-    variables:
-      SERVER_USERNAME:
-        type: string
-        required: true
-        description: Web UI login username
-      SERVER_PASSWORD:
-        type: secret
-        required: true
-        description: Web UI login password
-      KOPIA_PASSWORD:
-        type: secret
-        required: true
-        description: Repository encryption password
-        auto_generate: true
-      USER:
-        type: string
-        required: true
-        description: System user identity for Kopia
-    volumes:
-      config:
-        var: VOL_KOPIA_TR0N_CONFIG
-        host_subpath: container-mounts/kopia-tr0n/config
-        container_path: /app/config
-      cache:
-        var: VOL_KOPIA_TR0N_CACHE
-        host_subpath: container-mounts/kopia-tr0n/cache
-        container_path: /app/cache
-      logs:
-        var: VOL_KOPIA_TR0N_LOGS
-        host_subpath: container-mounts/kopia-tr0n/logs
-        container_path: /app/logs
-      repository:
-        var: VOL_KOPIA_TR0N_REPOSITORY
-        host_subpath: container-mounts/kopia-tr0n/repository
-        container_path: /repository
   mame:
+    source: do-it-self-containers
     description: MAME arcade emulator in the browser
     category: desktop-apps
     uses_tailscale: true
@@ -684,6 +669,7 @@ containers:
         host_subpath: container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged)
         container_path: /mame/chds
   mariadb:
+    source: do-it-self-containers
     description: Shared MariaDB database server
     category: uncategorized
     start_order: "001"
@@ -700,6 +686,7 @@ containers:
         container_path: /var/lib/mysql
     default_disabled: true
   meshtastic:
+    source: do-it-self-containers
     description: Meshtastic mesh networking web client
     category: uncategorized
     start_order: "031"
@@ -719,6 +706,7 @@ containers:
         required: true
         description: Admin panel password
   minecraft:
+    source: do-it-self-containers
     description: Minecraft Bedrock Edition dedicated server
     category: uncategorized
     uses_tailscale: true
@@ -732,6 +720,7 @@ containers:
         container_path: /data
     default_disabled: true
   netdata:
+    source: do-it-self-containers
     description: Real-time server performance monitoring
     category: system-monitoring
     uses_tailscale: true
@@ -752,6 +741,7 @@ containers:
         container_path: /var/cache/netdata
     default_disabled: true
   nextcloud:
+    source: do-it-self-containers
     description: Self-hosted cloud storage, calendar, and contacts
     category: my-stuff
     uses_tailscale: true
@@ -811,6 +801,7 @@ containers:
         container_path: /usr/share/elasticsearch/data
     default_disabled: true
   nextcloud-whiteboard:
+    source: do-it-self-containers
     description: Collaborative whiteboard for Nextcloud
     category: uncategorized
     uses_tailscale: true
@@ -823,6 +814,7 @@ containers:
         description: JWT secret for whiteboard authentication
         auto_generate: true
   obsidian:
+    source: do-it-self-containers
     description: Obsidian note-taking app in the browser via KasmVNC
     category: desktop-apps
     uses_tailscale: true
@@ -834,6 +826,7 @@ containers:
         container_path: /config
     default_disabled: true
   obsidian-babel-livesync:
+    source: do-it-self-containers
     description: CouchDB sync server for Obsidian LiveSync plugin
     category: uncategorized
     uses_tailscale: true
@@ -854,6 +847,7 @@ containers:
         container_path: /opt/couchdb/data
     default_disabled: true
   onlyoffice:
+    source: do-it-self-containers
     description: Online office suite for document editing
     category: uncategorized
     uses_tailscale: true
@@ -891,6 +885,7 @@ containers:
         container_path: /var/lib/postgresql/data
     default_disabled: true
   paperless:
+    source: do-it-self-containers
     description: Document management system with OCR
     category: my-stuff
     uses_tailscale: true
@@ -927,6 +922,7 @@ containers:
         container_path: /var/lib/postgresql/data
     default_disabled: true
   paste:
+    source: do-it-self-containers
     description: Self-hosted pastebin and code sharing
     category: tools
     uses_tailscale: true
@@ -948,6 +944,7 @@ containers:
         container_path: /var/lib/mysql
     default_disabled: true
   pihole:
+    source: do-it-self-containers
     description: Network-wide ad blocking via DNS
     category: uncategorized
     default_disabled: true
@@ -961,6 +958,7 @@ containers:
         host_subpath: container-mounts/pihole/dnsmasq
         container_path: /etc/dnsmasq.d
   portainer:
+    source: do-it-self-containers
     description: Docker container management web UI
     category: system-monitoring
     uses_tailscale: true
@@ -972,6 +970,7 @@ containers:
         container_path: /data
     default_disabled: true
   pure-ftpd:
+    source: do-it-self-containers
     description: FTP server for scanner file uploads
     category: uncategorized
     variables:
@@ -994,6 +993,7 @@ containers:
         container_path: /etc/ssl/private
     default_disabled: true
   quicken:
+    source: do-it-self-personal
     description: Quicken Classic web companion
     category: my-stuff
     uses_tailscale: true
@@ -1004,6 +1004,7 @@ containers:
         container_path: /data
     default_disabled: true
   recon:
+    source: do-it-self-containers
     description: Media acquisition stack (Sonarr, Radarr, SABnzbd, etc.)
     category: recon
     uses_tailscale: true
@@ -1092,6 +1093,7 @@ containers:
         container_path: /config
     default_disabled: true
   retroarch:
+    source: do-it-self-containers
     description: RetroArch game emulator in the browser
     category: desktop-apps
     uses_tailscale: true
@@ -1107,6 +1109,7 @@ containers:
         host_subpath: container-mounts/secure-webtop/downloads/mame
         container_path: /mame:ro
   rustdesk:
+    source: do-it-self-containers
     description: Self-hosted remote desktop server
     category: uncategorized
     uses_tailscale: true
@@ -1117,6 +1120,7 @@ containers:
         host_subpath: container-mounts/rustdesk/data
         container_path: /root
   searxng:
+    source: do-it-self-containers
     description: Privacy-respecting metasearch engine
     category: uncategorized
     uses_tailscale: true
@@ -1131,6 +1135,7 @@ containers:
         container_path: /etc/searxng:rw
     default_disabled: true
   secure-browser:
+    source: do-it-self-containers
     description: Isolated browser via KasmVNC with VPN
     category: desktop-apps
     uses_tailscale: true
@@ -1158,6 +1163,7 @@ containers:
         description: WireGuard client IP address (e.g. 10.x.x.x/32)
     default_disabled: true
   seerr:
+    source: do-it-self-containers
     description: Media request management for Jellyfin
     category: my-stuff
     uses_tailscale: true
@@ -1168,6 +1174,7 @@ containers:
         container_path: /app/config
     default_disabled: true
   space-game:
+    source: do-it-self-personal
     description: Space game web application
     category: uncategorized
     start_order: "031"
@@ -1178,11 +1185,13 @@ containers:
         container_path: /space-game
     default_disabled: true
   spacymote:
+    source: do-it-self-personal
     description: SpacyMote remote control web app
     category: uncategorized
     start_order: "031"
     default_disabled: true
   speedtest:
+    source: do-it-self-containers
     description: Self-hosted internet speed test tracker
     category: system-monitoring
     variables:
@@ -1198,6 +1207,7 @@ containers:
         container_path: /config
     default_disabled: true
   starbound:
+    source: do-it-self-containers
     description: Starbound dedicated game server
     category: uncategorized
     variables:
@@ -1212,6 +1222,7 @@ containers:
         container_path: /starbound
     default_disabled: true
   stirling-pdf:
+    source: do-it-self-containers
     description: PDF manipulation toolkit
     category: tools
     uses_tailscale: true
@@ -1226,11 +1237,13 @@ containers:
         container_path: /configs
     default_disabled: true
   the-lounge:
+    source: do-it-self-containers
     description: Self-hosted IRC web client
     category: home
     uses_tailscale: true
     default_disabled: true
   trilium:
+    source: do-it-self-containers
     description: Hierarchical note-taking application
     category: my-stuff
     uses_tailscale: true
@@ -1241,6 +1254,7 @@ containers:
         container_path: /home/node/trilium-data
     default_disabled: true
   tsidp:
+    source: do-it-self-containers
     description: Tailscale Identity Provider
     category: tools
     uses_tailscale: true
@@ -1254,6 +1268,7 @@ containers:
         container_path: /data
     default_disabled: true
   uptime:
+    source: do-it-self-containers
     description: Uptime Kuma service monitoring
     category: system-monitoring
     uses_tailscale: true
@@ -1265,6 +1280,7 @@ containers:
         container_path: /app/data
     default_disabled: true
   valheim:
+    source: do-it-self-containers
     description: Valheim dedicated game server
     category: home
     uses_tailscale: true
@@ -1301,6 +1317,7 @@ containers:
         container_path: /opt/valheim
     default_disabled: true
   vaultwarden:
+    source: do-it-self-containers
     description: Bitwarden-compatible password manager server
     category: tools
     uses_tailscale: true
@@ -1311,15 +1328,12 @@ containers:
         host_subpath: container-mounts/vaultwarden/data
         container_path: /data/
   voidship-ephemeral:
+    source: do-it-self-personal
     description: Voidship Ephemeral web application
     category: uncategorized
     default_disabled: true
-  web-admin:
-    description: Self-hosted container management dashboard (Tailscale sidecar; the backend is a PM2 process on the host bound to 127.0.0.1)
-    category: system-monitoring
-    uses_tailscale: true
-    start_order: "001"
   wallabag:
+    source: do-it-self-containers
     description: Self-hosted read-it-later and article archiver
     category: reading
     uses_tailscale: true
@@ -1342,7 +1356,14 @@ containers:
         host_subpath: container-mounts/wallabag/data
         container_path: /var/www/wallabag/data
     default_disabled: true
+  web-admin:
+    source: platform
+    description: Self-hosted container management dashboard (Tailscale sidecar; the backend is a PM2 process on the host bound to 127.0.0.1)
+    category: system-monitoring
+    uses_tailscale: true
+    start_order: "001"
   witchazzan:
+    source: do-it-self-personal
     description: Witchazzan multiplayer web game
     category: uncategorized
     start_order: "031"
@@ -1353,6 +1374,7 @@ containers:
         container_path: /app/persistentData
     default_disabled: true
   your-spotify:
+    source: do-it-self-containers
     description: Personal Spotify listening statistics
     category: favorites
     uses_tailscale: true
@@ -1372,6 +1394,7 @@ containers:
         container_path: /data/db
     default_disabled: true
   zipline:
+    source: do-it-self-containers
     description: File and image hosting with ShareX support
     category: tools
     uses_tailscale: true

@@ -1,4 +1,0 @@
-mounts:
-  /mnt/2000/container-mounts/caddy/site/my-digital-garden/dist:
-    mode: "775"
-    recursive: true

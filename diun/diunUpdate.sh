@@ -1,1 +1,0 @@
-/mnt/250/container-mounts/diun/script/diunUpdate.sh
