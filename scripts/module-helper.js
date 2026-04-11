@@ -606,9 +606,9 @@ async function regenerateRegistry() {
     containers: {},
   };
 
-  // Keep personal containers
+  // Keep personal and platform containers
   for (const [name, def] of Object.entries(registry.containers || {})) {
-    if (def.source === "personal") {
+    if (def.source === "personal" || def.source === "platform") {
       newRegistry.containers[name] = def;
     }
   }
