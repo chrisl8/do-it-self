@@ -392,27 +392,18 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
 
   const mounts = userConfig?.mounts || [{ path: "", label: "Default" }];
 
-  const containersByCategory = useMemo(() => {
+  const containersByGroup = useMemo(() => {
     if (!registry?.containers) return {};
     const grouped = {};
     for (const [name, def] of Object.entries(registry.containers)) {
-      const cat = def.category || "uncategorized";
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push({ name, def });
+      const group = def.homepage_group || "Uncategorized";
+      if (!grouped[group]) grouped[group] = [];
+      grouped[group].push({ name, def });
     }
-    for (const cat of Object.keys(grouped)) {
-      grouped[cat].sort((a, b) => a.name.localeCompare(b.name));
+    for (const group of Object.keys(grouped)) {
+      grouped[group].sort((a, b) => a.name.localeCompare(b.name));
     }
     return grouped;
-  }, [registry]);
-
-  const categoryLabels = useMemo(() => {
-    if (!registry?.categories) return {};
-    const labels = {};
-    for (const [slug, def] of Object.entries(registry.categories)) {
-      labels[slug] = def.label || slug;
-    }
-    return labels;
   }, [registry]);
 
   const handleSaveMounts = async (newMounts) => {
@@ -450,11 +441,9 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
     );
   }
 
-  const sortedCategories = Object.keys(containersByCategory).sort((a, b) => {
-    const la = categoryLabels[a] || a;
-    const lb = categoryLabels[b] || b;
-    return la.localeCompare(lb);
-  });
+  const sortedGroups = Object.keys(containersByGroup).sort((a, b) =>
+    a.localeCompare(b)
+  );
 
   return (
     <Box sx={{ p: 2, maxWidth: 1200, margin: "0 auto" }}>
@@ -584,12 +573,12 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
         Containers
       </Typography>
 
-      {sortedCategories.map((cat) => (
-        <Box key={cat} sx={{ mb: 2 }}>
+      {sortedGroups.map((group) => (
+        <Box key={group} sx={{ mb: 2 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "text.secondary" }}>
-            {categoryLabels[cat] || cat}
+            {group}
           </Typography>
-          {containersByCategory[cat].map(({ name, def }) => (
+          {containersByGroup[group].map(({ name, def }) => (
             <ContainerCard
               key={name}
               name={name}
