@@ -900,6 +900,15 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         fi
         set -e
 
+        # Apply mount permissions first — pre-start hooks (merge-homepage-config,
+        # config-defaults handler) need write access to directories that Docker
+        # may have created as root.
+        if [[ -f "mount-permissions.yaml" ]]; then
+          set +e
+          apply_mount_permissions "mount-permissions.yaml"
+          set -e
+        fi
+
         # Per-container pre-start hooks.
         # homepage and beszel get their monitoring mounts regenerated from
         # user-config.yaml (writes a gitignored compose.override.yaml that
@@ -958,13 +967,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         if [[ -x "$(command -v node)" ]] && [[ -f "${SETUP_HOOKS_HELPER}" ]]; then
           set +e
           node "${SETUP_HOOKS_HELPER}" "${CONTAINER_DIR}"
-          set -e
-        fi
-
-        # Apply mount permissions before starting containers
-        if [[ -f "mount-permissions.yaml" ]]; then
-          set +e
-          apply_mount_permissions "mount-permissions.yaml"
           set -e
         fi
 
