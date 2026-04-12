@@ -508,6 +508,21 @@ if [[ -x "$(command -v node)" ]] && [[ -f "${LIST_HELPER}" ]]; then
   ENABLED_LIST=$(node "${LIST_HELPER}" 2>/dev/null || true)
 fi
 
+# Remove cron jobs for disabled containers (only on --start)
+CRON_HELPER="${SCRIPT_DIR}/scripts/manage-cron-jobs.js"
+if [[ ${START_ACTION} = true ]] && [[ -n "${ENABLED_LIST}" ]] && [[ -x "$(command -v node)" ]] && [[ -f "${CRON_HELPER}" ]]; then
+  for DIR in *; do
+    if [[ -d "${SCRIPT_DIR}/${DIR}" ]] && [[ -e "${SCRIPT_DIR}/${DIR}/compose.yaml" ]]; then
+      STRIPPED_DIR=${DIR%*/}
+      if ! echo "${ENABLED_LIST}" | grep -qx "${STRIPPED_DIR}"; then
+        set +e
+        node "${CRON_HELPER}" remove "${STRIPPED_DIR}" 2>/dev/null
+        set -e
+      fi
+    fi
+  done
+fi
+
 # Create and sort list
 CONTAINER_LIST=()
 for DIR in *;do
@@ -924,6 +939,22 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           set -e
         fi
 
+        # Check host package dependencies (warn only, never blocks startup)
+        HOST_PKG_HELPER="${SCRIPT_DIR}/scripts/check-host-packages.js"
+        if [[ -x "$(command -v node)" ]] && [[ -f "${HOST_PKG_HELPER}" ]]; then
+          set +e
+          node "${HOST_PKG_HELPER}" "${CONTAINER_DIR}"
+          set -e
+        fi
+
+        # Run one-time setup hooks (tracked in installed-modules.yaml)
+        SETUP_HOOKS_HELPER="${SCRIPT_DIR}/scripts/run-setup-hooks.js"
+        if [[ -x "$(command -v node)" ]] && [[ -f "${SETUP_HOOKS_HELPER}" ]]; then
+          set +e
+          node "${SETUP_HOOKS_HELPER}" "${CONTAINER_DIR}"
+          set -e
+        fi
+
         # Apply mount permissions before starting containers
         if [[ -f "mount-permissions.yaml" ]]; then
           set +e
@@ -961,6 +992,13 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/favicon.ico /app/public/homepage.ico" 2>/dev/null
             docker exec --user 0 homepage sh -c "cp /app/public/images/favicons/apple-icon.png /app/public/apple-touch-icon.png" 2>/dev/null
           fi
+          set -e
+        fi
+
+        # Install cron jobs declared by this container (after successful start)
+        if [[ -x "$(command -v node)" ]] && [[ -f "${CRON_HELPER}" ]]; then
+          set +e
+          node "${CRON_HELPER}" sync "${CONTAINER_DIR}"
           set -e
         fi
 
