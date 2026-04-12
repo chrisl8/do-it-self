@@ -305,6 +305,22 @@ containers:
     homepage_group: Gaming
     tags: []
     uses_tailscale: true
+    required_accounts:
+      - name: Factorio Profile
+        url: https://factorio.com/profile
+        why: Username and token are needed for mod downloads and multiplayer. Find your token on your profile page.
+        populates:
+          - FACTORIO_USERNAME
+          - FACTORIO_TOKEN
+    variables:
+      FACTORIO_USERNAME:
+        type: string
+        required: false
+        description: Factorio.com username for mod downloads and multiplayer
+      FACTORIO_TOKEN:
+        type: secret
+        required: false
+        description: Factorio.com profile token for mod downloads and multiplayer
     volumes:
       data:
         var: VOL_FACTORIO_DATA
@@ -1076,6 +1092,16 @@ containers:
     tags: []
     uses_tailscale: true
     requires_gpu: true
+    required_accounts:
+      - name: WireGuard VPN provider
+        url: ""
+        why: Get WireGuard config (endpoint, port, public key, private key, addresses) from your VPN provider's account page.
+        populates:
+          - WIREGUARD_ENDPOINT_IP
+          - WIREGUARD_ENDPOINT_PORT
+          - WIREGUARD_PUBLIC_KEY
+          - WIREGUARD_PRIVATE_KEY
+          - WIREGUARD_ADDRESSES
     variables:
       WIREGUARD_ENDPOINT_IP:
         type: string
@@ -1151,6 +1177,12 @@ containers:
     description: Starbound dedicated game server
     homepage_group: Gaming
     tags: []
+    required_accounts:
+      - name: Steam
+        url: https://store.steampowered.com/
+        why: A Steam account that owns Starbound is required — SteamCMD downloads the dedicated server binary using your login.
+        populates:
+          - STEAM_USER
     variables:
       STEAM_USER:
         type: string
@@ -1275,6 +1307,13 @@ containers:
     homepage_group: Reading
     tags: []
     uses_tailscale: true
+    required_accounts:
+      - name: SMTP email provider
+        url: ""
+        why: Optional — needed only if you want email notifications. Any SMTP provider works (Gmail app password, SendGrid, AWS SES, etc.).
+        populates:
+          - SYMFONY__ENV__MAILER_DSN
+          - SYMFONY__ENV__FROM_EMAIL
     variables:
       SYMFONY__ENV__MAILER_DSN:
         type: string
