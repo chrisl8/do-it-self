@@ -15,20 +15,15 @@ Current repos (2): `do-it-self-containers` (56 public) and `do-it-self-personal`
 Remaining module work:
 
 - ~~**Category cleanup**~~ — **Done.** Replaced single `category` slug with two new fields: `homepage_group` (freeform display name for dashboard grouping, injected via `${HOMEPAGE_GROUP}` env var) and `tags` (empty array, for future discovery UI). All 65 containers assigned to meaningful groups: Productivity, Finance, Development, Media, Tools, System Monitoring, Reading, Gaming, Desktop Apps, Infrastructure, Communication, Personal Projects. Removed the `categories:` registry section, `--category` CLI flag, and slug-to-label indirection. Tailscale node state moved out of ephemeral container dirs to `<mount[0]>/tailscale-state/<name>/` via `TS_STATE_HOST_DIR` env var.
-- **Web admin UI** (Phase 3) — Browse/Sources pages for installing containers via the UI instead of CLI.
+- ~~**Web admin UI** (Phase 3)~~ — **Done.** Browse and Sources pages implemented in the web admin for installing, uninstalling, and managing module sources via the UI.
 - **Side effects** (Phase 4) — `cron_jobs`, `host_packages`, `setup_hooks` in module.yaml.
 - **Developer tooling** (Phase 5) — `dev-sync.sh` for syncing live edits back to module repos.
 
 ## 2. External Service Accounts Required
 
-Several containers need external accounts that aren't documented in one place:
+~~Several containers need external accounts that aren't documented in one place.~~ **Infrastructure done.** The `required_accounts` field exists in `container-registry.yaml` (with `name`, `url`, `why`, and `populates` subfields) and the Browse page in the web admin displays them per-container.
 
-- healthchecks.io account and ping key (for `scripts/healthcheck.conf`)
-- Cloudflare account with tunnel setup (for `cloudflared/`)
-- WireGuard/VPN provider credentials (for recon/gluetun stack)
-- Various service-specific API keys (Spotify, etc.)
-
-These should be declared per-container in `module.yaml` (e.g. a `required_accounts` field) so users know what they need before enabling a container. Do this during module implementation.
+All containers that need external accounts now have `required_accounts` entries: cloudflared, factorio, recon, secure-browser, starbound, wallabag, and your-spotify. Most containers are fully self-hosted and don't require any external accounts.
 
 ## 3. External Backup Infrastructure Assumed
 
@@ -94,3 +89,8 @@ Move maintainer-specific notes lower.
 ### 11. AGENTS.md and CLAUDE.md are developer-facing
 
 These files help AI tools work with the repo but don't help human newcomers. Update after the product is final so they accurately describe the system.
+
+--- Other Additions ---
+ - Put some rigor around deploying new updates to git once we have a working system that someone else is using.
+ - Possibly add some notices in the web admin to let the developer know if there are uncommited changes in the main or module folders.
+
