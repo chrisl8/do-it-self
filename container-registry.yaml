@@ -647,31 +647,6 @@ containers:
         host_subpath: container-mounts/kopia/tmp
         container_path: /tmp:shared
     default_disabled: true
-  mame:
-    source: do-it-self-containers
-    description: MAME arcade emulator in the browser
-    homepage_group: Gaming
-    tags: []
-    uses_tailscale: true
-    requires_gpu: true
-    default_disabled: true
-    volumes:
-      config:
-        var: VOL_MAME_CONFIG
-        host_subpath: container-mounts/mame/config
-        container_path: /config
-      extras:
-        var: VOL_MAME_EXTRAS
-        host_subpath: container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs
-        container_path: /mame
-      roms:
-        var: VOL_MAME_ROMS
-        host_subpath: container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged)
-        container_path: /mame/roms
-      chds:
-        var: VOL_MAME_CHDS
-        host_subpath: container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged)
-        container_path: /mame/chds
   mariadb:
     source: do-it-self-containers
     description: Shared MariaDB database server
@@ -690,27 +665,6 @@ containers:
         host_subpath: container-mounts/mariadb/db
         container_path: /var/lib/mysql
     default_disabled: true
-  meshtastic:
-    source: do-it-self-containers
-    description: Meshtastic mesh networking web client
-    homepage_group: Communication
-    tags: []
-    start_order: "031"
-    default_disabled: true
-    variables:
-      MESHTASTIC_DB_USER:
-        type: string
-        required: true
-        description: Database username
-      MESHTASTIC_DB_PASSWORD:
-        type: secret
-        required: true
-        description: Database password
-        auto_generate: true
-      ADMIN_PASSWORD:
-        type: secret
-        required: true
-        description: Admin panel password
   minecraft:
     source: do-it-self-containers
     description: Minecraft Bedrock Edition dedicated server
@@ -809,20 +763,6 @@ containers:
         host_subpath: container-mounts/nextcloud/elasticsearch_data
         container_path: /usr/share/elasticsearch/data
     default_disabled: true
-  nextcloud-whiteboard:
-    source: do-it-self-containers
-    description: Collaborative whiteboard for Nextcloud
-    homepage_group: Productivity
-    tags: []
-    uses_tailscale: true
-    start_order: "012"
-    default_disabled: true
-    variables:
-      WHITEBOARD_JWT_SECRET_KEY:
-        type: secret
-        required: true
-        description: JWT secret for whiteboard authentication
-        auto_generate: true
   obsidian:
     source: do-it-self-containers
     description: Obsidian note-taking app in the browser via KasmVNC
@@ -958,21 +898,6 @@ containers:
         host_subpath: container-mounts/paste/data
         container_path: /var/lib/mysql
     default_disabled: true
-  pihole:
-    source: do-it-self-containers
-    description: Network-wide ad blocking via DNS
-    homepage_group: Infrastructure
-    tags: []
-    default_disabled: true
-    volumes:
-      etc:
-        var: VOL_PIHOLE_ETC
-        host_subpath: container-mounts/pihole/etc
-        container_path: /etc/pihole
-      dnsmasq:
-        var: VOL_PIHOLE_DNSMASQ
-        host_subpath: container-mounts/pihole/dnsmasq
-        container_path: /etc/dnsmasq.d
   portainer:
     source: do-it-self-containers
     description: Docker container management web UI
@@ -1103,10 +1028,6 @@ containers:
         var: VOL_RECON_BAZARR_CONFIG
         host_subpath: container-mounts/recon/bazarr/config
         container_path: /config
-      mylar3_config:
-        var: VOL_RECON_MYLAR3_CONFIG
-        host_subpath: container-mounts/recon/mylar3/config
-        container_path: /config
       lazylibrarian_config:
         var: VOL_RECON_LAZYLIBRARIAN_CONFIG
         host_subpath: container-mounts/recon/lazylibrarian/config
@@ -1116,35 +1037,6 @@ containers:
         host_subpath: container-mounts/recon/sabnzbd/config
         container_path: /config
     default_disabled: true
-  retroarch:
-    source: do-it-self-containers
-    description: RetroArch game emulator in the browser
-    homepage_group: Gaming
-    tags: []
-    uses_tailscale: true
-    requires_gpu: true
-    default_disabled: true
-    volumes:
-      config:
-        var: VOL_RETROARCH_CONFIG
-        host_subpath: container-mounts/retroarch/config
-        container_path: /config
-      secure_webtop_downloads_mame:
-        var: VOL_RETROARCH_SECURE_WEBTOP_DOWNLOADS_MAME
-        host_subpath: container-mounts/secure-webtop/downloads/mame
-        container_path: /mame:ro
-  rustdesk:
-    source: do-it-self-containers
-    description: Self-hosted remote desktop server
-    homepage_group: Tools
-    tags: []
-    uses_tailscale: true
-    default_disabled: true
-    volumes:
-      data:
-        var: VOL_RUSTDESK_DATA
-        host_subpath: container-mounts/rustdesk/data
-        container_path: /root
   searxng:
     source: do-it-self-containers
     description: Privacy-respecting metasearch engine
@@ -1327,7 +1219,7 @@ containers:
     git_repos:
       valheim-server-docker:
         url: https://github.com/JustinTArthur/valheim-server-docker.git
-        branch: main
+        branch: update-libdoorstop-env-var-scheme
     variables:
       SERVER_NAME:
         type: string
@@ -1355,18 +1247,6 @@ containers:
         host_subpath: container-mounts/valheim/data
         container_path: /opt/valheim
     default_disabled: true
-  vaultwarden:
-    source: do-it-self-containers
-    description: Bitwarden-compatible password manager server
-    homepage_group: Tools
-    tags: []
-    uses_tailscale: true
-    default_disabled: true
-    volumes:
-      data:
-        var: VOL_VAULTWARDEN_DATA
-        host_subpath: container-mounts/vaultwarden/data
-        container_path: /data/
   voidship-ephemeral:
     source: do-it-self-personal
     description: Voidship Ephemeral web application
