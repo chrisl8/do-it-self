@@ -190,6 +190,12 @@ containers:
     homepage_group: Infrastructure
     tags: []
     start_order: "029"
+    required_accounts:
+      - name: Cloudflare Zero Trust
+        url: https://one.dash.cloudflare.com/
+        why: Create a tunnel in the Zero Trust dashboard and copy its token.
+        populates:
+          - TUNNEL_TOKEN
     variables:
       TUNNEL_TOKEN:
         type: secret
@@ -954,6 +960,16 @@ containers:
     tags: []
     uses_tailscale: true
     start_order: z110
+    required_accounts:
+      - name: WireGuard VPN provider
+        url: ""
+        why: Get WireGuard config (endpoint, port, public key, private key, addresses) from your VPN provider's account page.
+        populates:
+          - WIREGUARD_ENDPOINT_IP
+          - WIREGUARD_ENDPOINT_PORT
+          - WIREGUARD_PUBLIC_KEY
+          - WIREGUARD_PRIVATE_KEY
+          - WIREGUARD_ADDRESSES
     variables:
       SONARR_API_KEY:
         type: secret
@@ -1302,6 +1318,13 @@ containers:
     homepage_group: Media
     tags: []
     uses_tailscale: true
+    required_accounts:
+      - name: Spotify Developer App
+        url: https://developer.spotify.com/dashboard
+        why: Create an app to get the API client ID and secret.
+        populates:
+          - SPOTIFY_PUBLIC
+          - SPOTIFY_SECRET
     variables:
       SPOTIFY_PUBLIC:
         type: string
