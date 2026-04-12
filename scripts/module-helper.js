@@ -4,7 +4,7 @@
 // Manages module repos cloned into .modules/ and container installation.
 //
 // Usage: node module-helper.js <subcommand> [args...]
-// Subcommands: add-source, remove-source, install, uninstall, update, list, regenerate-registry
+// Subcommands: add-source, remove-source, install, uninstall, update, list, regenerate-registry, dev-sync
 //
 // See docs/MODULES.md for the full design.
 
@@ -12,6 +12,7 @@ import { readFile, writeFile, access, mkdir, rm, cp, readdir, rename } from "fs/
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
+import { createInterface } from "readline";
 import YAML from "yaml";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -644,6 +645,207 @@ async function regenerateRegistry() {
   console.log(`Registry regenerated: ${total} containers (${personal} personal, ${total - personal} from modules).`);
 }
 
+// --- Dev-sync ---
+
+function ask(question) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase());
+    });
+  });
+}
+
+function buildSyncExcludes(containerName, registry) {
+  const excludes = [...PRESERVE_ON_UPDATE, "tailscale-state"];
+  const containerDef = registry.containers?.[containerName];
+  if (containerDef?.git_repos) {
+    for (const subdir of Object.keys(containerDef.git_repos)) {
+      excludes.push(subdir);
+    }
+  }
+  return excludes.flatMap((e) => ["--exclude", e]);
+}
+
+async function syncOneContainer(containerName, moduleName, registry, yesFlag) {
+  const sourceDir = join(CONTAINERS_DIR, containerName) + "/";
+  const targetDir = join(MODULES_DIR, moduleName, containerName) + "/";
+
+  if (!(await dirExists(join(CONTAINERS_DIR, containerName)))) {
+    console.error(`Error: Container directory not found at ${containerName}/`);
+    return false;
+  }
+  if (!(await dirExists(join(MODULES_DIR, moduleName, containerName)))) {
+    console.error(`Error: Module source not found at .modules/${moduleName}/${containerName}/`);
+    return false;
+  }
+
+  const excludeArgs = buildSyncExcludes(containerName, registry);
+  const baseArgs = ["rsync", "--archive", "--checksum", "--delete", ...excludeArgs, sourceDir, targetDir];
+
+  const rawPreview = exec(
+    [...baseArgs, "--dry-run", "--itemize-changes"].map((a) => `"${a}"`).join(" "),
+  );
+
+  // Filter to only show real changes (not timestamp-only).
+  // rsync itemize format: position 0 is '.' when nothing is transferred.
+  // Lines starting with '*deleting' indicate removed files.
+  const preview = rawPreview
+    .split("\n")
+    .filter((line) => line && !line.startsWith("."))
+    .join("\n");
+
+  if (!preview) {
+    console.log(`  ${containerName}: no changes.`);
+    return false;
+  }
+
+  console.log(`\nChanges for ${containerName}:`);
+  console.log(preview);
+
+  if (!yesFlag) {
+    const answer = await ask(`\nSync ${containerName} to .modules/${moduleName}/${containerName}/? [y/N] `);
+    if (answer !== "y" && answer !== "yes") {
+      console.log(`  Skipped ${containerName}.`);
+      return false;
+    }
+  }
+
+  exec(baseArgs.map((a) => `"${a}"`).join(" "));
+  console.log(`  ${containerName}: synced.`);
+  return true;
+}
+
+async function devSync(args) {
+  const yesFlag = args.includes("--yes") || args.includes("-y");
+  const filteredArgs = args.filter((a) => a !== "--yes" && a !== "-y");
+
+  if (filteredArgs.length === 0) {
+    console.log("Usage: module.sh dev-sync [<module>] [<container>]");
+    console.log("");
+    console.log("  dev-sync <container>           Sync one container (auto-detect module)");
+    console.log("  dev-sync <module>              Sync all installed containers from a module");
+    console.log("  dev-sync <module> <container>  Sync one container from a specific module");
+    console.log("");
+    console.log("Options:");
+    console.log("  --yes, -y  Skip confirmation prompts");
+    return;
+  }
+
+  const installed = await readInstalledModules();
+  const registry = await readRegistry();
+
+  let moduleName;
+  let containerNames;
+
+  if (filteredArgs.length === 2) {
+    moduleName = filteredArgs[0];
+    containerNames = [filteredArgs[1]];
+    if (!installed.modules?.[moduleName]) {
+      console.error(`Error: Module "${moduleName}" not found in installed-modules.yaml.`);
+      process.exit(1);
+    }
+  } else {
+    const arg = filteredArgs[0];
+    if (installed.modules?.[arg]) {
+      moduleName = arg;
+      containerNames = installed.modules[arg].installed_containers || [];
+      if (containerNames.length === 0) {
+        console.log(`No installed containers from module "${moduleName}".`);
+        return;
+      }
+      console.log(`Syncing all ${containerNames.length} containers from ${moduleName}...`);
+    } else {
+      const containerDef = registry.containers?.[arg];
+      if (!containerDef) {
+        console.error(`Error: "${arg}" is not a known module or container name.`);
+        process.exit(1);
+      }
+      if (!containerDef.source || containerDef.source === "personal" || containerDef.source === "platform") {
+        console.error(`Error: Container "${arg}" is not from a module (source: ${containerDef.source || "unknown"}). dev-sync only works with module-sourced containers.`);
+        process.exit(1);
+      }
+      moduleName = containerDef.source;
+      containerNames = [arg];
+    }
+  }
+
+  const modulePath = join(MODULES_DIR, moduleName);
+  if (!(await dirExists(modulePath))) {
+    console.error(`Error: Module directory not found at .modules/${moduleName}/`);
+    process.exit(1);
+  }
+
+  const syncedNames = [];
+  for (const name of containerNames) {
+    const synced = await syncOneContainer(name, moduleName, registry, yesFlag);
+    if (synced) syncedNames.push(name);
+  }
+
+  if (syncedNames.length === 0) {
+    console.log("\nNo changes to commit.");
+    return;
+  }
+
+  const status = exec(`git -C "${modulePath}" status --porcelain`);
+  if (!status) {
+    console.log("\nNo changes to commit.");
+    return;
+  }
+
+  console.log(`\nModule repo diff (.modules/${moduleName}/):`);
+  try {
+    const diff = exec(`git -C "${modulePath}" diff`);
+    if (diff) console.log(diff);
+    const untrackedDiff = exec(`git -C "${modulePath}" diff --cached`);
+    if (untrackedDiff) console.log(untrackedDiff);
+  } catch {
+    // diff can fail on new untracked files, show status instead
+    console.log(status);
+  }
+
+  if (!yesFlag) {
+    const answer = await ask(`\nCommit changes to ${moduleName}? [y/N] `);
+    if (answer !== "y" && answer !== "yes") {
+      console.log("Changes synced but not committed.");
+      return;
+    }
+  }
+
+  const changedList = syncedNames.filter((name) => {
+    try {
+      const sub = exec(`git -C "${modulePath}" status --porcelain -- "${name}"`);
+      return sub.length > 0;
+    } catch { return false; }
+  });
+  const defaultMsg = `Update ${changedList.join(", ")}`;
+
+  let commitMsg = defaultMsg;
+  if (!yesFlag) {
+    const input = await ask(`Commit message [${defaultMsg}]: `);
+    if (input) commitMsg = input;
+  }
+
+  exec(`git -C "${modulePath}" add -A`);
+  execSync(`git -C "${modulePath}" commit -m "${commitMsg.replace(/"/g, '\\"')}"`, {
+    encoding: "utf8",
+    stdio: "inherit",
+  });
+  console.log("Committed.");
+
+  if (!yesFlag) {
+    const answer = await ask("Push to remote? [y/N] ");
+    if (answer !== "y" && answer !== "yes") {
+      console.log("Committed locally. Run `git push` in the module repo when ready.");
+      return;
+    }
+  }
+
+  execSync(`git -C "${modulePath}" push`, { encoding: "utf8", stdio: "inherit" });
+  console.log("Pushed.");
+}
+
 // --- Main ---
 
 const subcommands = {
@@ -654,6 +856,7 @@ const subcommands = {
   update: updateModules,
   list: listContainers,
   "regenerate-registry": regenerateRegistry,
+  "dev-sync": devSync,
 };
 
 const [subcommand, ...args] = process.argv.slice(2);

@@ -22,7 +22,7 @@ SUBCOMMAND="${1:-help}"
 shift || true
 
 case "${SUBCOMMAND}" in
-  add-source|remove-source|install|uninstall|update|list|regenerate-registry)
+  add-source|remove-source|install|uninstall|update|list|regenerate-registry|dev-sync)
     node "${HELPER}" "${SUBCOMMAND}" "$@"
     ;;
   help|--help|-h)
@@ -36,6 +36,7 @@ case "${SUBCOMMAND}" in
     echo "  update [<module>]                 Update module(s) and sync installed containers"
     echo "  list [--available|--installed|--all]  List containers"
     echo "  regenerate-registry               Rebuild container-registry.yaml from modules"
+    echo "  dev-sync [<module>] [<container>]  Sync live edits back to module repo"
     echo ""
     echo "See docs/MODULES.md for the full design."
     exit 0
