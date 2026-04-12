@@ -17,7 +17,7 @@ Remaining module work:
 - ~~**Category cleanup**~~ — **Done.** Replaced single `category` slug with two new fields: `homepage_group` (freeform display name for dashboard grouping, injected via `${HOMEPAGE_GROUP}` env var) and `tags` (empty array, for future discovery UI). All 65 containers assigned to meaningful groups: Productivity, Finance, Development, Media, Tools, System Monitoring, Reading, Gaming, Desktop Apps, Infrastructure, Communication, Personal Projects. Removed the `categories:` registry section, `--category` CLI flag, and slug-to-label indirection. Tailscale node state moved out of ephemeral container dirs to `<mount[0]>/tailscale-state/<name>/` via `TS_STATE_HOST_DIR` env var.
 - ~~**Web admin UI** (Phase 3)~~ — **Done.** Browse and Sources pages implemented in the web admin for installing, uninstalling, and managing module sources via the UI.
 - ~~**Side effects** (Phase 4)~~ — **Done.** Containers can declare `cron_jobs`, `host_packages`, and `setup_hooks` in module.yaml. Cron entries are tagged and managed automatically on enable/disable/uninstall. Host packages produce warnings with install commands. Setup hooks run once and track completion in installed-modules.yaml. Helpers: `manage-cron-jobs.js`, `check-host-packages.js`, `run-setup-hooks.js`.
-- **Developer tooling** (Phase 5) — `dev-sync.sh` for syncing live edits back to module repos.
+- ~~**Developer tooling** (Phase 5)~~ — **Done.** `module.sh dev-sync` subcommand (with `scripts/dev-sync.sh` wrapper) syncs live edits back to module repos using rsync with content-based comparison. Auto-detects module from registry, excludes platform-specific files, shows diff, prompts for commit/push. `--yes` flag for scripting.
 
 ## 2. External Service Accounts Required
 
