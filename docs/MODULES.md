@@ -77,6 +77,50 @@ containers:
     # ...
 ```
 
+### Declaring external account requirements
+
+Containers that depend on an external account (a Spotify Developer app, a
+Cloudflare Zero Trust tunnel, a VPN provider, etc.) can declare those
+dependencies via `required_accounts` on the container entry. This is purely
+advisory — the gate for enable/start is still `variables.required`. The field
+exists so the UI can tell the user *where to get* the values they need, before
+they install.
+
+```yaml
+containers:
+  your-spotify:
+    description: Personal Spotify listening statistics
+    required_accounts:
+      - name: Spotify Developer App
+        url: https://developer.spotify.com/dashboard
+        why: Create an app to get the API client ID and secret.
+        populates: [SPOTIFY_PUBLIC, SPOTIFY_SECRET]
+    variables:
+      SPOTIFY_PUBLIC:
+        type: string
+        required: true
+      SPOTIFY_SECRET:
+        type: secret
+        required: true
+```
+
+Fields (all optional; the block is only useful when at least `name` and `why`
+are set):
+
+- **name** — display string shown in the UI
+- **url** — sign-up or dashboard URL. Opens in a new tab when present;
+  omit or set to an empty string when the source varies per user (e.g. "your
+  VPN provider's account page")
+- **why** — short explanation, target < 120 chars
+- **populates** — list of variable names (must match keys in the container's
+  `variables:` block). The web admin cross-references these so a missing
+  variable is shown with a link back to the account that provides it. May be
+  an empty array for advisory-only notes.
+
+A single container can list multiple accounts when it integrates with multiple
+services. Nothing about `required_accounts` affects runtime behavior — removing
+it from a module.yaml has no functional effect, only a loss of UI guidance.
+
 ## Core architectural invariant
 
 **Container folders are ephemeral.** A container's folder at the platform root (`~/containers/jellyfin/`) contains only compose configuration and platform metadata — never user state. All persistent data lives elsewhere:

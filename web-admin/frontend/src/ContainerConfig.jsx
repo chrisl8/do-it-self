@@ -30,10 +30,37 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
+import Link from "@mui/material/Link";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import useContainerConfig from "./hooks/useContainerConfig";
 import useModules from "./hooks/useModules";
 import ModuleOperationDialog from "./ModuleOperationDialog";
+
+function findAccountForVar(def, varName) {
+  const accounts = def?.required_accounts || [];
+  return accounts.find((a) => (a.populates || []).includes(varName));
+}
+
+function AccountHint({ account }) {
+  if (!account) return null;
+  return (
+    <Typography
+      variant="caption"
+      color="text.secondary"
+      sx={{ display: "block", mt: 0.5, pl: 1.5 }}
+    >
+      Get this from{" "}
+      {account.url ? (
+        <Link href={account.url} target="_blank" rel="noopener noreferrer">
+          {account.name}
+        </Link>
+      ) : (
+        <strong>{account.name}</strong>
+      )}
+      {account.why ? ` — ${account.why}` : null}
+    </Typography>
+  );
+}
 
 function SecretField({ label, value, onChange, description }) {
   const [show, setShow] = useState(false);
@@ -352,20 +379,16 @@ function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdat
               </Typography>
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                 {Object.entries(varDefs).map(([varName, varDef]) => {
-                  if (varDef.type === "secret") {
-                    return (
-                      <SecretField
-                        key={varName}
-                        label={`${varName}${varDef.required ? " *" : ""}`}
-                        description={varDef.description}
-                        value={vars[varName]}
-                        onChange={(val) => handleVarChange(varName, val)}
-                      />
-                    );
-                  }
-                  return (
+                  const account = findAccountForVar(def, varName);
+                  const field = varDef.type === "secret" ? (
+                    <SecretField
+                      label={`${varName}${varDef.required ? " *" : ""}`}
+                      description={varDef.description}
+                      value={vars[varName]}
+                      onChange={(val) => handleVarChange(varName, val)}
+                    />
+                  ) : (
                     <TextField
-                      key={varName}
                       fullWidth
                       size="small"
                       label={`${varName}${varDef.required ? " *" : ""}`}
@@ -373,6 +396,12 @@ function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdat
                       value={vars[varName] || ""}
                       onChange={(e) => handleVarChange(varName, e.target.value)}
                     />
+                  );
+                  return (
+                    <Box key={varName}>
+                      {field}
+                      <AccountHint account={account} />
+                    </Box>
                   );
                 })}
               </Box>

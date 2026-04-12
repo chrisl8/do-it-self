@@ -9,20 +9,38 @@ import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import Divider from "@mui/material/Divider";
+import Link from "@mui/material/Link";
 import useModules from "./hooks/useModules";
 import ModuleOperationDialog from "./ModuleOperationDialog";
 
-// Placeholder for issue #2 (required_accounts in module.yaml). Returns
-// nothing today since the field is not populated in any module. Keeps
-// the rendering slot reserved so it lands without another UI change.
 function RequiredAccounts({ container }) {
   const accounts = container.required_accounts || [];
   if (accounts.length === 0) return null;
   return (
-    <Box sx={{ mt: 1 }}>
-      <Typography variant="caption" color="text.secondary">
-        Requires accounts: {accounts.join(", ")}
+    <Box sx={{ mt: 1.5 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: "block", fontWeight: 600 }}
+      >
+        Requires external accounts:
       </Typography>
+      <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+        {accounts.map((a, i) => (
+          <Box component="li" key={a.name || i} sx={{ mt: 0.25 }}>
+            <Typography variant="caption" color="text.secondary">
+              {a.url ? (
+                <Link href={a.url} target="_blank" rel="noopener noreferrer">
+                  {a.name}
+                </Link>
+              ) : (
+                <strong>{a.name}</strong>
+              )}
+              {a.why ? ` — ${a.why}` : null}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
     </Box>
   );
 }
