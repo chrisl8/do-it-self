@@ -28,7 +28,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 SERVER_NAME="do-it-self-test"
-SERVER_TYPE="cx23"
+SERVER_TYPE="cpx32"
 IMAGE="ubuntu-24.04"
 LOCATION="nbg1"
 KEEP=false
