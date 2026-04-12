@@ -477,24 +477,41 @@ if [[ "$TS_READY" == true ]]; then
         esac
       }
 
-      # Allow up to 90 seconds per container for HTTPS cert provisioning.
-      for c in $TEST_CONTAINERS; do
+      # HTTPS smoke tests on a subset of containers. Each Tailscale sidecar
+      # registers its own ACME account with Let's Encrypt, and LE enforces a
+      # limit of 10 new registrations per IP per 3 hours. With 9+ sidecars
+      # starting from the same VM, we'd exceed this limit if we tested all
+      # of them. Test a representative subset: the first few containers
+      # (which get certs before the rate limit hits) plus web-admin (already
+      # verified in Phase 6b). Containers not in SMOKE_CONTAINERS are still
+      # validated as fully-running above — they just skip the HTTPS check.
+      SMOKE_CONTAINERS="homepage searxng freshrss nextcloud"
+
+      # Batch approach: loop over all smoke containers repeatedly with a
+      # shared 3-minute deadline. Containers that pass are removed from the
+      # pending list so we don't waste time re-checking them.
+      declare -A SMOKE_PENDING
+      declare -A SMOKE_URLS
+      for c in $SMOKE_CONTAINERS; do
         TS_NAME_FOR_URL=$(ts_hostname "$c")
-        URL="https://${TS_NAME_FOR_URL}.${TS_DOMAIN_SMOKE}"
-        REACHED=false
-        for _attempt in $(seq 1 18); do
-          HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' -m 5 "$URL" 2>/dev/null) || true
+        SMOKE_URLS[$c]="https://${TS_NAME_FOR_URL}.${TS_DOMAIN_SMOKE}"
+        SMOKE_PENDING[$c]=1
+      done
+
+      SMOKE_DEADLINE=$((SECONDS + 180))
+      while [[ ${#SMOKE_PENDING[@]} -gt 0 && $SECONDS -lt $SMOKE_DEADLINE ]]; do
+        for c in "${!SMOKE_PENDING[@]}"; do
+          HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' -m 3 "${SMOKE_URLS[$c]}" 2>/dev/null) || true
           if [[ -n "$HTTP_CODE" && "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 500 ]]; then
-            REACHED=true
-            break
+            pass "${c} reachable at ${SMOKE_URLS[$c]} (HTTP ${HTTP_CODE})"
+            unset "SMOKE_PENDING[$c]"
           fi
-          sleep 5
         done
-        if [[ "$REACHED" == true ]]; then
-          pass "${c} reachable at ${URL} (HTTP ${HTTP_CODE})"
-        else
-          fail "${c} not reachable at ${URL}"
-        fi
+        [[ ${#SMOKE_PENDING[@]} -gt 0 ]] && sleep 10
+      done
+
+      for c in "${!SMOKE_PENDING[@]}"; do
+        fail "${c} not reachable at ${SMOKE_URLS[$c]}"
       done
     else
       fail "could not detect tailnet domain for HTTP smoke tests"
