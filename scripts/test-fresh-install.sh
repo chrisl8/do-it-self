@@ -202,6 +202,62 @@ else
   fail "GET /api/config/validate failed"
 fi
 
+# ── Phase 6a: Module system ───────────────────────────────────────────
+
+section "Module System"
+
+check "installed-modules.yaml exists" test -f "${CONTAINERS_DIR}/installed-modules.yaml"
+check ".modules directory exists" test -d "${CONTAINERS_DIR}/.modules"
+
+# Verify at least one module source is cloned with a valid git repo
+if ls -d "${CONTAINERS_DIR}/.modules"/*/.git >/dev/null 2>&1; then
+  pass "module source(s) cloned with .git"
+else
+  fail "no module sources found in .modules/"
+fi
+
+# Module API endpoints
+if curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/modules/catalog > /dev/null 2>&1; then
+  pass "GET /api/modules/catalog responds"
+else
+  fail "GET /api/modules/catalog failed"
+fi
+
+if curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/modules/installed > /dev/null 2>&1; then
+  pass "GET /api/modules/installed responds"
+else
+  fail "GET /api/modules/installed failed"
+fi
+
+# Verify installed modules tracks containers
+INSTALLED_COUNT=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/modules/installed 2>/dev/null \
+  | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const m=JSON.parse(d).modules||{};let n=0;for(const k in m)n+=(m[k].installed_containers||[]).length;console.log(n)})" 2>/dev/null) || true
+if [[ -n "$INSTALLED_COUNT" && "$INSTALLED_COUNT" -gt 0 ]]; then
+  pass "installed-modules.yaml tracks ${INSTALLED_COUNT} containers"
+else
+  fail "installed-modules.yaml has no tracked containers"
+fi
+
+# Verify registry contains module-system fields (source, cron_jobs, required_accounts)
+REGISTRY_JSON=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/registry 2>/dev/null) || true
+if [[ -n "$REGISTRY_JSON" ]]; then
+  # Every container should have a source field
+  HAS_SOURCE=$(echo "$REGISTRY_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const c=JSON.parse(d).containers||{};const all=Object.values(c).every(v=>v.source);console.log(all?'yes':'no')})" 2>/dev/null) || true
+  if [[ "$HAS_SOURCE" == "yes" ]]; then
+    pass "all registry containers have source field"
+  else
+    fail "some registry containers missing source field"
+  fi
+
+  # Nextcloud should have cron_jobs
+  HAS_CRON=$(echo "$REGISTRY_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const c=JSON.parse(d).containers?.nextcloud;console.log(c?.cron_jobs?.length>0?'yes':'no')})" 2>/dev/null) || true
+  if [[ "$HAS_CRON" == "yes" ]]; then
+    pass "nextcloud has cron_jobs in registry"
+  else
+    fail "nextcloud missing cron_jobs in registry"
+  fi
+fi
+
 # ── Phase 6b: Web-admin reachability through the tailnet ───────────────
 # The architectural regression guard. setup.sh runs the same checks at the
 # end of an install; we run them here too because test-fresh-install.sh
@@ -238,7 +294,7 @@ if command -v tailscale > /dev/null 2>&1; then
   if [[ -n "$TS_DOMAIN_DETECTED" ]]; then
     ADMIN_URL="https://admin.${TS_DOMAIN_DETECTED}/api/config/infisical-status"
     REACHED=false
-    for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    for _i in 1 2 3 4 5 6 7 8 9 10 11 12; do
       if curl -sf -m 5 -o /dev/null "$ADMIN_URL" 2>/dev/null; then
         REACHED=true
         break
@@ -277,20 +333,46 @@ fi
 if [[ "$TS_READY" == true ]]; then
   section "Container Startup (with Tailscale)"
 
-  TEST_CONTAINERS="homepage searxng freshrss the-lounge uptime kanboard paste"
+  TEST_CONTAINERS="homepage searxng freshrss the-lounge uptime kanboard paste nextcloud"
 
   # Enable each container via the web admin API (over the Unix socket).
+  # For nextcloud, pass the two user-facing variables (admin username and
+  # password). The three internal secrets (MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD,
+  # ELASTIC_PASSWORD) are auto_generate: true in the registry — the web admin
+  # generates them automatically when enabled=true, which is the real user flow.
   for c in $TEST_CONTAINERS; do
-    if curl -sf --unix-socket "$WEB_ADMIN_SOCKET" -X PUT "http://localhost/api/config/container/$c" \
+    if [[ "$c" == "nextcloud" ]]; then
+      ENABLE_BODY='{"enabled": true, "variables": {"NEXTCLOUD_ADMIN_USER": "testadmin", "NEXTCLOUD_ADMIN_PASSWORD": "TestPass123!"}}'
+    else
+      ENABLE_BODY='{"enabled": true}'
+    fi
+    ENABLE_RESP=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" -X PUT "http://localhost/api/config/container/$c" \
       -H 'Content-Type: application/json' \
-      -d '{"enabled": true}' > /dev/null 2>&1; then
+      -d "$ENABLE_BODY" 2>/dev/null) || true
+    if [[ -n "$ENABLE_RESP" ]] && echo "$ENABLE_RESP" | grep -q '"success":true'; then
       pass "enabled $c via API"
     else
       fail "could not enable $c via API"
     fi
   done
 
-  # Start them all
+  # Verify nextcloud's auto_generate secrets were created by the enable call
+  INFISICAL_CMD="infisical secrets get --token=${INFISICAL_TOKEN} --projectId=${INFISICAL_PROJECT_ID} --env=prod --domain=${INFISICAL_API_URL}"
+  NC_AUTO_OK=true
+  for secret in MYSQL_ROOT_PASSWORD MYSQL_PASSWORD ELASTIC_PASSWORD; do
+    if ! $INFISICAL_CMD "$secret" --path="/nextcloud" --silent --plain > /dev/null 2>&1; then
+      NC_AUTO_OK=false
+      break
+    fi
+  done
+  if [[ "$NC_AUTO_OK" == true ]]; then
+    pass "nextcloud auto_generate secrets created by enable"
+  else
+    fail "nextcloud auto_generate secrets missing after enable"
+  fi
+
+  # Start them all. Nextcloud (MariaDB + Elasticsearch + app + TS sidecar)
+  # adds significant startup time.
   printf "${YELLOW}  Starting containers (this may take several minutes)...${NC}\n"
   cd "${CONTAINERS_DIR}"
   if scripts/all-containers.sh --start --no-wait --no-health-check > /tmp/start.log 2>&1; then
@@ -299,11 +381,28 @@ if [[ "$TS_READY" == true ]]; then
     fail "all-containers.sh --start failed (see /tmp/start.log)"
   fi
 
-  # Verify EVERY container in each compose project is in 'running' state.
-  # The previous lenient check passed if any container in the project was
-  # running, which masked failures where (e.g.) only the redis sidecar was
-  # up while the app and tailscale sidecar crashlooped.
-  sleep 5
+  # Wait for all containers to reach healthy/running state. Nextcloud's
+  # Elasticsearch and MariaDB have 120s start_period health checks, so
+  # the full stack can take 3-5 minutes on first boot.
+  printf "${YELLOW}  Waiting up to 8 minutes for all containers to become healthy...${NC}\n"
+  HEALTHY_DEADLINE=$((SECONDS + 480))
+  ALL_HEALTHY=false
+  while [[ $SECONDS -lt $HEALTHY_DEADLINE ]]; do
+    UNHEALTHY=$(docker ps -a --format '{{.Status}}' 2>/dev/null | grep -cv "(healthy)" || true)
+    if [[ "$UNHEALTHY" -eq 0 ]]; then
+      ALL_HEALTHY=true
+      break
+    fi
+    sleep 10
+  done
+
+  if [[ "$ALL_HEALTHY" == true ]]; then
+    pass "all containers healthy within deadline"
+  else
+    printf "${RED}  Some containers still unhealthy after 8 minutes:${NC}\n"
+    docker ps -a --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null | grep -v "(healthy)" || true
+  fi
+
   TAG_CONTAINER_HINT=false
   for c in $TEST_CONTAINERS; do
     TOTAL=$(docker ps -a --filter "label=com.docker.compose.project=$c" -q 2>/dev/null | wc -l)
@@ -312,8 +411,6 @@ if [[ "$TS_READY" == true ]]; then
       pass "$c fully running ($RUNNING/$TOTAL)"
     else
       fail "$c not fully running ($RUNNING/$TOTAL)"
-      # If the failing project has a *-ts sidecar that's failing the
-      # tag:container ACL check, surface a hint at the bottom of the run.
       TS_NAME=$(docker ps -a --filter "label=com.docker.compose.project=$c" --format '{{.Names}}' 2>/dev/null | grep -- '-ts$' | head -1)
       if [[ -n "$TS_NAME" ]] && docker logs "$TS_NAME" 2>&1 | tail -20 | grep -q 'tag:container'; then
         TAG_CONTAINER_HINT=true
@@ -332,6 +429,80 @@ if [[ "$TS_READY" == true ]]; then
     printf "${RED}│ must also be defined in your tailnet ACL policy.                       │${NC}\n"
     printf "${RED}└──────────────────────────────────────────────────────────────────────┘${NC}\n"
   fi
+
+  # ── Phase 8: Module side effects ─────────────────────────────────────
+
+  section "Module Side Effects (cron_jobs)"
+
+  # Verify nextcloud's cron job was installed by all-containers.sh
+  if crontab -l 2>/dev/null | grep -q "do-it-self:nextcloud:nextcloud-cron-job.sh"; then
+    pass "nextcloud cron job tagged entry in crontab"
+  else
+    fail "nextcloud cron job not found in crontab"
+  fi
+
+  if crontab -l 2>/dev/null | grep -q "${CONTAINERS_DIR}/nextcloud/nextcloud-cron-job.sh"; then
+    pass "nextcloud cron points to container directory"
+  else
+    fail "nextcloud cron path incorrect"
+  fi
+
+  # Verify the cron script exists and is executable
+  check "nextcloud-cron-job.sh exists" test -f "${CONTAINERS_DIR}/nextcloud/nextcloud-cron-job.sh"
+  check "nextcloud-cron-job.sh executable" test -x "${CONTAINERS_DIR}/nextcloud/nextcloud-cron-job.sh"
+
+  # Verify manage-cron-jobs.js list works
+  if node "${CONTAINERS_DIR}/scripts/manage-cron-jobs.js" list 2>/dev/null | grep -q "nextcloud"; then
+    pass "manage-cron-jobs.js list shows nextcloud"
+  else
+    fail "manage-cron-jobs.js list missing nextcloud"
+  fi
+
+  # ── Phase 9: Tailnet HTTP smoke tests ────────────────────────────────
+
+  section "Tailnet HTTP Smoke Tests"
+
+  if command -v tailscale > /dev/null 2>&1; then
+    TS_DOMAIN_SMOKE=$(tailscale status --json 2>/dev/null \
+      | grep -oP '"MagicDNSSuffix":\s*"\K[^"]+' | head -1)
+
+    if [[ -n "$TS_DOMAIN_SMOKE" ]]; then
+      # Map container directory names to their Tailscale hostnames.
+      # Most match, but some differ (homepage→console, the-lounge→thelounge).
+      ts_hostname() {
+        case "$1" in
+          homepage) echo "console" ;;
+          the-lounge) echo "thelounge" ;;
+          *) echo "$1" ;;
+        esac
+      }
+
+      # Allow up to 90 seconds per container for HTTPS cert provisioning.
+      for c in $TEST_CONTAINERS; do
+        TS_NAME_FOR_URL=$(ts_hostname "$c")
+        URL="https://${TS_NAME_FOR_URL}.${TS_DOMAIN_SMOKE}"
+        REACHED=false
+        for _attempt in $(seq 1 18); do
+          HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' -m 5 "$URL" 2>/dev/null) || true
+          if [[ -n "$HTTP_CODE" && "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 500 ]]; then
+            REACHED=true
+            break
+          fi
+          sleep 5
+        done
+        if [[ "$REACHED" == true ]]; then
+          pass "${c} reachable at ${URL} (HTTP ${HTTP_CODE})"
+        else
+          fail "${c} not reachable at ${URL}"
+        fi
+      done
+    else
+      fail "could not detect tailnet domain for HTTP smoke tests"
+    fi
+  else
+    printf "${YELLOW}  Skipping HTTP smoke tests: tailscale not installed.${NC}\n"
+  fi
+
 else
   section "Container Startup (skipped -- no Tailscale)"
   printf "${YELLOW}  Skipping container startup test: TS_AUTHKEY not configured.${NC}\n"
