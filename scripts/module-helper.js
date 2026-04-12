@@ -331,6 +331,14 @@ async function uninstallContainer(args) {
 
   const moduleName = containerDef.source;
 
+  // Remove cron jobs before deleting the container directory
+  const cronHelper = join(__dirname, "manage-cron-jobs.js");
+  try {
+    exec(`node "${cronHelper}" remove "${containerName}"`);
+  } catch {
+    // Cron removal is best-effort
+  }
+
   // Stop container if running
   if (await dirExists(targetDir)) {
     try {
@@ -351,13 +359,16 @@ async function uninstallContainer(args) {
   delete registry.containers[containerName];
   await writeRegistry(registry);
 
-  // Update installed-modules.yaml
+  // Update installed-modules.yaml (including setup_hooks state)
   if (moduleName) {
     const installed = await readInstalledModules();
     const moduleEntry = installed.modules[moduleName];
     if (moduleEntry) {
       moduleEntry.installed_containers = (moduleEntry.installed_containers || [])
         .filter((c) => c !== containerName);
+      if (moduleEntry.container_state?.[containerName]) {
+        delete moduleEntry.container_state[containerName];
+      }
       await writeInstalledModules(installed);
     }
   }

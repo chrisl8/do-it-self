@@ -351,7 +351,7 @@ Manages module repos:
 
 ## Module side effects (cron jobs, host dependencies)
 
-Modules can declare side effects in `module.yaml`:
+Modules can declare three types of side effects in `module.yaml`:
 
 ```yaml
 containers:
@@ -362,14 +362,30 @@ containers:
         script: nextcloud-cron-job.sh
         description: "Nextcloud background jobs"
     host_packages:
-      - ffmpeg  # needed for media preview generation
+      - ffmpeg
     setup_hooks:
-      - scripts/setup-nextcloud.sh  # runs once on first enable
+      - setup-nextcloud.sh
 ```
 
-When a container with cron_jobs is ENABLED, `all-containers.sh` installs the cron entries (same `install_cron` pattern from setup.sh). When DISABLED, it removes them. This is checked on every `--start` run, so enabling/disabling via the web admin takes effect on the next start.
+### cron_jobs
 
-Host packages are checked at install time and on container enable. If missing, the user is warned (or they're auto-installed with confirmation, like setup.sh does for base packages).
+Each entry has `schedule` (cron expression), `script` (path relative to the container directory), and `description` (human-readable label).
+
+When a container is ENABLED and started via `all-containers.sh --start`, its cron entries are installed into the user's crontab. When DISABLED, they are removed. This is checked on every `--start` run, so enabling/disabling via the web admin takes effect on the next start.
+
+Each managed cron entry is tagged with a comment (`# do-it-self:<container>:<script>`) for reliable identification and removal. The helper `scripts/manage-cron-jobs.js` handles all crontab manipulation. Cron entries are also removed on `module.sh uninstall`.
+
+Run `node scripts/manage-cron-jobs.js list` to see all module-managed cron entries.
+
+### host_packages
+
+A list of Debian package names the container needs on the host. Checked before `docker compose up` on every start. If packages are missing, a warning is printed with the `apt-get install` command — startup is never blocked.
+
+### setup_hooks
+
+A list of scripts (paths relative to the container directory) that run once on first enable. Completion is tracked per-hook in `installed-modules.yaml` under `container_state.<name>.setup_hooks_completed`. Failed hooks are not marked completed and will retry on next start. Hook state is cleaned up on uninstall.
+
+The helper `scripts/run-setup-hooks.js` manages execution and tracking.
 
 ## Platform files and git structure
 
