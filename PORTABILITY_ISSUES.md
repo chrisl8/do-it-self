@@ -59,7 +59,7 @@ The generic `config-defaults` handler in `all-containers.sh` now does a `cmp -s`
 
 - Add info to TESTING.md about how to add yourself to the test tailnet to fully test
 - Add output to the test that provides clickable links to the testing site
-- Add automated tests to ensure tailnet sites are responding to traffic
+- ~~Add automated tests to ensure tailnet sites are responding to traffic~~ — **Done.** HTTPS smoke tests added for a subset of containers. Full coverage is blocked by Let's Encrypt's ACME rate limit (10 new account registrations per IP per 3 hours). Each Tailscale sidecar registers its own ACME account, so 9+ sidecars from one VM exhaust the limit. Smoke test failures are reported as warnings, not hard failures. A real fix would require Tailscale to share ACME accounts across sidecars or use a single cert-manager.
 - Add a "pause" option to the Hetzner test so it waits for manual testing before destroying
 
 Test the final module-based architecture end-to-end.
