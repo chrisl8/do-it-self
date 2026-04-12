@@ -732,6 +732,20 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
       fi
     fi
     cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
+
+    # Generate .env early so docker compose ps/down/up can parse the
+    # compose.yaml (volume specs reference vars like TS_STATE_HOST_DIR
+    # that live in .env). Without this, a missing .env causes
+    # "invalid spec" errors and the container gets silently skipped.
+    REGISTRY_FILE="${SCRIPT_DIR}/container-registry.yaml"
+    USER_CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
+    GENERATE_ENV_SCRIPT="${SCRIPT_DIR}/scripts/generate-env.js"
+    if [[ -f "${REGISTRY_FILE}" ]] && [[ -f "${USER_CONFIG_FILE}" ]] && [[ -x "$(command -v node)" ]] && [[ -f "${GENERATE_ENV_SCRIPT}" ]]; then
+      set +e
+      node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --quiet 2>/dev/null
+      set -e
+    fi
+
     if [[ ${RESTART_UNHEALTHY} = true ]];then
       # Check if any containers are unhealthy
       UNHEALTHY_COUNT=$(docker --log-level ERROR compose ps -a --format '{{.Status}}' | grep -c -v "(healthy)" || true)
@@ -825,10 +839,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           set -e
         fi
 
-        # Generate .env file from registry + user config (non-secret config like volume paths)
-        REGISTRY_FILE="${SCRIPT_DIR}/container-registry.yaml"
-        USER_CONFIG_FILE="${SCRIPT_DIR}/user-config.yaml"
-        GENERATE_ENV_SCRIPT="${SCRIPT_DIR}/scripts/generate-env.js"
         INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
 
         # If this container references any shared variable that lives in
@@ -862,10 +872,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
               continue
             fi
           fi
-          # Generate .env file (volume paths and per-container variables)
-          set +e
-          node "${GENERATE_ENV_SCRIPT}" "${CONTAINER_DIR}" --quiet
-          set -e
         fi
 
         if [[ ${VALIDATE_ONLY} = true ]]; then
