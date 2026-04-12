@@ -29,7 +29,11 @@ import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Divider from "@mui/material/Divider";
+import Tooltip from "@mui/material/Tooltip";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import useContainerConfig from "./hooks/useContainerConfig";
+import useModules from "./hooks/useModules";
+import ModuleOperationDialog from "./ModuleOperationDialog";
 
 function SecretField({ label, value, onChange, description }) {
   const [show, setShow] = useState(false);
@@ -251,7 +255,7 @@ function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
   );
 }
 
-function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdate, saving }) {
+function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdate, onUninstall, saving, moduleBusy }) {
   const [vars, setVars] = useState(containerConfig?.variables || {});
   const [volMounts, setVolMounts] = useState(containerConfig?.volume_mounts || {});
   const [enabled, setEnabled] = useState(() => {
@@ -312,6 +316,22 @@ function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdat
             <Chip key={f} label={f} size="small" variant="outlined" />
           ))}
           <ReadinessBadge status={validation} />
+          {def.source && def.source !== "personal" && def.source !== "platform" && (
+            <Tooltip title="Uninstall container">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={moduleBusy}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUninstall(name);
+                  }}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
         </Box>
       </AccordionSummary>
       {hasDetails && (
@@ -383,12 +403,51 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
     loading,
     saving,
     error,
+    fetchConfig,
     updateSharedVars,
     updateContainer,
     updateMounts,
   } = useContainerConfig();
 
+  const { uninstallContainer } = useModules();
+
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
+  const [moduleDialog, setModuleDialog] = useState({
+    open: false,
+    title: "",
+    running: false,
+    result: null,
+  });
+
+  const handleUninstallContainer = async (name) => {
+    const confirmed = window.confirm(
+      `Uninstall ${name}?\n\n` +
+        `This will remove ~/containers/${name}/ and its registry entry.\n\n` +
+        `Your volume data at ~/container-mounts/${name}/, credentials in ` +
+        `~/credentials/${name}.env, and user-config.yaml entries are preserved — ` +
+        `you can reinstall later without losing anything.`,
+    );
+    if (!confirmed) return;
+    setModuleDialog({
+      open: true,
+      title: `Uninstalling ${name}...`,
+      running: true,
+      result: null,
+    });
+    const result = await uninstallContainer(name);
+    setModuleDialog({
+      open: true,
+      title: result.success ? `Uninstalled ${name}` : `Failed to uninstall ${name}`,
+      running: false,
+      result,
+    });
+    if (result.success) {
+      await fetchConfig();
+    }
+  };
+
+  const closeModuleDialog = () =>
+    setModuleDialog({ open: false, title: "", running: false, result: null });
 
   const mounts = userConfig?.mounts || [{ path: "", label: "Default" }];
 
@@ -587,7 +646,9 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
               validation={validationStatus?.containers?.[name]}
               mounts={mounts}
               onUpdate={handleUpdateContainer}
+              onUninstall={handleUninstallContainer}
               saving={saving}
+              moduleBusy={moduleDialog.running}
             />
           ))}
         </Box>
@@ -598,6 +659,14 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
         autoHideDuration={3000}
         onClose={() => setSnackbar({ open: false, message: "" })}
         message={snackbar.message}
+      />
+
+      <ModuleOperationDialog
+        open={moduleDialog.open}
+        title={moduleDialog.title}
+        running={moduleDialog.running}
+        result={moduleDialog.result}
+        onClose={closeModuleDialog}
       />
     </Box>
   );

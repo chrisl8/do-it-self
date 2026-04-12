@@ -13,11 +13,15 @@ import Tab from "@mui/material/Tab";
 import DockerStatus from "./DockerStatus";
 import BackupStatus from "./BackupStatus";
 import ContainerConfig from "./ContainerConfig";
+import Browse from "./Browse";
+import Sources from "./Sources";
 import useDockerStatus from "./hooks/useDockerStatus";
 
 const routes = [
   { path: "/docker-status", label: "Docker Status" },
-  { path: "/container-config", label: "Configuration" },
+  { path: "/container-config", label: "My Containers" },
+  { path: "/browse", label: "Browse" },
+  { path: "/sources", label: "Sources" },
   { path: "/backup-status", label: "Backup Status" },
 ];
 
@@ -111,6 +115,8 @@ const App = () => {
             />
           }
         />
+        <Route path="/browse" element={<Browse />} />
+        <Route path="/sources" element={<Sources />} />
         <Route path="/backup-status" element={<BackupStatus />} />
       </Routes>
     </BrowserRouter>

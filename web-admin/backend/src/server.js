@@ -23,6 +23,11 @@ import {
   generateMissingSecrets,
 } from "./configRegistry.js";
 import {
+  getModuleCatalog,
+  getInstalledModules,
+  getAvailableContainers,
+} from "./moduleRegistry.js";
+import {
   isAvailable as isInfisicalAvailable,
   getContainerSecrets,
   setContainerSecrets,
@@ -748,6 +753,128 @@ app.post("/api/config/generate-all-envs", async (req, res) => {
     console.error("Error generating envs:", err);
     res.status(500).json({ error: "Failed to generate .env files" });
   }
+});
+
+// --- Module System APIs ---
+
+app.get("/api/modules/catalog", async (req, res) => {
+  try {
+    const catalog = await getModuleCatalog();
+    res.json(catalog);
+  } catch (err) {
+    console.error("Error reading module catalog:", err);
+    res.status(500).json({ error: "Failed to read module catalog" });
+  }
+});
+
+app.get("/api/modules/installed", async (req, res) => {
+  try {
+    const installed = await getInstalledModules();
+    res.json(installed);
+  } catch (err) {
+    console.error("Error reading installed modules:", err);
+    res.status(500).json({ error: "Failed to read installed modules" });
+  }
+});
+
+app.get("/api/modules/available", async (req, res) => {
+  try {
+    const available = await getAvailableContainers();
+    res.json(available);
+  } catch (err) {
+    console.error("Error reading available containers:", err);
+    res.status(500).json({ error: "Failed to read available containers" });
+  }
+});
+
+// Mutating module operations serialize through a single in-memory lock.
+// Two concurrent installs would race on installed-modules.yaml and
+// container-registry.yaml; the CLI doesn't guard against this either,
+// so we enforce one-at-a-time here.
+const MODULE_SH = join(os.homedir(), "containers/scripts/module.sh");
+let moduleOpInFlight = false;
+
+function acquireModuleLock(res) {
+  if (moduleOpInFlight) {
+    res.status(409).json({
+      error: "Another module operation is in progress. Wait for it to finish and try again.",
+      output: "",
+    });
+    return false;
+  }
+  moduleOpInFlight = true;
+  return true;
+}
+
+async function runModuleCommand(args) {
+  const { promise } = spawnTracked(MODULE_SH, args, 300000);
+  return await promise;
+}
+
+async function refreshDockerStatusAfterModuleOp() {
+  try {
+    const containers = await getFormattedDockerContainers();
+    updateStatus("docker.running", containers.running);
+    updateStatus("docker.stacks", containers.stacks);
+  } catch (err) {
+    console.error("Error refreshing docker status after module op:", err);
+  }
+}
+
+async function handleModuleMutation(res, args) {
+  if (!acquireModuleLock(res)) return;
+  try {
+    const { exitCode, output } = await runModuleCommand(args);
+    await refreshDockerStatusAfterModuleOp();
+    if (exitCode !== 0) {
+      res.status(500).json({ success: false, exitCode, output });
+    } else {
+      res.json({ success: true, output });
+    }
+  } catch (err) {
+    console.error(`Error running module.sh ${args.join(" ")}:`, err);
+    res.status(500).json({ success: false, output: err.message });
+  } finally {
+    moduleOpInFlight = false;
+  }
+}
+
+app.post("/api/modules/sources", async (req, res) => {
+  const { url, name } = req.body || {};
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "Missing or invalid 'url' in request body" });
+  }
+  const args = ["add-source", url];
+  if (name && typeof name === "string") args.push("--name", name);
+  await handleModuleMutation(res, args);
+});
+
+app.delete("/api/modules/sources/:name", async (req, res) => {
+  await handleModuleMutation(res, ["remove-source", req.params.name]);
+});
+
+app.post("/api/modules/sources/:name/update", async (req, res) => {
+  await handleModuleMutation(res, ["update", req.params.name]);
+});
+
+app.post("/api/modules/sources/update-all", async (req, res) => {
+  await handleModuleMutation(res, ["update"]);
+});
+
+app.post("/api/modules/regenerate-registry", async (req, res) => {
+  await handleModuleMutation(res, ["regenerate-registry"]);
+});
+
+app.post("/api/modules/containers/:name/install", async (req, res) => {
+  const moduleName = req.body?.module;
+  if (!moduleName || typeof moduleName !== "string") {
+    return res.status(400).json({ error: "Missing or invalid 'module' in request body" });
+  }
+  await handleModuleMutation(res, ["install", moduleName, req.params.name]);
+});
+
+app.delete("/api/modules/containers/:name", async (req, res) => {
+  await handleModuleMutation(res, ["uninstall", req.params.name]);
 });
 
 app.use((req, res, next) => {
