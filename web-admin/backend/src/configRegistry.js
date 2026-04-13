@@ -173,6 +173,7 @@ export async function writeAllContainerEnvs() {
 
   for (const name of Object.keys(registry.containers || {})) {
     const containerDef = registry.containers[name];
+    if (containerDef.system_service) continue;
     const containerConfig = userConfig.containers?.[name];
     if (!isContainerEnabled(containerDef, containerConfig)) continue;
 
@@ -386,16 +387,9 @@ export async function getConfigStatus() {
 
   for (const [name, def] of Object.entries(registry.containers || {})) {
     const containerConfig = userConfig.containers?.[name];
-    const enabled = isContainerEnabled(def, containerConfig);
+    const enabled = def.system_service ? true : isContainerEnabled(def, containerConfig);
     const { errors } = buildEnvForContainer(registry, userConfig, name);
 
-    // buildEnvForContainer no longer writes TS_AUTHKEY into the .env (it's
-    // injected from Infisical at runtime). But we still need to validate
-    // that the key exists in Infisical for any container that uses
-    // Tailscale -- otherwise the runtime injection will inject nothing and
-    // the sidecar will fail. The Infisical merge above pulled /shared into
-    // userConfig.shared, so a missing TS_AUTHKEY here means it isn't in
-    // Infisical (or Infisical wasn't reachable when this status was built).
     if (def.uses_tailscale && !userConfig.shared?.TS_AUTHKEY) {
       errors.push("TS_AUTHKEY (Infisical)");
     }
