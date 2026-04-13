@@ -141,7 +141,7 @@ else
 
     # Verify database dumps can be extracted
     echo "  Extracting db-dumps/ ..."
-    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" mnt/22TB/borg-db-dumps/ 2>/dev/null; then
+    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" "${BORG_DB_DUMP_DIR#/}/" 2>/dev/null; then
         DUMP_COUNT=$(find "${TEST_DIR}" -name "*.sql" -o -name "*.sql.gz" -o -name "*.archive" -o -name "*.archive.gz" -o -name "*.sqlite" -o -name "*.sqlite3" -o -name "*.db" -o -name "*.sqlite.gz" -o -name "*.sqlite3.gz" -o -name "*.db.gz" | wc -l)
         echo "  Extracted ${DUMP_COUNT} dump files successfully"
         if [ "${DUMP_COUNT}" -eq 0 ]; then
@@ -151,12 +151,13 @@ else
         echo "  WARNING: Could not extract db-dumps (may not exist in archive yet)"
     fi
 
-    # Verify a sample of service data can be extracted
-    echo "  Extracting vaultwarden data (sample service) ..."
-    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" mnt/2000/container-mounts/vaultwarden/data/rsa_key.pem 2>/dev/null; then
-        echo "  Service data extraction OK"
+    # Verify a sample file can be extracted
+    SAMPLE_PATH="${BORG_RESTORE_TEST_SAMPLE_PATH:-etc/hostname}"
+    echo "  Extracting sample file (${SAMPLE_PATH}) ..."
+    if borg extract "${BORG_REPO}::${LATEST_ARCHIVE}" "${SAMPLE_PATH}" 2>/dev/null; then
+        echo "  Sample file extraction OK"
     else
-        echo "  WARNING: Could not extract vaultwarden config"
+        echo "  WARNING: Could not extract ${SAMPLE_PATH}"
     fi
 fi
 

@@ -43,6 +43,7 @@ scripts/package-lock.json
 web-admin/**/node_modules/
 
 # Scripts runtime config
+scripts/borg-backup.conf
 scripts/healthcheck.conf
 scripts/excluded_devices.conf
 scripts/post-startup-hook.sh

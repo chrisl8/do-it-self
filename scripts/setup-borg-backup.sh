@@ -11,6 +11,32 @@ YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 NC='\033[0m' # NoColor
 
+# ── Bootstrap configuration ─────────────────────────────────────
+
+CONF_FILE="${SCRIPT_DIR}/borg-backup.conf"
+CONF_EXAMPLE="${SCRIPT_DIR}/borg-backup.conf.example"
+
+if [ ! -f "${CONF_FILE}" ]; then
+    if [ -f "${CONF_EXAMPLE}" ]; then
+        cp "${CONF_EXAMPLE}" "${CONF_FILE}"
+        printf "${YELLOW}[NOTE]${NC} Created %s from template\n" "${CONF_FILE}"
+        printf "       Edit this file to configure paths for your system before continuing.\n\n"
+    else
+        echo "ERROR: Neither ${CONF_FILE} nor ${CONF_EXAMPLE} found"
+        exit 1
+    fi
+fi
+
+# shellcheck source=borg-backup.conf
+. "${CONF_FILE}"
+
+if [[ "${BORG_REPO}" == *"YOUR-MOUNT"* ]] || [ -z "${BORG_REPO}" ]; then
+    printf "${YELLOW}[WARN]${NC} borg-backup.conf still has placeholder values\n"
+    printf "       Edit %s and set BORG_REPO, BORG_DB_DUMP_DIR, and BORG_BACKUP_PATHS\n" "${CONF_FILE}"
+    printf "       for your system, then re-run this script.\n"
+    exit 1
+fi
+
 done_count=0
 skip_count=0
 
@@ -66,7 +92,7 @@ create_dir() {
 }
 
 create_dir "${BORGBACKUP_DIR}"
-create_dir "/mnt/2000/container-mounts/borgbackup/db-dumps"
+create_dir "${BORG_DB_DUMP_DIR}"
 create_dir "${HOME}/logs"
 echo ""
 
@@ -98,8 +124,6 @@ if [ "${SECRETS_AVAILABLE}" = "true" ]; then
     BORG_PASSPHRASE=$(infisical secrets get BORG_PASSPHRASE --token="${INFISICAL_TOKEN}" --projectId="${INFISICAL_PROJECT_ID}" --path="/borgbackup" --env=prod --domain="${INFISICAL_API_URL}" --silent --plain 2>/dev/null) || true
 fi
 export BORG_PASSPHRASE
-
-BORG_REPO="/mnt/22TB/borg-repo"
 
 if [ -d "${BORG_REPO}" ]; then
     skip_msg "Borg repo at ${BORG_REPO}"
@@ -225,16 +249,18 @@ echo "=========================================="
 echo "Setup complete: ${done_count} actions performed, ${skip_count} skipped"
 echo "=========================================="
 echo ""
-BORG_REPO="/mnt/22TB/borg-repo"
+echo "Configuration: ${CONF_FILE}"
+echo ""
 echo "Next steps:"
-echo "  1. In Infisical at path /borgbackup, set the following secrets:"
+echo "  1. Edit ${CONF_FILE} to configure paths for your system"
+echo "  2. In Infisical at path /borgbackup, set the following secrets:"
 echo "     - BORG_PASSPHRASE: a strong passphrase"
-echo "     - BORG_HEALTHCHECK_URL: healthchecks.io URL (add later)"
-echo "     - BORG_REMOTE_PASSPHRASE: a separate passphrase for the offsite repo"
-echo "  2. Re-run this script to initialize the borg repo"
+echo "     - BORG_HEALTHCHECK_URL: healthchecks.io URL (optional)"
+echo "     - BORG_REMOTE_PASSPHRASE: a separate passphrase for the offsite repo (optional)"
+echo "  3. Re-run this script to initialize the borg repo"
 echo "     (if BORG_PASSPHRASE was not set yet)"
-echo "  3. For offsite backup, set BORG_REMOTE_REPO in borg-backup.conf and re-run"
-echo "  4. Run the first backup manually:"
+echo "  4. For offsite backup, set BORG_REMOTE_REPO in borg-backup.conf and re-run"
+echo "  5. Run the first backup manually:"
 echo "     ${SCRIPT_DIR}/borg-backup.sh"
-echo "  5. Verify: borg list ${BORG_REPO}"
+echo "  6. Verify: borg list ${BORG_REPO}"
 echo ""

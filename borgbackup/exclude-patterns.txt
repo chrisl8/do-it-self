@@ -2,37 +2,37 @@
 # Used by borg-backup.sh during archive creation
 
 # Re-downloadable media (large, easily re-acquired)
-/mnt/22TB/container-mounts/recon/data/media/movies/
-/mnt/22TB/container-mounts/recon/data/media/series/
-/mnt/22TB/container-mounts/recon/data/media/qbittorrent/
-/mnt/22TB/container-mounts/recon/data/media/sabnzbd/
-/mnt/22TB/container-mounts/jellyfin/
+*/container-mounts/recon/data/media/movies/
+*/container-mounts/recon/data/media/series/
+*/container-mounts/recon/data/media/qbittorrent/
+*/container-mounts/recon/data/media/sabnzbd/
+*/container-mounts/jellyfin/
 
-# Raw database data directories (already backed up via SQL/archive dumps in borgbackup/db-dumps/)
+# Raw database data directories (already backed up via SQL/archive dumps)
 # PostgreSQL
-/mnt/2000/container-mounts/immich/db/
-/mnt/2000/container-mounts/dawarich/db_data/
-/mnt/2000/container-mounts/paperless-ngx/database/
-/mnt/2000/container-mounts/formbricks/data/
-/mnt/250/container-mounts/onlyoffice/db_data/
+*/container-mounts/immich/db/
+*/container-mounts/dawarich/db_data/
+*/container-mounts/paperless-ngx/database/
+*/container-mounts/formbricks/data/
+*/container-mounts/onlyoffice/db_data/
 # MariaDB
-/mnt/2000/container-mounts/mariadb/db/
-/mnt/2000/container-mounts/nextcloud/db/
-/mnt/2000/container-mounts/paste/data/
+*/container-mounts/mariadb/db/
+*/container-mounts/nextcloud/db/
+*/container-mounts/paste/data/
 # MongoDB
-/mnt/2000/container-mounts/your-spotify/db/
+*/container-mounts/your-spotify/db/
 # CouchDB — Obsidian LiveSync is a sync replica; authoritative data lives on devices/Obsidian Sync
-/mnt/2000/container-mounts/obsidian-babel-livesync/data/
+*/container-mounts/obsidian-babel-livesync/data/
 # Uptime Kuma — backed up via SQLite dump for consistency; live file triggers rc 1 warning
-/mnt/2000/container-mounts/uptime/data/kuma.db
+*/container-mounts/uptime/data/kuma.db
 # The Lounge IRC logs (1.3G SQLite + text logs, not worth backing up)
 */the-lounge/config/logs/
 
 # Regenerated caches
-/mnt/2000/container-mounts/jellyfin/cache/
+*/container-mounts/jellyfin/cache/
 
 # Kopia caches (regenerated)
-/mnt/250/container-mounts/kopia-*/cache/
+*/container-mounts/kopia-*/cache/
 
 # Tailscale state (regenerated on auth)
 */tailscale-state/

@@ -25,14 +25,9 @@ Remaining module work:
 
 All containers that need external accounts now have `required_accounts` entries: cloudflared, factorio, recon, secure-browser, starbound, wallabag, and your-spotify. Most containers are fully self-hosted and don't require any external accounts.
 
-## 3. External Backup Infrastructure Assumed
+## 3. ~~External Backup Infrastructure Assumed~~ — **Done.**
 
-- BorgBackup assumes a remote server `backup-pi` accessible via SSH
-- Kopia assumes its own remote backup target
-- SSH keys at `/root/.ssh/borg-offsite` must be manually created
-- `scripts/borg-backup.conf` hardcodes remote host and paths
-
-This is acceptable for the maintainer but needs documentation or configurability for other users. Once backup containers are in their own module, document the setup requirements there.
+`scripts/borg-backup.conf` is now gitignored and created from a tracked `scripts/borg-backup.conf.example` template on first run. All hardcoded paths (local repo, db-dump dir, backup paths, remote repo, container mount dirs) are configurable via the conf. SQLite dump paths in `borg-db-dump.sh` resolve dynamically via `BORG_CONTAINER_MOUNT_DIRS`. Exclude patterns in `borgbackup/exclude-patterns.txt` use globs instead of mount-specific absolute paths. `borgbackup/RECOVERY.md` references conf variables instead of hardcoded hostnames and paths. Setup guide: `borgbackup/SETUP.md`. Kopia was already configurable via its registry variables.
 
 ## 4. Revisit homepage default groups, icons, and widgets
 
