@@ -993,7 +993,7 @@ containers:
   recon:
     source: do-it-self-containers
     description: Media acquisition stack (Sonarr, Radarr, SABnzbd, etc.)
-    homepage_group: Media
+    homepage_group: Downloads
     tags: []
     uses_tailscale: true
     start_order: z110
@@ -1148,7 +1148,7 @@ containers:
   seerr:
     source: do-it-self-containers
     description: Media request management for Jellyfin
-    homepage_group: Media
+    homepage_group: Downloads
     tags: []
     uses_tailscale: true
     volumes:
