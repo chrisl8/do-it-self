@@ -29,16 +29,9 @@ All containers that need external accounts now have `required_accounts` entries:
 
 `scripts/borg-backup.conf` is now gitignored and created from a tracked `scripts/borg-backup.conf.example` template on first run. All hardcoded paths (local repo, db-dump dir, backup paths, remote repo, container mount dirs) are configurable via the conf. SQLite dump paths in `borg-db-dump.sh` resolve dynamically via `BORG_CONTAINER_MOUNT_DIRS`. Exclude patterns in `borgbackup/exclude-patterns.txt` use globs instead of mount-specific absolute paths. `borgbackup/RECOVERY.md` references conf variables instead of hardcoded hostnames and paths. Setup guide: `borgbackup/SETUP.md`. Kopia was already configurable via its registry variables.
 
-## 4. Revisit homepage default groups, icons, and widgets
+## 4. ~~Revisit homepage default groups, icons, and widgets~~ — **Done.**
 
-The `homepage/config-defaults/` files are opinionated first drafts:
-
-- The `Top` group (Web Admin, Tailscale Admin, do-it-self on GitHub) — revisit once more users are onboard
-- The default `widgets.yaml` greeting is "just something in the slot" — could be replaced with something useful
-- Icon choices should be reviewed for consistency
-- The maintainer's `settings.yaml` layout hardcodes a 13-group ordering that new users don't benefit from
-
-Revisit once the module-based container set is finalized.
+Reviewed all 12 `homepage_group` values — names are generic and universal, no changes needed. Added a default layout to `homepage/config-defaults/settings.yaml` that orders all 13 groups (Top + 12 homepage_groups) logically: daily-use groups first (Productivity, Finance, Communication, Reading, Media), then utility/entertainment (Gaming, Desktop Apps, Tools, Development, Personal Projects), then ops (System Monitoring, Infrastructure). Added sensible styling defaults: `target: _self`, `headerStyle: boxedWidgets`, `statusStyle: basic`. Widgets and icons were already in good shape — `${HOST_NAME}.${TS_DOMAIN}` greeting is informative, and icons consistently use the dashboard-icons library with custom icons only where needed.
 
 ## 5. ~~config-defaults handler fails on container-owned files~~ — **Done.**
 
