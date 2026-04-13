@@ -329,12 +329,16 @@ function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdat
     <Accordion slotProps={{ transition: { unmountOnExit: true } }}>
       <AccordionSummary expandIcon={hasDetails ? <ExpandMoreIcon /> : null}>
         <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
-          <Switch
-            size="small"
-            checked={enabled}
-            onChange={handleToggle}
-            onClick={(e) => e.stopPropagation()}
-          />
+          {def.system_service ? (
+            <Chip label="System" size="small" color="info" sx={{ minWidth: 62 }} />
+          ) : (
+            <Switch
+              size="small"
+              checked={enabled}
+              onChange={handleToggle}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
           <Typography sx={{ fontWeight: 500, minWidth: 180 }}>{name}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
             {def.description}

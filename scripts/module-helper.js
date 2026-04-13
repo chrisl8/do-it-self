@@ -385,6 +385,8 @@ const PRESERVE_ON_UPDATE = [
   "config-personal",
   "compose.override.yaml",
   ".env",
+  "icons",
+  "images",
 ];
 
 async function updateModules(args) {
