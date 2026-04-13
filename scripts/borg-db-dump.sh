@@ -36,8 +36,10 @@ load_secret() {
 if [ "${SECRETS_AVAILABLE}" = "true" ]; then
     MARIADB_ROOT_PASSWORD=$(load_secret "mariadb" "MARIADB_ROOT_PASSWORD") || true
     NEXTCLOUD_MYSQL_ROOT_PASSWORD=$(load_secret "nextcloud" "MYSQL_ROOT_PASSWORD") || true
+    PASTE_MYSQL_ROOT_PASSWORD=$(load_secret "paste" "PASTE_MYSQL_ROOT_PASSWORD") || true
     echo "Credential status: MariaDB=$([ -n "${MARIADB_ROOT_PASSWORD}" ] && echo ok || echo MISSING)" \
-         "Nextcloud=$([ -n "${NEXTCLOUD_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo MISSING)"
+         "Nextcloud=$([ -n "${NEXTCLOUD_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo MISSING)" \
+         "Paste=$([ -n "${PASTE_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo fallback)"
 else
     echo "WARNING: Infisical not available — database credentials will be missing"
 fi
@@ -57,8 +59,10 @@ docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE poi
 docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM;'
 
 
-# Paste DB has a hardcoded password
-PASTE_MYSQL_ROOT_PASSWORD="${PASTE_MYSQL_ROOT_PASSWORD:-pastefy}"
+if [ -z "${PASTE_MYSQL_ROOT_PASSWORD}" ]; then
+    PASTE_MYSQL_ROOT_PASSWORD="pastefy"
+    echo "  WARNING: Using default paste DB password — set PASTE_MYSQL_ROOT_PASSWORD in Infisical at /paste"
+fi
 
 mkdir -p "${BORG_DB_DUMP_DIR}"
 
@@ -172,6 +176,34 @@ fi
 SQLITE_DUMP_DIR="${BORG_DB_DUMP_DIR}/sqlite"
 mkdir -p "${SQLITE_DUMP_DIR}"
 
+# Resolve a file path across configured container mount directories
+find_container_file() {
+    local container="$1"
+    local subpath="$2"
+    for dir in "${BORG_CONTAINER_MOUNT_DIRS[@]}"; do
+        if [ -f "${dir}/${container}/${subpath}" ]; then
+            echo "${dir}/${container}/${subpath}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Resolve a glob pattern across configured container mount directories
+find_container_glob() {
+    local pattern="$1"
+    local found=false
+    for dir in "${BORG_CONTAINER_MOUNT_DIRS[@]}"; do
+        for f in ${dir}/${pattern}; do
+            if [ -f "${f}" ]; then
+                echo "${f}"
+                found=true
+            fi
+        done
+    done
+    ${found}
+}
+
 dump_sqlite() {
     local label="$1"
     local db_path="$2"
@@ -205,35 +237,38 @@ dump_sqlite() {
 
 echo "Dumping SQLite databases..."
 
-# Critical
-dump_sqlite "vaultwarden" "/mnt/2000/container-mounts/vaultwarden/data/db.sqlite3" "vaultwarden.sqlite3"
-dump_sqlite "forgejo" "/mnt/2000/container-mounts/forgejo/data/gitea/gitea.db" "forgejo.db"
-dump_sqlite "trilium" "/mnt/2000/container-mounts/trilium/data/document.db" "trilium.db"
-dump_sqlite "actual-budget-account" "/mnt/2000/container-mounts/actual-budget/data/server-files/account.sqlite" "actual-budget-account.sqlite"
-dump_sqlite "karakeep" "/mnt/2000/container-mounts/karakeep/data/db.db" "karakeep.db"
+if [ ${#BORG_CONTAINER_MOUNT_DIRS[@]} -eq 0 ]; then
+    echo "  WARNING: BORG_CONTAINER_MOUNT_DIRS is empty in borg-backup.conf — skipping SQLite dumps"
+    echo "  Add your container-mounts directories to BORG_CONTAINER_MOUNT_DIRS in scripts/borg-backup.conf"
+else
+    # Critical
+    dump_sqlite "vaultwarden" "$(find_container_file vaultwarden data/db.sqlite3)" "vaultwarden.sqlite3"
+    dump_sqlite "forgejo" "$(find_container_file forgejo data/gitea/gitea.db)" "forgejo.db"
+    dump_sqlite "trilium" "$(find_container_file trilium data/document.db)" "trilium.db"
+    dump_sqlite "actual-budget-account" "$(find_container_file actual-budget data/server-files/account.sqlite)" "actual-budget-account.sqlite"
+    dump_sqlite "karakeep" "$(find_container_file karakeep data/db.db)" "karakeep.db"
 
-# Actual Budget user data (glob for budget group files)
-for f in /mnt/2000/container-mounts/actual-budget/data/user-files/group-*.sqlite; do
-    [ -f "${f}" ] && dump_sqlite "actual-budget-data" "${f}" "actual-budget-$(basename "${f}")"
-done
+    # Actual Budget user data (glob for budget group files)
+    while IFS= read -r f; do
+        dump_sqlite "actual-budget-data" "${f}" "actual-budget-$(basename "${f}")"
+    done < <(find_container_glob "actual-budget/data/user-files/group-*.sqlite")
 
-# Actual API (second instance)
-dump_sqlite "actual-api-account" "/mnt/2000/container-mounts/actual-api/data/My-Finances-0336643/db.sqlite" "actual-api-db.sqlite"
-dump_sqlite "quicken-account" "/mnt/2000/container-mounts/quicken/data/server-files/account.sqlite" "quicken-account.sqlite"
-for f in /mnt/2000/container-mounts/quicken/data/user-files/group-*.sqlite; do
-    [ -f "${f}" ] && dump_sqlite "quicken-data" "${f}" "quicken-$(basename "${f}")"
-done
+    # Actual API (second instance)
+    dump_sqlite "actual-api-account" "$(find_container_file actual-api data/My-Finances-0336643/db.sqlite)" "actual-api-db.sqlite"
+    dump_sqlite "quicken-account" "$(find_container_file quicken data/server-files/account.sqlite)" "quicken-account.sqlite"
+    while IFS= read -r f; do
+        dump_sqlite "quicken-data" "${f}" "quicken-$(basename "${f}")"
+    done < <(find_container_glob "quicken/data/user-files/group-*.sqlite")
 
-# Important
-dump_sqlite "kanboard" "/mnt/2000/container-mounts/kanboard/data/db.sqlite" "kanboard.sqlite"
-dump_sqlite "freshrss" "/mnt/2000/container-mounts/freshrss/data/users/Chris10/db.sqlite" "freshrss.sqlite"
-dump_sqlite "wallabag" "/mnt/2000/container-mounts/wallabag/data/db/wallabag.sqlite"
-# portainer.db is BoltDB format, not SQLite — backed up via regular borg archive
-dump_sqlite "1password" "/mnt/250/container-mounts/1password/data/1password.sqlite"
-dump_sqlite "beszel" "/mnt/250/container-mounts/beszel/data/data.db" "beszel.db"
-dump_sqlite "speedtest" "/mnt/2000/container-mounts/speedtest/config/database.sqlite" "speedtest.sqlite"
-dump_sqlite "uptime" "/mnt/2000/container-mounts/uptime/data/kuma.db"
-# Yggdrasil.db is a Valheim binary world save, not a SQLite database — backed up via regular borg archive
+    # Important
+    dump_sqlite "kanboard" "$(find_container_file kanboard data/db.sqlite)" "kanboard.sqlite"
+    dump_sqlite "freshrss" "$(find_container_file freshrss data/users/Chris10/db.sqlite)" "freshrss.sqlite"
+    dump_sqlite "wallabag" "$(find_container_file wallabag data/db/wallabag.sqlite)"
+    dump_sqlite "1password" "$(find_container_file 1password data/1password.sqlite)"
+    dump_sqlite "beszel" "$(find_container_file beszel data/data.db)" "beszel.db"
+    dump_sqlite "speedtest" "$(find_container_file speedtest config/database.sqlite)" "speedtest.sqlite"
+    dump_sqlite "uptime" "$(find_container_file uptime data/kuma.db)"
+fi
 
 echo ""
 echo "Database dumps complete. Errors: ${DUMP_ERRORS}"

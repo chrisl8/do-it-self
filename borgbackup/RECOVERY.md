@@ -1,26 +1,27 @@
 # BorgBackup Disaster Recovery Runbook
 
+## Before You Begin
+
+All paths referenced below are configured in `scripts/borg-backup.conf`. Source it to set the variables:
+
+```bash
+source ~/containers/scripts/borg-backup.conf
+```
+
+Secrets (passphrases, healthcheck URLs) are stored in Infisical at `/borgbackup`.
+
 ## Prerequisites
 
 1. Fresh Ubuntu install on the server
-2. Mount all drives to their expected paths:
-   - `/mnt/2000` (2TB SSD)
-   - `/mnt/250` (250GB SSD)
-   - `/mnt/22TB` (22TB HDD)
+2. Mount all drives to their expected paths (match your `borg-backup.conf` settings)
 3. Install BorgBackup: `sudo apt install borgbackup`
-4. Have the borg repo passphrase available (stored in 1Password)
-
-## Locating the Repository
-
-The borg repo is at `/mnt/22TB/borg-repo`. If the 22TB drive is intact, the repo is available immediately.
-
-If using a remote repo (when configured), you'll need Tailscale access to the remote machine.
+4. Have the borg repo passphrase available (stored in Infisical)
 
 ## Step 1: List Available Archives
 
 ```bash
 export BORG_PASSPHRASE="your-passphrase-here"
-export BORG_REPO="/mnt/22TB/borg-repo"
+export BORG_REPO="$BORG_REPO"   # from borg-backup.conf
 
 # List all archives (most recent last)
 borg list "$BORG_REPO"
@@ -60,30 +61,26 @@ done
 
 ## Step 4: Restore Container Data
 
-Restore all container mount data:
+Restore the directories listed in `BORG_BACKUP_PATHS` from your `borg-backup.conf`. The paths in the archive match the original absolute paths (without leading `/`):
 
 ```bash
 cd /
-# Restore the main data directories
-borg extract "$BORG_REPO::archive-name" mnt/2000/container-mounts/
-borg extract "$BORG_REPO::archive-name" mnt/250/container-mounts/
-borg extract "$BORG_REPO::archive-name" mnt/22TB/container-mounts/recon/data/media/comics/
-borg extract "$BORG_REPO::archive-name" mnt/22TB/container-mounts/recon/data/media/ebooks/
-borg extract "$BORG_REPO::archive-name" mnt/22TB/container-mounts/recon/data/media/manga/
-borg extract "$BORG_REPO::archive-name" mnt/22TB/container-mounts/recon/data/media/music/
-borg extract "$BORG_REPO::archive-name" mnt/22TB/container-mounts/filez/
+
+# Restore each path from BORG_BACKUP_PATHS in your borg-backup.conf.
+# Example (adjust for your mount points):
+borg extract "$BORG_REPO::archive-name" mnt/primary/container-mounts/
+borg extract "$BORG_REPO::archive-name" mnt/secondary/container-mounts/
 ```
 
 ## Step 5: Restore Databases from Dumps
 
 If raw database files are inconsistent, restore from the SQL dumps created before each backup.
 
-The dumps are stored at `/mnt/2000/container-mounts/borgbackup/db-dumps/` inside the archive.
+The dumps are stored at `$BORG_DB_DUMP_DIR` (configured in `borg-backup.conf`):
 
 ```bash
-# Extract just the dumps
 cd /tmp
-borg extract "$BORG_REPO::archive-name" mnt/2000/container-mounts/borgbackup/db-dumps/
+borg extract "$BORG_REPO::archive-name" "${BORG_DB_DUMP_DIR#/}/"
 ```
 
 ### PostgreSQL
@@ -95,7 +92,7 @@ Start the database container first, then restore:
 cd ~/containers/immich
 docker compose up -d db
 # Wait for it to be healthy
-gunzip -c /tmp/mnt/2000/container-mounts/borgbackup/db-dumps/immich_postgres.sql.gz | \
+gunzip -c "/tmp/${BORG_DB_DUMP_DIR#/}/immich_postgres.sql.gz" | \
     docker exec -i immich_postgres psql -U postgres
 
 # Repeat for: dawarich_db, paperless-db, formbricks_postgres, onlyoffice-postgresql
@@ -107,7 +104,7 @@ gunzip -c /tmp/mnt/2000/container-mounts/borgbackup/db-dumps/immich_postgres.sql
 # Example for mariadb
 cd ~/containers/mariadb
 docker compose up -d
-gunzip -c /tmp/mnt/2000/container-mounts/borgbackup/db-dumps/mariadb.sql.gz | \
+gunzip -c "/tmp/${BORG_DB_DUMP_DIR#/}/mariadb.sql.gz" | \
     docker exec -i mariadb mariadb -u root -p"$MARIADB_ROOT_PASSWORD"
 
 # Repeat for: nextcloud-db, paste-db
@@ -118,7 +115,7 @@ gunzip -c /tmp/mnt/2000/container-mounts/borgbackup/db-dumps/mariadb.sql.gz | \
 ```bash
 cd ~/containers/your-spotify
 docker compose up -d mongo
-gunzip -c /tmp/mnt/2000/container-mounts/borgbackup/db-dumps/your_spotify-mongo.archive.gz | \
+gunzip -c "/tmp/${BORG_DB_DUMP_DIR#/}/your_spotify-mongo.archive.gz" | \
     docker exec -i your_spotify-mongo mongorestore --archive --gzip
 ```
 
@@ -128,7 +125,7 @@ gunzip -c /tmp/mnt/2000/container-mounts/borgbackup/db-dumps/your_spotify-mongo.
 cd ~/containers/obsidian-babel-livesync
 docker compose up -d
 # Restore each database from the dump directory
-for dump in /tmp/mnt/2000/container-mounts/borgbackup/db-dumps/couchdb_*.json.gz; do
+for dump in /tmp/${BORG_DB_DUMP_DIR#/}/couchdb_*.json.gz; do
     dbname=$(basename "$dump" .json.gz | sed 's/^couchdb_//')
     curl -X PUT "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@localhost:5984/${dbname}"
     gunzip -c "$dump" | curl -X POST "http://${COUCHDB_USER}:${COUCHDB_PASSWORD}@localhost:5984/${dbname}/_bulk_docs" \
@@ -159,16 +156,16 @@ scripts/all-containers.sh --start
 To restore just one service (e.g., trilium):
 
 ```bash
+source ~/containers/scripts/borg-backup.conf
 export BORG_PASSPHRASE="your-passphrase-here"
-export BORG_REPO="/mnt/22TB/borg-repo"
 
 # Stop the service
 cd ~/containers/trilium
 docker compose down
 
-# Restore its data
+# Restore its data (adjust the mount path for your system)
 cd /
-borg extract "$BORG_REPO::archive-name" mnt/2000/container-mounts/trilium/
+borg extract "$BORG_REPO::archive-name" mnt/primary/container-mounts/trilium/
 
 # Restore its compose file and credentials if needed
 borg extract "$BORG_REPO::archive-name" home/$USER/containers/trilium/
@@ -183,20 +180,20 @@ docker compose up -d
 
 ## Remote (Offsite) Repo Recovery
 
-Use the offsite repo on the Raspberry Pi when the local 22TB drive is lost or the entire server is destroyed.
+Use the offsite repo when the local drive is lost or the entire server is destroyed.
 
 ### Prerequisites
 
 1. Install BorgBackup: `sudo apt install borgbackup`
-2. Install and authenticate Tailscale (the Pi is on the tailnet)
-3. Have the remote borg passphrase available (`BORG_REMOTE_PASSPHRASE` from 1Password)
-4. Set up SSH access to the Pi (key in `/root/.ssh/borg-offsite` or generate a new one)
+2. Install and authenticate Tailscale (the remote server is on the tailnet)
+3. Have the remote borg passphrase available (`BORG_REMOTE_PASSPHRASE` from Infisical)
+4. Set up SSH access to the remote server (generate a key pair and copy the public key)
 
 ### Connect to the Remote Repo
 
 ```bash
 export BORG_PASSPHRASE="your-remote-passphrase-here"
-export BORG_REPO="ssh://piadmin@backup-pi.jamnapari-goblin.ts.net/mnt/backup/borg-repo"
+export BORG_REPO="$BORG_REMOTE_REPO"   # from borg-backup.conf
 ```
 
 If the repo key was lost with the server, import it first:
@@ -222,22 +219,22 @@ borg extract "$BORG_REPO::archive-name" home/$USER/credentials/
 
 ### Large Restores
 
-For a full server rebuild, restoring hundreds of GB over the network may be slow. If the Pi is offsite, consider physically retrieving it and connecting it to the local network first. USB 3 + gigabit Ethernet will be significantly faster than a residential uplink.
+For a full server rebuild, restoring hundreds of GB over the network may be slow. If the remote server is offsite, consider physically retrieving it and connecting it to the local network first. USB 3 + gigabit Ethernet will be significantly faster than a residential uplink.
 
 ### Re-enabling Offsite Backup After Rebuild
 
-1. Set up SSH key for root: `sudo ssh-keygen -t ed25519 -f /root/.ssh/borg-offsite`
-2. Copy the public key to the Pi: `ssh-copy-id -i /root/.ssh/borg-offsite.pub piadmin@backup-pi.jamnapari-goblin.ts.net`
-3. Add SSH config entry for `backup-pi` in `/root/.ssh/config`
+1. Generate an SSH key pair: `sudo ssh-keygen -t ed25519 -f /root/.ssh/borg-offsite`
+2. Copy the public key to the remote server: `ssh-copy-id -i /root/.ssh/borg-offsite.pub USER@REMOTE-HOST`
+3. Add an SSH config entry for the remote host in `/root/.ssh/config`
 4. Set `BORG_REMOTE_REPO` in `scripts/borg-backup.conf`
 5. Run `scripts/setup-borg-backup.sh` to verify connectivity
 
 ## Notes
 
-- The local borg repo key is stored in 1Password and at `~/credentials/borg-repo-key.txt`
-- The remote borg repo key is stored in 1Password and at `~/credentials/borg-remote-repo-key.txt`
-- If a key is lost, that repo cannot be decrypted — keep the 1Password copies safe
-- To import a key: `borg key import /mnt/22TB/borg-repo ~/credentials/borg-repo-key.txt`
-- To import the remote key: `borg key import ssh://piadmin@backup-pi/mnt/backup/borg-repo ~/credentials/borg-remote-repo-key.txt`
+- The local borg repo key is stored in Infisical and at `~/credentials/borg-repo-key.txt`
+- The remote borg repo key is stored in Infisical and at `~/credentials/borg-remote-repo-key.txt`
+- If a key is lost, that repo cannot be decrypted — keep the Infisical copies safe
+- To import a key: `borg key import "$BORG_REPO" ~/credentials/borg-repo-key.txt`
+- To import the remote key: `borg key import "$BORG_REMOTE_REPO" ~/credentials/borg-remote-repo-key.txt`
 - Archives are named with timestamps: `backup-YYYY-MM-DDTHH:MM:SS`
 - The same archive name is used in both local and remote repos for easy correlation

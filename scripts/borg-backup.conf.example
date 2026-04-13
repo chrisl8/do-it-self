@@ -1,0 +1,98 @@
+# BorgBackup configuration
+# Sourced by borg-backup.sh and related scripts
+#
+# Copy this file to borg-backup.conf and edit for your system:
+#   cp borg-backup.conf.example borg-backup.conf
+#
+# Or run setup-borg-backup.sh, which copies it automatically.
+
+# ── Local repository ────────────────────────────────────────────
+
+# Path to the local borg repository (created by setup-borg-backup.sh)
+BORG_REPO="/YOUR-MOUNT/borg-repo"
+
+# Compression algorithm — lz4 is fast, good for local disk
+BORG_COMPRESSION="lz4"
+
+# ── Database dumps ──────────────────────────────────────────────
+
+# Directory where database dumps are written before each backup
+BORG_DB_DUMP_DIR="/YOUR-MOUNT/borg-db-dumps"
+
+# ── Exclusion patterns ──────────────────────────────────────────
+
+BORG_EXCLUDE_FILE="${HOME}/containers/borgbackup/exclude-patterns.txt"
+
+# ── Status & logging ───────────────────────────────────────────
+
+# JSON status file served by the Homepage dashboard
+BORG_STATUS_DIR="${HOME}/containers/homepage/images"
+BORG_STATUS_FILE="${BORG_STATUS_DIR}/borg-status.json"
+
+# Web admin URL for backup status page (set automatically after loading TS_DOMAIN)
+BORG_WEB_ADMIN_URL=""
+
+BORG_LOCK_FILE="/tmp/borg-backup.lock"
+BORG_LOG_FILE="${HOME}/logs/borg-backup.log"
+
+# ── Retention policy ───────────────────────────────────────────
+
+BORG_KEEP_DAILY=7
+BORG_KEEP_WEEKLY=4
+BORG_KEEP_MONTHLY=6
+BORG_KEEP_YEARLY=2
+
+# ── Paths to back up ──────────────────────────────────────────
+
+# List every directory you want included in backups.
+# Typically: container mount directories, database dumps, home, /etc.
+BORG_BACKUP_PATHS=(
+    # "/mnt/primary/container-mounts/"
+    # "/mnt/secondary/container-mounts/"
+    # "${BORG_DB_DUMP_DIR}/"
+    # "${HOME}/"
+    # "/etc/"
+)
+
+# ── Container mount directories ───────────────────────────────
+
+# Base directories where containers store their persistent data.
+# Used by borg-db-dump.sh to locate SQLite databases for safe dumping.
+# Typically your container-mounts directories from user-config.yaml.
+BORG_CONTAINER_MOUNT_DIRS=(
+    # "/mnt/primary/container-mounts"
+    # "/mnt/secondary/container-mounts"
+)
+
+# ── Restore test ───────────────────────────────────────────────
+
+# A file path (relative to archive root, no leading /) extracted during
+# weekly restore tests as a sample service data check.
+# Default: etc/hostname (exists on every system)
+BORG_RESTORE_TEST_SAMPLE_PATH="etc/hostname"
+
+# ── Remote (offsite) backup ────────────────────────────────────
+
+# Leave empty to disable remote backup.
+# Format: ssh://USER@HOST/path/to/borg-repo
+BORG_REMOTE_REPO=""
+# Example: BORG_REMOTE_REPO="ssh://borg@backup-server/mnt/backup/borg"
+# Example: BORG_REMOTE_REPO="ssh://user@nas.your-tailnet.ts.net/volume1/borg"
+
+# Remote compression — higher ratio to reduce transfer size
+BORG_REMOTE_COMPRESSION="zstd,3"
+
+# DR-focused retention — fewer dailies (local repo handles deleted-file recovery)
+BORG_REMOTE_KEEP_DAILY=3
+BORG_REMOTE_KEEP_WEEKLY=4
+BORG_REMOTE_KEEP_MONTHLY=12
+BORG_REMOTE_KEEP_YEARLY=5
+
+# Rate limit for remote transfers in kB/s (0 = unlimited)
+# Set to e.g. 5000 if the remote is offsite to avoid saturating your uplink
+BORG_REMOTE_RATELIMIT=0
+
+# SSH command for borg remote connections
+# BatchMode=yes: fail immediately instead of prompting for passwords
+# StrictHostKeyChecking=accept-new: auto-accept unknown keys, reject changed keys
+BORG_RSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
