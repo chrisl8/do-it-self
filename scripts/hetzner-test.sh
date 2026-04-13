@@ -10,6 +10,7 @@
 #   scripts/hetzner-test.sh --keep             # Leave server running after test
 #   scripts/hetzner-test.sh --destroy          # Destroy the test server
 #   scripts/hetzner-test.sh --retest           # Re-run tests on existing server
+#   scripts/hetzner-test.sh --browse           # Open SOCKS proxy after tests for manual browsing
 #   scripts/hetzner-test.sh --type cx32        # Use a different server type
 #   scripts/hetzner-test.sh --ts-key KEY       # Provide Tailscale auth key
 #
@@ -35,10 +36,14 @@ KEEP=false
 KEEP_IF_FAILS=true
 DESTROY_ONLY=false
 RETEST=false
+BROWSE=false
 TS_KEY=""
 TS_API_TOKEN=""
 TS_TAILNET="-"
 LOG_DIR="/tmp/hetzner-test-logs"
+AT_JOB_FILE="/tmp/hetzner-test-at-job"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,6 +51,7 @@ while [[ $# -gt 0 ]]; do
     --no-keep-if-fails) KEEP_IF_FAILS=false ;;
     --destroy) DESTROY_ONLY=true ;;
     --retest) RETEST=true ;;
+    --browse) BROWSE=true ;;
     --type) shift; SERVER_TYPE="$1" ;;
     --ts-key) shift; TS_KEY="$1" ;;
     --ts-api-token) shift; TS_API_TOKEN="$1" ;;
@@ -104,6 +110,39 @@ cleanup_tailscale_nodes() {
   done <<< "$node_ids"
 }
 
+cancel_auto_destroy() {
+  if [[ -f "$AT_JOB_FILE" ]]; then
+    local JOB_ID
+    JOB_ID=$(cat "$AT_JOB_FILE")
+    if [[ -n "$JOB_ID" ]] && atrm "$JOB_ID" 2>/dev/null; then
+      printf "${GREEN}Cancelled scheduled auto-destroy (job %s).${NC}\n" "$JOB_ID"
+    fi
+    rm -f "$AT_JOB_FILE"
+  fi
+}
+
+schedule_auto_destroy() {
+  if ! command -v at &>/dev/null; then
+    printf "${YELLOW}at command not installed — no auto-destroy timer. Remember to destroy manually.${NC}\n"
+    printf "Install with: sudo apt install at\n"
+    return
+  fi
+  local AT_OUTPUT
+  AT_OUTPUT=$(at now + 2 hours 2>&1 <<DESTROY
+"${SCRIPT_DIR}/hetzner-test.sh" --destroy --ts-api-token "${TS_API_TOKEN}" --ts-tailnet "${TS_TAILNET}" > /dev/null 2>&1
+rm -f "${AT_JOB_FILE}"
+DESTROY
+  )
+  local JOB_ID
+  JOB_ID=$(echo "$AT_OUTPUT" | grep -oP 'job \K\d+')
+  local JOB_TIME
+  JOB_TIME=$(echo "$AT_OUTPUT" | grep -oP 'at \K.*')
+  if [[ -n "$JOB_ID" ]]; then
+    echo "$JOB_ID" > "$AT_JOB_FILE"
+    printf "${YELLOW}Auto-destroy scheduled for %s (job %s). Cancel with: atrm %s${NC}\n" "$JOB_TIME" "$JOB_ID" "$JOB_ID"
+  fi
+}
+
 # Check prerequisites
 if ! command -v hcloud &>/dev/null; then
   printf "${RED}hcloud CLI not installed.${NC}\n"
@@ -114,6 +153,7 @@ fi
 
 # Destroy mode
 if [[ "$DESTROY_ONLY" == true ]]; then
+  cancel_auto_destroy
   printf "${YELLOW}Destroying server %s...${NC}\n" "$SERVER_NAME"
   hcloud server delete "$SERVER_NAME" 2>/dev/null || echo "Server not found"
   cleanup_tailscale_nodes
@@ -130,6 +170,40 @@ if [[ -z "$SSH_KEY" ]]; then
 fi
 printf "${GREEN}Using SSH key: %s${NC}\n" "$SSH_KEY"
 
+# Pre-flight: warn about local changes that won't be on the test server.
+# The test VM pulls setup.sh from GitHub and clones the repo from there,
+# so uncommitted or unpushed changes won't be tested.
+if [[ "$RETEST" != true ]]; then
+  WARNINGS=""
+
+  UNCOMMITTED=$(git -C "$REPO_DIR" status --porcelain 2>/dev/null | head -5)
+  if [[ -n "$UNCOMMITTED" ]]; then
+    WARNINGS="${WARNINGS}\n  ${YELLOW}Uncommitted changes:${NC}\n"
+    while IFS= read -r line; do
+      WARNINGS="${WARNINGS}    ${line}\n"
+    done <<< "$UNCOMMITTED"
+    TOTAL=$(git -C "$REPO_DIR" status --porcelain 2>/dev/null | wc -l)
+    if [[ $TOTAL -gt 5 ]]; then
+      WARNINGS="${WARNINGS}    ... and $((TOTAL - 5)) more\n"
+    fi
+  fi
+
+  UNPUSHED=$(git -C "$REPO_DIR" log '@{u}..HEAD' --oneline 2>/dev/null | head -5)
+  if [[ -n "$UNPUSHED" ]]; then
+    WARNINGS="${WARNINGS}\n  ${YELLOW}Unpushed commits:${NC}\n"
+    while IFS= read -r line; do
+      WARNINGS="${WARNINGS}    ${line}\n"
+    done <<< "$UNPUSHED"
+  fi
+
+  if [[ -n "$WARNINGS" ]]; then
+    printf "\n${YELLOW}WARNING: The test VM pulls from GitHub — these local changes won't be tested:${NC}\n"
+    printf "$WARNINGS"
+    printf "\n${YELLOW}Continuing in 10 seconds... (Ctrl+C to abort)${NC}\n\n"
+    sleep 10
+  fi
+fi
+
 # Create or reuse server
 if [[ "$RETEST" == true ]]; then
   IP=$(hcloud server ip "$SERVER_NAME" 2>/dev/null)
@@ -140,6 +214,7 @@ if [[ "$RETEST" == true ]]; then
   printf "${GREEN}Reusing existing server at %s${NC}\n" "$IP"
 else
   # Clean up any existing test server (Hetzner VM + stale Tailscale nodes from prior runs)
+  cancel_auto_destroy
   hcloud server delete "$SERVER_NAME" 2>/dev/null || true
   cleanup_tailscale_nodes
 
@@ -247,6 +322,7 @@ CLOUDINIT
       echo "Server left running for debugging."
       echo "SSH:     ssh root@${IP}"
       echo "Destroy: scripts/hetzner-test.sh --destroy"
+      schedule_auto_destroy
     else
       hcloud server delete "$SERVER_NAME"
     fi
@@ -294,6 +370,49 @@ ssh "ubuntu@${IP}" "docker ps -a 2>&1; echo '---'; docker images 2>&1" > "${LOG_
 ssh "ubuntu@${IP}" "ls -la ~/containers ~/credentials 2>&1" > "${LOG_BUNDLE}/file-state.log" 2>/dev/null || true
 printf "${GREEN}Logs saved to %s${NC}\n" "$LOG_BUNDLE"
 
+# Browse mode: open a SOCKS5 proxy so a remote browser can reach the test tailnet
+if [[ "$BROWSE" == true ]]; then
+  TS_DOMAIN_BROWSE=$(ssh "ubuntu@${IP}" "tailscale status --json 2>/dev/null" \
+    | grep -oP '"MagicDNSSuffix":\s*"\K[^"]+' | head -1)
+
+  if [[ -z "$TS_DOMAIN_BROWSE" ]]; then
+    printf "${YELLOW}Could not detect tailnet domain — skipping browse mode.${NC}\n"
+  else
+    ssh -D 1080 -g -N -f "ubuntu@${IP}"
+    SOCKS_PID=$!
+
+    THIS_HOST=$(hostname)
+    printf "\n${GREEN}══════════════════════════════════════════════════════════════${NC}\n"
+    printf "${GREEN}  SOCKS5 proxy running on ${THIS_HOST}:1080${NC}\n"
+    printf "${GREEN}══════════════════════════════════════════════════════════════${NC}\n"
+    printf "\n  Configure your browser to use this proxy:\n\n"
+    printf "  ${YELLOW}Firefox (recommended — per-browser, no system-wide changes):${NC}\n"
+    printf "    Settings → Network Settings → Manual proxy configuration\n"
+    printf "    SOCKS Host: ${THIS_HOST}    Port: 1080    SOCKS v5\n"
+    printf "    ✓ Check \"Proxy DNS when using SOCKS v5\"\n\n"
+    printf "  ${YELLOW}Chrome (uses system proxy, or launch with flag):${NC}\n"
+    printf "    chrome.exe --proxy-server=\"socks5://${THIS_HOST}:1080\"\n"
+    printf "\n  Available test sites:\n\n"
+    printf "    https://admin.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://console.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://searxng.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://freshrss.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://thelounge.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://nextcloud.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://uptime.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://kanboard.${TS_DOMAIN_BROWSE}\n"
+    printf "    https://paste.${TS_DOMAIN_BROWSE}\n"
+    printf "\n${GREEN}══════════════════════════════════════════════════════════════${NC}\n"
+    printf "  Remember to undo your browser proxy settings when done.\n"
+    printf "${GREEN}══════════════════════════════════════════════════════════════${NC}\n\n"
+
+    read -r -p "Press Enter when done browsing to continue with teardown..."
+    kill "$SOCKS_PID" 2>/dev/null || true
+    wait "$SOCKS_PID" 2>/dev/null || true
+    printf "${GREEN}SOCKS proxy stopped.${NC}\n\n"
+  fi
+fi
+
 # Tear down logic:
 # - --keep:        always keep
 # - --no-keep-if-fails: destroy even on failure
@@ -311,7 +430,11 @@ if [[ "$SHOULD_DESTROY" == false ]]; then
   echo "SSH:     ssh ubuntu@${IP}"
   echo "Setup:   ssh ubuntu@${IP} cat /home/ubuntu/setup.log"
   echo "Destroy: scripts/hetzner-test.sh --destroy"
+  if [[ "$KEEP" != true ]]; then
+    schedule_auto_destroy
+  fi
 else
+  cancel_auto_destroy
   printf "${YELLOW}Destroying server...${NC}\n"
   hcloud server delete "$SERVER_NAME"
   printf "${GREEN}Server destroyed.${NC}\n"

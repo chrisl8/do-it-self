@@ -41,6 +41,7 @@ scripts/hetzner-test.sh --destroy
 | `--no-keep-if-fails`   | Destroy server even if tests fail (default: keep on failure)  |
 | `--destroy`            | Just destroy the test server                                  |
 | `--retest`             | Run tests on existing server                                  |
+| `--browse`             | After tests, open a SOCKS5 proxy for browsing test sites      |
 | `--type cx33`          | Server type (default: cx23)                                   |
 | `--location ash`       | Location (default: nbg1 / Nuremberg, Germany)                 |
 | `--ts-key KEY`         | Tailscale auth key (joins server, enables container startup)  |
@@ -66,6 +67,56 @@ After each run, logs are saved to `/tmp/hetzner-test-logs/hetzner-test-<timestam
 - `file-state.log` -- key directories listing
 
 If a test fails, the server is kept running by default so you can SSH in and investigate. Use `--no-keep-if-fails` to override.
+
+### Auto-destroy timer
+
+When the server is kept after a failure (the default), the script schedules an `at` job to automatically destroy it after 2 hours. This prevents forgotten servers from running up costs. The output includes the job ID and scheduled time:
+
+```
+Auto-destroy scheduled for Sun Apr 13 16:32:00 2026 (job 47). Cancel with: atrm 47
+```
+
+The timer is cancelled automatically when you run `--destroy`, `--retest`, or start a new test. The timer is NOT set when you use `--keep` (explicit keep means you want it to stay).
+
+Requires the `at` command (`sudo apt install at`). If `at` is not installed, the script warns and skips the timer.
+
+## Browsing Test Sites
+
+The test VM runs on a separate test tailnet that your local browser can't reach directly. The `--browse` flag solves this by opening an SSH SOCKS5 proxy on port 1080, allowing a browser on another machine to route traffic through the test VM and access all the test sites.
+
+### Typical setup
+
+The test script runs on a headless Linux server. Your browser is on a separate machine (e.g. Windows laptop) that can reach the Linux server via Tailscale or LAN.
+
+```
+Windows browser  →  SOCKS proxy on Linux server:1080  →  SSH tunnel  →  Hetzner VM  →  test tailnet
+```
+
+### Usage
+
+```bash
+scripts/hetzner-test.sh --ts-key tskey-auth-... --ts-api-token tskey-api-... --browse
+```
+
+After tests complete, the script starts the proxy, prints clickable URLs for all test sites, and waits. Press Enter when you're done browsing to continue with teardown. Combine with `--keep` if you want the server to survive after teardown.
+
+### Browser configuration
+
+**Firefox** (recommended — proxy is per-browser, doesn't affect anything else on your system):
+
+1. Settings → Network Settings → Settings...
+2. Select "Manual proxy configuration"
+3. SOCKS Host: `<your-linux-server-ip>`  Port: `1080`  SOCKS v5
+4. Check **"Proxy DNS when using SOCKS v5"** — this is critical, it makes `*.ts.net` hostnames resolve on the remote end
+5. Click OK
+
+**Chrome** (uses system proxy, or launch a separate instance with a flag):
+
+```
+chrome.exe --proxy-server="socks5://<your-linux-server-ip>:1080"
+```
+
+**Important:** Remember to undo your proxy settings when you're done browsing. Firefox will not route any traffic correctly while the proxy is configured and the tunnel is down.
 
 When you eventually run `--destroy` (or kick off another test run), pass `--ts-api-token` so all Tailscale nodes from that test run are reaped at the same time — both the host and every container sidecar (matched via the `tag:container` tag every sidecar advertises). The next test run also sweeps any leftover test nodes from prior failed runs before provisioning, so they never accumulate.
 
