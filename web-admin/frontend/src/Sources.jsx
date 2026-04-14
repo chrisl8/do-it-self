@@ -8,11 +8,18 @@ import CardActions from "@mui/material/CardActions";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
+import AlertTitle from "@mui/material/AlertTitle";
+import Collapse from "@mui/material/Collapse";
 import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import Link from "@mui/material/Link";
+import IconButton from "@mui/material/IconButton";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import useModules from "./hooks/useModules";
+import useGitStatus from "./hooks/useGitStatus";
 import ModuleOperationDialog from "./ModuleOperationDialog";
 
 function formatDate(iso) {
@@ -105,6 +112,49 @@ function CatalogRow({ name, entry, added, onAdd, busy }) {
   );
 }
 
+function DirtyRepoEntry({ repo, onDevSync, busy }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <Box sx={{ mb: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <IconButton size="small" onClick={() => setExpanded(!expanded)}>
+          {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+        </IconButton>
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          {repo.label}
+        </Typography>
+        <Chip
+          size="small"
+          label={`${repo.changes.length}${repo.truncated ? "+" : ""} file${repo.changes.length === 1 ? "" : "s"}`}
+          variant="outlined"
+        />
+        {repo.isModule && (
+          <Button size="small" variant="outlined" disabled={busy} onClick={() => onDevSync(repo.name)}>
+            Dev-sync
+          </Button>
+        )}
+      </Box>
+      <Collapse in={expanded}>
+        <Box
+          component="pre"
+          sx={{
+            ml: 5,
+            mt: 0.5,
+            mb: 0,
+            fontSize: "0.8rem",
+            fontFamily: "monospace",
+            whiteSpace: "pre-wrap",
+            color: "text.secondary",
+          }}
+        >
+          {repo.changes.map((c, i) => `${c.status.padEnd(3)}${c.file}`).join("\n")}
+          {repo.truncated ? `\n... and ${repo.truncated} more` : ""}
+        </Box>
+      </Collapse>
+    </Box>
+  );
+}
+
 function Sources() {
   const {
     catalog,
@@ -117,6 +167,8 @@ function Sources() {
     updateAllSources,
     regenerateRegistry,
   } = useModules();
+
+  const { dirtyRepos, refresh: refreshGit, devSync } = useGitStatus();
 
   const [dialog, setDialog] = useState({ open: false, title: "", running: false, result: null });
   const [customUrl, setCustomUrl] = useState("");
@@ -157,6 +209,8 @@ function Sources() {
     if (!window.confirm("Regenerate container-registry.yaml from installed modules? Non-module entries are preserved.")) return;
     run("Regenerating registry...", () => regenerateRegistry());
   };
+  const handleDevSync = (moduleName) =>
+    run(`Dev-syncing ${moduleName}...`, () => devSync(moduleName)).then(() => refreshGit());
 
   const installedEntries = useMemo(
     () => Object.entries(installed?.modules || {}).sort(([a], [b]) => a.localeCompare(b)),
@@ -194,6 +248,28 @@ function Sources() {
         a source clones it into <code>.modules/</code>; its containers then
         appear on the Browse page where you can install them individually.
       </Alert>
+
+      {dirtyRepos.length > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <IconButton size="small" onClick={refreshGit} title="Refresh">
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          }
+        >
+          <AlertTitle>Uncommitted Git Changes</AlertTitle>
+          {dirtyRepos.map((repo) => (
+            <DirtyRepoEntry
+              key={repo.name}
+              repo={repo}
+              onDevSync={handleDevSync}
+              busy={dialog.running}
+            />
+          ))}
+        </Alert>
+      )}
 
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
