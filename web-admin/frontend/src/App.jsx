@@ -18,11 +18,11 @@ import Sources from "./Sources";
 import useDockerStatus from "./hooks/useDockerStatus";
 
 const routes = [
-  { path: "/docker-status", label: "Docker Status" },
-  { path: "/container-config", label: "My Containers" },
+  { path: "/docker-status", label: "Dashboard" },
+  { path: "/container-config", label: "Configuration" },
   { path: "/browse", label: "Browse" },
   { path: "/sources", label: "Sources" },
-  { path: "/backup-status", label: "Backup Status" },
+  { path: "/backup-status", label: "Backups" },
 ];
 
 const Navigation = () => {
