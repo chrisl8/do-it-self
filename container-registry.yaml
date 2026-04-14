@@ -62,23 +62,6 @@ containers:
     homepage_group: Tools
     tags: []
     default_disabled: true
-  borgbackup:
-    system_service: true
-    description: Encrypted deduplicating backup (host cron job, not a container)
-    homepage_group: Infrastructure
-    variables:
-      BORG_PASSPHRASE:
-        type: secret
-        required: true
-        description: Encryption passphrase for the local borg repository
-      BORG_REMOTE_PASSPHRASE:
-        type: secret
-        required: false
-        description: Encryption passphrase for the remote (offsite) borg repository
-      BORG_HEALTHCHECK_URL:
-        type: string
-        required: false
-        description: Healthchecks.io ping URL for backup monitoring
   beszel:
     source: do-it-self-containers
     description: Server monitoring dashboard
@@ -1003,7 +986,7 @@ containers:
   recon:
     source: do-it-self-containers
     description: Media acquisition stack (Sonarr, Radarr, SABnzbd, etc.)
-    homepage_group: Downloads
+    homepage_group: Media
     tags: []
     uses_tailscale: true
     start_order: z110
@@ -1158,7 +1141,7 @@ containers:
   seerr:
     source: do-it-self-containers
     description: Media request management for Jellyfin
-    homepage_group: Downloads
+    homepage_group: Media
     tags: []
     uses_tailscale: true
     volumes:
