@@ -304,7 +304,21 @@ if command -v tailscale > /dev/null 2>&1; then
     if [[ "$REACHED" = true ]]; then
       pass "https://admin.${TS_DOMAIN_DETECTED} reachable end-to-end"
     else
-      fail "https://admin.${TS_DOMAIN_DETECTED} did not respond after 60s"
+      # Check if the failure is due to LE rate limiting (not a real
+      # connectivity problem). LE allows max 5 duplicate certificates per
+      # 7 days for the same hostname; repeated test runs exhaust this.
+      LE_RETRY_AFTER=""
+      if docker logs web-admin-ts 2>&1 | grep -q 'rateLimited'; then
+        LE_RETRY_AFTER=$(docker logs web-admin-ts 2>&1 \
+          | grep -oP 'retry after \K\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC' \
+          | tail -1)
+      fi
+      if [[ -n "$LE_RETRY_AFTER" ]]; then
+        LE_HUMAN=$(date -d "$LE_RETRY_AFTER" '+%a %b %-d %-I:%M %p %Z' 2>/dev/null || echo "$LE_RETRY_AFTER")
+        printf "${YELLOW}  WARN: admin not reachable (LE rate limit: max 5 certs per 7 days for the same hostname, retry after ${LE_HUMAN})${NC}\n"
+      else
+        fail "https://admin.${TS_DOMAIN_DETECTED} did not respond after 60s"
+      fi
     fi
   else
     fail "could not detect tailnet domain (is the host on Tailscale?)"

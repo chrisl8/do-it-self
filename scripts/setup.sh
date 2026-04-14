@@ -683,14 +683,31 @@ if [[ -n "${TS_DOMAIN:-}" ]]; then
   if [[ "$REACHED" = true ]]; then
     ok "https://admin.${TS_DOMAIN} is reachable end-to-end"
   else
-    printf "${RED}  FAIL: https://admin.${TS_DOMAIN} did not respond after 60s${NC}\n"
-    printf "${RED}  All four upstream checks above passed, so the failure is somewhere${NC}\n"
-    printf "${RED}  in the tailnet routing layer. Most likely causes:${NC}\n"
-    printf "${RED}    - HTTPS Certificates not enabled in your tailnet (Tailscale admin --> DNS).${NC}\n"
-    printf "${RED}    - First-run cert provisioning still in progress; retry in a minute.${NC}\n"
-    printf "${RED}    - This host isn't actually on the tailnet (run 'tailscale status').${NC}\n"
-    printf "${RED}    - sidecar logs: docker logs web-admin-ts | grep -i 'serve\\|cert'${NC}\n"
-    exit 1
+    # Check if the failure is LE rate limiting rather than a real problem.
+    # LE allows max 5 duplicate certs per 7 days for the same hostname;
+    # repeated test/setup runs exhaust this quickly.
+    LE_RETRY_AFTER=""
+    if docker logs web-admin-ts 2>&1 | grep -q 'rateLimited'; then
+      LE_RETRY_AFTER=$(docker logs web-admin-ts 2>&1 \
+        | grep -oP 'retry after \K\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC' \
+        | tail -1)
+    fi
+    if [[ -n "$LE_RETRY_AFTER" ]]; then
+      LE_HUMAN=$(date -d "$LE_RETRY_AFTER" '+%a %b %-d %-I:%M %p %Z' 2>/dev/null || echo "$LE_RETRY_AFTER")
+      printf "${YELLOW}  ⚠ HTTPS cert rate-limited for admin.${TS_DOMAIN}${NC}\n"
+      printf "${YELLOW}    Let's Encrypt allows max 5 certificates per 7 days for the same hostname.${NC}\n"
+      printf "${YELLOW}    Retry after: ${LE_HUMAN}${NC}\n"
+      printf "${YELLOW}    The web admin sidecar is healthy — HTTPS will work once the limit resets.${NC}\n"
+    else
+      printf "${RED}  FAIL: https://admin.${TS_DOMAIN} did not respond after 60s${NC}\n"
+      printf "${RED}  All four upstream checks above passed, so the failure is somewhere${NC}\n"
+      printf "${RED}  in the tailnet routing layer. Most likely causes:${NC}\n"
+      printf "${RED}    - HTTPS Certificates not enabled in your tailnet (Tailscale admin --> DNS).${NC}\n"
+      printf "${RED}    - First-run cert provisioning still in progress; retry in a minute.${NC}\n"
+      printf "${RED}    - This host isn't actually on the tailnet (run 'tailscale status').${NC}\n"
+      printf "${RED}    - sidecar logs: docker logs web-admin-ts | grep -i 'serve\\|cert'${NC}\n"
+      exit 1
+    fi
   fi
 else
   printf "${YELLOW}  Skipping tailnet probe (TS_DOMAIN not set this run).${NC}\n"
