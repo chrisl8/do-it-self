@@ -84,8 +84,11 @@ Move maintainer-specific notes lower.
 
 These files help AI tools work with the repo but don't help human newcomers. Update after the product is final so they accurately describe the system.
 
---- Other Additions ---
+### 12. Deploy rigor
 
-- Put some rigor around deploying new updates to git once we have a working system that someone else is using.
-- Possibly add some notices in the web admin to let the developer know if there are uncommitted changes in the main or module folders.
+Put some rigor around deploying new updates to git once we have a working system that someone else is using.
+
+--- Other Completed ---
+
+- ~~Possibly add some notices in the web admin to let the developer know if there are uncommitted changes in the main or module folders.~~ **Done.** Sources page shows a warning banner when the platform repo or any module repo has uncommitted changes, with per-repo file lists and a Dev-sync button for modules.
 - Review all code and scripts for issues, run linters, etc. before final "it is done", especially to catch all of those, "this issue was from a previous session"

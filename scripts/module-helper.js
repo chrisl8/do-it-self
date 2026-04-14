@@ -35,7 +35,7 @@ async function dirExists(path) {
 }
 
 function exec(cmd, opts = {}) {
-  return execSync(cmd, { encoding: "utf8", ...opts }).trim();
+  return execSync(cmd, { encoding: "utf8", maxBuffer: 10 * 1024 * 1024, ...opts }).trim();
 }
 
 async function ensureModulesDir() {
@@ -682,7 +682,7 @@ function ask(question) {
 }
 
 function buildSyncExcludes(containerName, registry) {
-  const excludes = [...PRESERVE_ON_UPDATE, "tailscale-state"];
+  const excludes = [...PRESERVE_ON_UPDATE, "tailscale-state", ".git", "node_modules"];
   const containerDef = registry.containers?.[containerName];
   if (containerDef?.git_repos) {
     for (const subdir of Object.keys(containerDef.git_repos)) {

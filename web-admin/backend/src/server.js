@@ -2,9 +2,10 @@ import express from "express";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { spawn } from "child_process";
+import { spawn, execFile } from "child_process";
 import { readFile, writeFile, unlink, chmod, mkdir } from "fs/promises";
-import { unlinkSync } from "fs";
+import { unlinkSync, existsSync } from "fs";
+import { promisify } from "util";
 import http from "http";
 import os from "os";
 import getFormattedDockerContainers from "./dockerStatus.js";
@@ -824,6 +825,52 @@ app.get("/api/modules/available", async (req, res) => {
   }
 });
 
+const execFileAsync = promisify(execFile);
+const MODULES_DIR = join(CONTAINERS_DIR, ".modules");
+const MAX_CHANGES_PER_REPO = 50;
+
+async function getRepoStatus(name, label, repoPath, isModule) {
+  const result = { name, label, isModule, clean: true, changes: [] };
+  try {
+    const { stdout } = await execFileAsync("git", ["status", "--porcelain"], {
+      cwd: repoPath,
+      env: { ...childEnv(), GIT_OPTIONAL_LOCKS: "0" },
+    });
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    result.clean = lines.length === 0;
+    const capped = lines.slice(0, MAX_CHANGES_PER_REPO);
+    result.changes = capped.map((line) => {
+      const match = line.match(/^(.+?)\s+(\S.*)$/);
+      return match
+        ? { status: match[1].trim(), file: match[2] }
+        : { status: "?", file: line.trim() };
+    });
+    if (lines.length > MAX_CHANGES_PER_REPO) {
+      result.truncated = lines.length - MAX_CHANGES_PER_REPO;
+    }
+  } catch (err) {
+    result.error = err.message;
+  }
+  return result;
+}
+
+app.get("/api/git-status", async (req, res) => {
+  try {
+    const repos = [];
+    repos.push(await getRepoStatus("platform", "Platform", CONTAINERS_DIR, false));
+    const installed = await getInstalledModules();
+    for (const moduleName of Object.keys(installed.modules || {})) {
+      const modulePath = join(MODULES_DIR, moduleName);
+      if (!existsSync(modulePath)) continue;
+      repos.push(await getRepoStatus(moduleName, moduleName, modulePath, true));
+    }
+    res.json({ repos });
+  } catch (err) {
+    console.error("Error checking git status:", err);
+    res.status(500).json({ error: "Failed to check git status" });
+  }
+});
+
 // Mutating module operations serialize through a single in-memory lock.
 // Two concurrent installs would race on installed-modules.yaml and
 // container-registry.yaml; the CLI doesn't guard against this either,
@@ -912,6 +959,10 @@ app.post("/api/modules/containers/:name/install", async (req, res) => {
 
 app.delete("/api/modules/containers/:name", async (req, res) => {
   await handleModuleMutation(res, ["uninstall", req.params.name]);
+});
+
+app.post("/api/modules/dev-sync/:name", async (req, res) => {
+  await handleModuleMutation(res, ["dev-sync", req.params.name, "--yes"]);
 });
 
 app.use((req, res, next) => {
