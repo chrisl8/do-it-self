@@ -449,13 +449,28 @@ async function updateModules(args) {
         continue;
       }
 
+      // Restore orphaned preserves from a previous interrupted update
+      // before collecting items to preserve for this run.
+      for (const item of PRESERVE_ON_UPDATE) {
+        const tmpPath = join(CONTAINERS_DIR, `.preserve-${containerName}-${item.replace(/\//g, "-")}`);
+        if (await fileExists(tmpPath)) {
+          const restoreDest = join(targetDir, item);
+          if (await fileExists(restoreDest)) {
+            await cp(tmpPath, restoreDest, { recursive: true, force: true });
+          } else {
+            await rename(tmpPath, restoreDest);
+            continue;
+          }
+          await rm(tmpPath, { recursive: true, force: true });
+        }
+      }
+
       // Collect preserved files/dirs that exist in the target
       const preserved = new Map();
       for (const item of PRESERVE_ON_UPDATE) {
         const itemPath = join(targetDir, item);
         if (await fileExists(itemPath)) {
           const tmpPath = join(CONTAINERS_DIR, `.preserve-${containerName}-${item.replace(/\//g, "-")}`);
-          // Move to temp location
           await rename(itemPath, tmpPath);
           preserved.set(item, tmpPath);
         }
@@ -468,9 +483,16 @@ async function updateModules(args) {
         filter: (src) => !src.includes(".git"),
       });
 
-      // Restore preserved files
+      // Restore preserved files — merge into target if module source
+      // created the same directory (e.g. icons/ with a default file)
       for (const [item, tmpPath] of preserved) {
-        await rename(tmpPath, join(targetDir, item));
+        const restoreDest = join(targetDir, item);
+        if (await fileExists(restoreDest)) {
+          await cp(tmpPath, restoreDest, { recursive: true, force: true });
+          await rm(tmpPath, { recursive: true, force: true });
+        } else {
+          await rename(tmpPath, restoreDest);
+        }
       }
 
       // Update .start-order if specified in module.yaml
