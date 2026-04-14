@@ -673,7 +673,7 @@ if [[ -n "${TS_DOMAIN:-}" ]]; then
   ADMIN_URL="https://admin.${TS_DOMAIN}/api/config/infisical-status"
   printf "${YELLOW}  Probing ${ADMIN_URL} ...${NC}\n"
   REACHED=false
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
     if curl -sf -m 5 -o /dev/null "$ADMIN_URL" 2>/dev/null; then
       REACHED=true
       break

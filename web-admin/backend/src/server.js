@@ -504,7 +504,7 @@ app.post("/api/kopia-check", async (req, res) => {
   kopiaCheckRunning = true;
   console.log("Kopia backup check requested via web admin");
   const scriptPath = join(os.homedir(), "containers/scripts/kopia-backup-check.sh");
-  const child = spawn(scriptPath);
+  const child = spawn(scriptPath, [], { env: childEnv() });
   let output = "";
   child.stdout.on("data", (chunk) => {
     output += chunk.toString();
@@ -530,7 +530,7 @@ app.post("/api/kopia-check", async (req, res) => {
 
 app.get("/api/ups-status", async (req, res) => {
   try {
-    const child = spawn("apcaccess");
+    const child = spawn("apcaccess", [], { env: childEnv() });
     let data = "";
     let error = "";
     child.stdout.on("data", (chunk) => {
@@ -905,6 +905,16 @@ async function refreshDockerStatusAfterModuleOp() {
   }
 }
 
+const SAFE_NAME_RE = /^[a-zA-Z0-9._-]+$/;
+
+function validateName(res, name, label) {
+  if (!name || typeof name !== "string" || !SAFE_NAME_RE.test(name)) {
+    res.status(400).json({ error: `Invalid ${label}: ${name}` });
+    return false;
+  }
+  return true;
+}
+
 async function handleModuleMutation(res, args) {
   if (!acquireModuleLock(res)) return;
   try {
@@ -934,10 +944,12 @@ app.post("/api/modules/sources", async (req, res) => {
 });
 
 app.delete("/api/modules/sources/:name", async (req, res) => {
+  if (!validateName(res, req.params.name, "source name")) return;
   await handleModuleMutation(res, ["remove-source", req.params.name]);
 });
 
 app.post("/api/modules/sources/:name/update", async (req, res) => {
+  if (!validateName(res, req.params.name, "source name")) return;
   await handleModuleMutation(res, ["update", req.params.name]);
 });
 
@@ -950,18 +962,19 @@ app.post("/api/modules/regenerate-registry", async (req, res) => {
 });
 
 app.post("/api/modules/containers/:name/install", async (req, res) => {
+  if (!validateName(res, req.params.name, "container name")) return;
   const moduleName = req.body?.module;
-  if (!moduleName || typeof moduleName !== "string") {
-    return res.status(400).json({ error: "Missing or invalid 'module' in request body" });
-  }
+  if (!validateName(res, moduleName, "module name")) return;
   await handleModuleMutation(res, ["install", moduleName, req.params.name]);
 });
 
 app.delete("/api/modules/containers/:name", async (req, res) => {
+  if (!validateName(res, req.params.name, "container name")) return;
   await handleModuleMutation(res, ["uninstall", req.params.name]);
 });
 
 app.post("/api/modules/dev-sync/:name", async (req, res) => {
+  if (!validateName(res, req.params.name, "module name")) return;
   await handleModuleMutation(res, ["dev-sync", req.params.name, "--yes"]);
 });
 
@@ -1092,7 +1105,12 @@ async function webserver() {
     });
 
     ws.on("message", async (data) => {
-      const message = JSON.parse(data);
+      let message;
+      try {
+        message = JSON.parse(data);
+      } catch {
+        return;
+      }
       if (message.type === "getDockerContainers") {
         try {
           const containers = await getFormattedDockerContainers();
@@ -1170,6 +1188,17 @@ async function webserver() {
         });
         child.stderr.on("data", (data) => {
           output += data.toString();
+        });
+
+        child.on("error", (err) => {
+          activeStacks.delete(stackName);
+          console.error(`Failed to spawn restart for ${stackName}:`, err);
+          updateStatus(`restartStatus.${stackName}`, {
+            status: "failed",
+            operation: "restart",
+            output: "",
+            error: err.message,
+          });
         });
 
         child.on("close", (code) => {
@@ -1273,6 +1302,17 @@ async function webserver() {
           output += data.toString();
         });
 
+        child.on("error", (err) => {
+          activeStacks.delete(stackName);
+          console.error(`Failed to spawn upgrade for ${stackName}:`, err);
+          updateStatus(`restartStatus.${stackName}`, {
+            status: "failed",
+            operation: "upgrade",
+            output: "",
+            error: err.message,
+          });
+        });
+
         child.on("close", (code) => {
           activeStacks.delete(stackName);
           ws.send(
@@ -1360,7 +1400,9 @@ async function webserver() {
             total: queue.length,
           });
 
-          processUpdateQueue();
+          processUpdateQueue().catch((err) =>
+            console.error("[Update All] Unhandled error in queue:", err),
+          );
         } catch (e) {
           console.error("[Update All] Error starting batch update:", e);
           ws.send(
@@ -1448,7 +1490,9 @@ async function webserver() {
             total: queue.length,
           });
 
-          processStartAllQueue();
+          processStartAllQueue().catch((err) =>
+            console.error("[Start All] Unhandled error in queue:", err),
+          );
         } catch (e) {
           console.error("[Start All] Error starting batch:", e);
           ws.send(

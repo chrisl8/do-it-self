@@ -407,40 +407,40 @@ apply_single_mount_permission() {
   
   # Apply chmod if specified
   if [[ -n "$chmod_args" ]]; then
-    local chmod_cmd="chmod"
+    local -a chmod_cmd=(chmod)
     if [[ "$recursive" == "true" ]]; then
-      chmod_cmd="chmod -R"
+      chmod_cmd=(chmod -R)
     fi
-    
+
     printf "  ${YELLOW}chmod $chmod_args $mount_path${NC}"
     if [[ "$recursive" == "true" ]]; then
       printf " (recursive)"
     fi
     printf "\n"
-    
-    if ! $chmod_cmd "$chmod_args" "$mount_path" 2>/dev/null; then
+
+    if ! "${chmod_cmd[@]}" "$chmod_args" "$mount_path" 2>/dev/null; then
       # Retry with sudo — Docker often creates mount subdirs as root
-      if ! sudo $chmod_cmd "$chmod_args" "$mount_path" 2>/dev/null; then
+      if ! sudo "${chmod_cmd[@]}" "$chmod_args" "$mount_path" 2>/dev/null; then
         printf "${RED}WARNING: Failed to set mode $chmod_args on $mount_path, continuing...${NC}\n"
         return 1
       fi
     fi
   fi
-  
+
   # Apply chown if specified
   if [[ -n "$chown_args" ]]; then
-    local chown_cmd="sudo /usr/bin/chown"
+    local -a chown_cmd=(sudo /usr/bin/chown)
     if [[ "$recursive" == "true" ]]; then
-      chown_cmd="sudo /usr/bin/chown -R"
+      chown_cmd=(sudo /usr/bin/chown -R)
     fi
-    
+
     printf "  ${YELLOW}chown $chown_args $mount_path${NC}"
     if [[ "$recursive" == "true" ]]; then
       printf " (recursive)"
     fi
     printf "\n"
-    
-    if ! $chown_cmd "$chown_args" "$mount_path" 2>/dev/null; then
+
+    if ! "${chown_cmd[@]}" "$chown_args" "$mount_path" 2>/dev/null; then
       printf "${RED}WARNING: Failed to set owner $chown_args on $mount_path, continuing...${NC}\n"
       return 1
     fi

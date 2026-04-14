@@ -56,8 +56,7 @@ echo "Performing graceful system $ACTION..."
 # Get the current user dynamically since $USER is not set in cron
 CURRENT_USER=$(whoami)
 
-"/home/$CURRENT_USER/containers/scripts/all-containers.sh" --stop --no-wait --no-health-check
-if [ $? -eq 0 ]; then
+if "/home/$CURRENT_USER/containers/scripts/all-containers.sh" --stop --no-wait --no-health-check; then
   pm2 stop all
   if [[ "$ACTION" == "halt" ]];then
     sudo /usr/sbin/shutdown -h now

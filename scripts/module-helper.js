@@ -11,7 +11,7 @@
 import { readFile, writeFile, access, mkdir, rm, cp, readdir, rename } from "fs/promises";
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import { createInterface } from "readline";
 import YAML from "yaml";
 
@@ -851,8 +851,8 @@ async function devSync(args) {
     if (input) commitMsg = input;
   }
 
-  exec(`git -C "${modulePath}" add -A`);
-  execSync(`git -C "${modulePath}" commit -m "${commitMsg.replace(/"/g, '\\"')}"`, {
+  execFileSync("git", ["-C", modulePath, "add", "-A"], { encoding: "utf8" });
+  execFileSync("git", ["-C", modulePath, "commit", "-m", commitMsg], {
     encoding: "utf8",
     stdio: "inherit",
   });
@@ -866,7 +866,7 @@ async function devSync(args) {
     }
   }
 
-  execSync(`git -C "${modulePath}" push`, { encoding: "utf8", stdio: "inherit" });
+  execFileSync("git", ["-C", modulePath, "push"], { encoding: "utf8", stdio: "inherit" });
   console.log("Pushed.");
 }
 
