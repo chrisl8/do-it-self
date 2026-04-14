@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import DOMPurify from "dompurify";
 import Alert from "@mui/material/Alert";
 import AlertTitle from "@mui/material/AlertTitle";
 import Box from "@mui/material/Box";
@@ -1418,7 +1419,7 @@ const DockerStatus = ({
                     "& a": { color: "primary.main" },
                     "& img": { maxWidth: "100%" },
                   }}
-                  dangerouslySetInnerHTML={{ __html: release.bodyHtml }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(release.bodyHtml) }}
                 />
               ) : (
                 <Box

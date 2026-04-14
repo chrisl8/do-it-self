@@ -185,7 +185,7 @@ resolve_to_absolute() {
     return
   fi
 
-  python3 -c "import os; print(os.path.abspath(os.path.join('$base_dir', '$path')))"
+  realpath -m "$base_dir/$path"
 }
 
 list_local_mounts() {
@@ -251,11 +251,14 @@ resolve_mount_path() {
   # expansion inside parameter-expansion defaults like ${X:-~/foo}.
   raw_path="${raw_path//\~/$HOME}"
 
-  # Now run through eval to perform ${VAR} and ${VAR:-default} expansion.
-  # Quoted to suppress globbing/word-splitting; safe because the input is
-  # from a repo file, not user input.
-  local expanded
-  expanded=$(eval "echo \"$raw_path\"" 2>/dev/null)
+  # Expand ${VAR} and ${VAR:-default} references without eval.
+  local expanded="$raw_path"
+  while [[ "$expanded" =~ \$\{([A-Za-z_][A-Za-z_0-9]*)(:-([^}]*))?\} ]]; do
+    local var_name="${BASH_REMATCH[1]}"
+    local default_val="${BASH_REMATCH[3]}"
+    local replacement="${!var_name:-$default_val}"
+    expanded="${expanded//${BASH_REMATCH[0]}/$replacement}"
+  done
   echo "$expanded"
 }
 

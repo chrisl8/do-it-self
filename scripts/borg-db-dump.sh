@@ -60,8 +60,7 @@ docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM;'
 
 
 if [ -z "${PASTE_MYSQL_ROOT_PASSWORD}" ]; then
-    PASTE_MYSQL_ROOT_PASSWORD="pastefy"
-    echo "  WARNING: Using default paste DB password — set PASTE_MYSQL_ROOT_PASSWORD in Infisical at /paste"
+    echo "  WARNING: PASTE_MYSQL_ROOT_PASSWORD not set — paste DB dump will be skipped. Set it in Infisical at /paste"
 fi
 
 mkdir -p "${BORG_DB_DUMP_DIR}"
@@ -150,7 +149,11 @@ dump_mariadb() {
 echo "Dumping MariaDB databases..."
 dump_mariadb "mariadb" "${MARIADB_ROOT_PASSWORD}"
 dump_mariadb "nextcloud-db" "${NEXTCLOUD_MYSQL_ROOT_PASSWORD}"
-dump_mariadb "paste-db" "${PASTE_MYSQL_ROOT_PASSWORD}"
+if [ -n "${PASTE_MYSQL_ROOT_PASSWORD}" ]; then
+    dump_mariadb "paste-db" "${PASTE_MYSQL_ROOT_PASSWORD}"
+else
+    DUMP_ERRORS=$((DUMP_ERRORS + 1))
+fi
 
 # ── MongoDB containers ────────────────────────────────────────────
 

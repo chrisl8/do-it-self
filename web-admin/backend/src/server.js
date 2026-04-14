@@ -430,6 +430,11 @@ app.put("/api/kopia-ignore-hosts", async (req, res) => {
     res.status(400).json({ error: "Hosts must be an array of non-empty strings" });
     return;
   }
+  const hostnameRe = /^[a-zA-Z0-9._-]+$/;
+  if (hosts.some((h) => !hostnameRe.test(h.trim()))) {
+    res.status(400).json({ error: "Hostnames may only contain letters, numbers, dots, hyphens, and underscores" });
+    return;
+  }
   try {
     const data = await readFile(KOPIA_CONF_FILE, "utf8");
     const bashArray = hosts.length > 0

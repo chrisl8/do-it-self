@@ -402,6 +402,11 @@ containers:
         required: true
         description: Secret for cron job authentication
         auto_generate: true
+      FORMBRICKS_POSTGRES_PASSWORD:
+        type: secret
+        required: true
+        description: PostgreSQL password for the formbricks database
+        auto_generate: true
     volumes:
       data:
         var: VOL_FORMBRICKS_DATA
@@ -887,6 +892,11 @@ containers:
     tags: []
     uses_tailscale: true
     variables:
+      PAPERLESS_POSTGRES_PASSWORD:
+        type: secret
+        required: true
+        description: PostgreSQL password for the paperless database
+        auto_generate: true
       PAPERLESS_SECRET_KEY:
         type: secret
         required: true

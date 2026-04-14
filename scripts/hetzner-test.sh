@@ -93,7 +93,18 @@ cleanup_tailscale_nodes() {
   local node_ids
   node_ids=$(curl -sf -H "Authorization: Bearer ${TS_API_TOKEN}" \
     "https://api.tailscale.com/api/v2/tailnet/${TS_TAILNET}/devices?fields=all" 2>/dev/null \
-    | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);(j.devices||[]).filter(x=>x.hostname==='${SERVER_NAME}'||(x.name||'').startsWith('${SERVER_NAME}.')||(x.tags||[]).includes('tag:container')).forEach(dev=>console.log(dev.id+'\t'+(dev.hostname||dev.name||'?')));}catch(e){}});" 2>/dev/null)
+    | SERVER_NAME="$SERVER_NAME" node -e "
+      let d='';
+      process.stdin.on('data',c=>d+=c);
+      process.stdin.on('end',()=>{
+        try {
+          const sn=process.env.SERVER_NAME;
+          const j=JSON.parse(d);
+          (j.devices||[])
+            .filter(x=>x.hostname===sn||(x.name||'').startsWith(sn+'.')||(x.tags||[]).includes('tag:container'))
+            .forEach(dev=>console.log(dev.id+'\t'+(dev.hostname||dev.name||'?')));
+        } catch(e) {}
+      });" 2>/dev/null)
   if [[ -z "$node_ids" ]]; then
     printf "${GREEN}No stale Tailscale test nodes found.${NC}\n"
     return 0

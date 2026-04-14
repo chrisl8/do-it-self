@@ -12,7 +12,7 @@
 //
 // Usage: node generate-env.js <container-name> [--all] [--validate-only] [--quiet]
 
-import { readFile, writeFile, appendFile, access } from "fs/promises";
+import { readFile, writeFile, appendFile, access, chmod } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
@@ -222,6 +222,7 @@ async function appendInfisicalBootstrapSecrets(envPath, containerName) {
     .filter((line) => line.trim() && !line.trim().startsWith("#"));
   if (lines.length === 0) return;
   await appendFile(envPath, `\n# Infisical internal secrets\n${lines.join("\n")}\n`, "utf8");
+  await chmod(envPath, 0o600);
 }
 
 async function generateForContainer(registry, userConfig, containerName, opts = {}) {
@@ -235,7 +236,7 @@ async function generateForContainer(registry, userConfig, containerName, opts = 
 
   if (!validateOnly) {
     const envPath = join(CONTAINERS_DIR, containerName, ".env");
-    await writeFile(envPath, formatEnvFile(env), "utf8");
+    await writeFile(envPath, formatEnvFile(env), { encoding: "utf8", mode: 0o600 });
     await appendInfisicalBootstrapSecrets(envPath, containerName);
     if (!quiet) console.log(`${containerName}: wrote .env (${Object.keys(env).length} variables)`);
   }
