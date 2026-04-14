@@ -19,6 +19,9 @@ fi
 EXCLUDED_DEVICES_FOR_EMAIL=""
 EXCLUDED_DEVICES_FOR_ERROR_COUNT=""
 
+HEALTH_STATE_DIR="${HOME}/.local/state/containers"
+mkdir -p "$HEALTH_STATE_DIR"
+
 # If you want to exclude some tailscale devices from being checked or flagging things as "down", then add it to a file called `excluded_devices.conf` in this directory
 # with contents that look like this:
 # EXCLUDED_DEVICES_FOR_EMAIL="my-computer1|my-computer2|my-phone"
@@ -75,16 +78,16 @@ if [ -n "$DOCKER_ISSUES" ]; then
 fi
 
 # Check for changes in container count
-if ! [[ -e /tmp/docker-ps-wc-previous.txt ]]; then
-  docker ps -a | wc -l > /tmp/docker-ps-wc-previous.txt
+if ! [[ -e "${HEALTH_STATE_DIR}/docker-ps-wc-previous.txt" ]]; then
+  docker ps -a | wc -l > "${HEALTH_STATE_DIR}/docker-ps-wc-previous.txt"
 fi
-docker ps -a | wc -l > /tmp/docker-ps-wc-now.txt
-if ! diff /tmp/docker-ps-wc-previous.txt /tmp/docker-ps-wc-now.txt > /dev/null; then
-  PREVIOUS_COUNT=$(</tmp/docker-ps-wc-previous.txt)
-  NOW_COUNT=$(</tmp/docker-ps-wc-now.txt)
+docker ps -a | wc -l > "${HEALTH_STATE_DIR}/docker-ps-wc-now.txt"
+if ! diff "${HEALTH_STATE_DIR}/docker-ps-wc-previous.txt" "${HEALTH_STATE_DIR}/docker-ps-wc-now.txt" > /dev/null; then
+  PREVIOUS_COUNT=$(<"${HEALTH_STATE_DIR}/docker-ps-wc-previous.txt")
+  NOW_COUNT=$(<"${HEALTH_STATE_DIR}/docker-ps-wc-now.txt")
   echo "Docker Container count has changed from $PREVIOUS_COUNT to $NOW_COUNT"
   echo ""
-  mv /tmp/docker-ps-wc-now.txt /tmp/docker-ps-wc-previous.txt
+  mv "${HEALTH_STATE_DIR}/docker-ps-wc-now.txt" "${HEALTH_STATE_DIR}/docker-ps-wc-previous.txt"
 fi
 
 # Check Tailscale health

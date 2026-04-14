@@ -37,24 +37,30 @@ Reviewed all 12 `homepage_group` values — names are generic and universal, no 
 
 The generic `config-defaults` handler in `all-containers.sh` now does a `cmp -s` content check before copying: if the destination already matches the source, the copy is skipped entirely, so a container-owned file (e.g. CouchDB's `docker.ini`, UID 5984 in `obsidian-babel-livesync`) no longer trips a `Permission denied` on every restart. When the content genuinely differs and the `cp` fails, the handler prints an explicit yellow warning naming the file and container so the user knows a manual resync is needed — no more silent failure.
 
-## 6. Document and/or automate maintenance tasks
+## ~~6. Document and/or automate maintenance tasks~~ — **Done.**
 
-- Rebooting procedure
-- Patching and rebooting
-- What else needs documenting?
+`docs/MAINTENANCE.md` covers: automated cron jobs (startup, health checks, backup freshness), graceful reboot/halt procedure, OS patching workflow, NVIDIA driver recovery after kernel updates, DIUN-based container image updates, troubleshooting (unhealthy containers, web admin, Tailscale), and optional config files.
 
-## 7. Testing improvements
+## ~~7. Testing improvements~~ — **Done.**
 
-- Add info to TESTING.md about how to add yourself to the test tailnet to fully test
-- Add output to the test that provides clickable links to the testing site
-- ~~Add automated tests to ensure tailnet sites are responding to traffic~~ — **Done.** HTTPS smoke tests added for a subset of containers. Full coverage is blocked by Let's Encrypt's ACME rate limit (10 new account registrations per IP per 3 hours). Each Tailscale sidecar registers its own ACME account, so 9+ sidecars from one VM exhaust the limit. Smoke test failures are reported as warnings, not hard failures. A real fix would require Tailscale to share ACME accounts across sidecars or use a single cert-manager.
-- Add a "pause" option to the Hetzner test so it waits for manual testing before destroying
+`docs/TESTING.md` covers tailnet setup (creating a test tailnet, ACL config, HTTPS certs, auth keys/API tokens). `hetzner-test.sh --browse` opens a SOCKS5 proxy, prints all test site URLs, and waits for Enter before teardown (`--keep` skips destroy entirely). HTTPS smoke tests run against a subset of containers (full coverage blocked by LE ACME rate limit — 10 registrations/IP/3h). `test-fresh-install.sh` exercises the full module-based architecture end-to-end: module install, container enable via web admin API, startup, health checks, and cron side effects.
 
-Test the final module-based architecture end-to-end.
+## ~~8. Security review~~ — **Done.**
 
-## 8. Security review
+Three-pass audit covering shell scripts, web admin (Express/React), and Docker Compose/credential handling. Fixes applied:
 
-Have Claude do a thorough review of the entire codebase for security issues. Should be done after the code is stable and tested, before going public.
+- **Critical:** Bash injection in web admin's kopia-ignore-hosts endpoint (hostname validation added)
+- **High:** All .env files were world-readable (0664); generate-env.js now writes mode 0600, existing files remediated
+- **High:** Hardcoded DB passwords in paperless and formbricks compose files replaced with `${VAR}` references + Infisical integration
+- **High:** `eval` in all-containers.sh mount path expansion replaced with safe bash regex loop
+- **High:** Unquoted variable interpolation in hetzner-test.sh `node -e` fixed (now uses process.env)
+- **High:** Python code injection in resolve_to_absolute replaced with `realpath`
+- **Medium:** Predictable /tmp state files in health check moved to `~/.local/state/containers/`
+- **Medium:** Default password fallback in borg-db-dump.sh removed (now skips dump + increments error count)
+- **Medium:** GitHub release notes HTML sanitized with DOMPurify
+- **Medium:** Kopia `--disable-csrf-token-checks` removed
+
+Dismissed: web admin "no auth" (Unix socket + filesystem permissions IS the auth model), Docker socket mounts for monitoring tools (by-design), root containers (image requirement), 0.0.0.0 port bindings (intentional LAN access). Remaining `eval` calls use standard tool patterns (`fnm env`, `infisical export --format=dotenv-export`).
 
 ---
 
@@ -79,6 +85,7 @@ Move maintainer-specific notes lower.
 These files help AI tools work with the repo but don't help human newcomers. Update after the product is final so they accurately describe the system.
 
 --- Other Additions ---
- - Put some rigor around deploying new updates to git once we have a working system that someone else is using.
- - Possibly add some notices in the web admin to let the developer know if there are uncommited changes in the main or module folders.
- - Review all code and scripts for issues, run linters, etc. before final "it is done", especially to catch all of those, "this issue was from a previouse session"
+
+- Put some rigor around deploying new updates to git once we have a working system that someone else is using.
+- Possibly add some notices in the web admin to let the developer know if there are uncommitted changes in the main or module folders.
+- Review all code and scripts for issues, run linters, etc. before final "it is done", especially to catch all of those, "this issue was from a previous session"
