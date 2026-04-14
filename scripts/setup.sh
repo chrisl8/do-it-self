@@ -322,7 +322,7 @@ if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]] || \
     printf "  2. API token: scroll to 'API access tokens', click 'Generate'\n"
     printf "     (used for preflight checks that catch misconfigurations)\n\n"
     printf "Your tailnet ACL must define tag:container, and HTTPS Certificates\n"
-    printf "must be enabled (DNS → HTTPS Certificates). See docs/TESTING.md.\n\n"
+    printf "must be enabled (DNS → HTTPS Certificates). See docs/TAILSCALE.md.\n\n"
     if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]]; then
       read -r -s -p "Tailscale auth key (input hidden): " TS_AUTHKEY
       echo
@@ -347,7 +347,7 @@ if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]] || \
     printf "  1. Auth key: Reusable=ON, Tags=tag:container\n"
     printf "  2. API token: scroll to 'API access tokens', generate one\n\n"
     printf "Your tailnet ACL must define tag:container, and HTTPS Certificates\n"
-    printf "must be enabled (DNS → HTTPS Certificates). See docs/TESTING.md.\n"
+    printf "must be enabled (DNS → HTTPS Certificates). See docs/TAILSCALE.md.\n"
     printf "\n"
     printf "Then re-run with both in your environment, e.g.:\n"
     printf "  TS_AUTHKEY=tskey-auth-... TS_API_TOKEN=tskey-api-... bash %s\n" "$0"
