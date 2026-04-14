@@ -178,6 +178,86 @@ ln -sf ~/credentials/trilium.env ~/containers/trilium/.env
 docker compose up -d
 ```
 
+## Extracting Individual Files or Directories
+
+Use this when you need to recover specific files (e.g., accidentally deleted icons,
+a config file) without a full service restore.
+
+### 1. Load the passphrase from Infisical
+
+The borg repo is root-owned, so all borg commands need `sudo -E` to preserve
+the passphrase environment variable.
+
+```bash
+source ~/credentials/infisical.env
+export INFISICAL_TOKEN INFISICAL_API_URL
+export BORG_PASSPHRASE=$(infisical secrets get BORG_PASSPHRASE \
+  --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" \
+  --path="/borgbackup" --env=prod --domain="$INFISICAL_API_URL" \
+  --silent --plain)
+```
+
+### 2. Find the right archive
+
+```bash
+sudo -E borg list /mnt/22TB/borg-repo --last 10
+```
+
+### 3. Preview what's in the archive (dry run)
+
+Archive paths are stored WITHOUT a leading `/`. So `/home/chrisl8/containers/`
+becomes `home/chrisl8/containers/`.
+
+```bash
+sudo -E borg extract --dry-run --list /mnt/22TB/borg-repo::ARCHIVE_NAME \
+  home/chrisl8/containers/homepage/icons/
+```
+
+### 4. Extract to a temp directory
+
+Borg extracts relative to the current working directory, recreating the full
+directory structure. Always `cd` to `/tmp` first to avoid overwriting live files.
+
+```bash
+cd /tmp
+sudo -E borg extract /mnt/22TB/borg-repo::ARCHIVE_NAME \
+  home/chrisl8/containers/homepage/icons/
+```
+
+The files are now at `/tmp/home/chrisl8/containers/homepage/icons/`.
+
+### 5. Copy extracted files to their destination
+
+**Important**: The extracted files are root-owned. You must use `sudo` for the
+copy and then fix ownership. Do NOT use shell globs (`*`) with sudo — the glob
+is expanded by your unprivileged shell before sudo runs, and it cannot read
+root-owned directories. Use the `/.` suffix to copy directory contents instead:
+
+```bash
+# Copy contents (the /. avoids needing glob expansion)
+sudo cp -r /tmp/home/chrisl8/containers/homepage/icons/. ~/containers/homepage/icons/
+
+# Fix ownership
+sudo chown $USER:$USER ~/containers/homepage/icons/*
+
+# Clean up
+sudo rm -rf /tmp/home
+```
+
+### Common gotchas
+
+- **`sudo ls dir/*` fails but `sudo ls dir/` works**: Your shell expands `*`
+  before sudo runs. Since the directory is root-owned, the unprivileged shell
+  cannot read it and the glob fails. Always let sudo handle the path directly.
+- **Borg needs sudo**: The backup script runs as root to read all container mount
+  files. The repo is therefore root-owned.
+- **Use `sudo -E`**: The `-E` flag preserves `BORG_PASSPHRASE` in the sudo
+  environment. Without it, borg will prompt for the passphrase interactively.
+- **Extract to /tmp first**: Extracting to `/` would overwrite live files with
+  the backed-up versions. Always extract to a temp location and copy what you need.
+
+---
+
 ## Remote (Offsite) Repo Recovery
 
 Use the offsite repo when the local drive is lost or the entire server is destroyed.
