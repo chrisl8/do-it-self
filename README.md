@@ -164,6 +164,8 @@ For now, I want my personal script `all-containers.sh` to always manage the cont
 
 ## Tailscale
 
+For step-by-step tailnet setup (ACL configuration, HTTPS certificates, key generation), see [docs/TAILSCALE.md](docs/TAILSCALE.md).
+
 ### Credentials
 
 The simple and non-expiring way is to use an OAuth Client, as mentioned here:

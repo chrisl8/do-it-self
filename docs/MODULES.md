@@ -410,6 +410,7 @@ After the module system is implemented:
     ...
   docs/
     MODULES.md                       # this document
+    TAILSCALE.md
     TESTING.md
   module-catalog.yaml                # known module repos
   container-registry.yaml            # GENERATED from installed modules

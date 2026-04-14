@@ -131,81 +131,9 @@ Don't pollute your real Tailscale network with ephemeral test machines. Create a
 1. Create a free Tailscale account at https://tailscale.com using a different SSO provider (e.g. a different Google account) than your production Tailscale account
 2. Free tier supports 100 devices and 3 users -- plenty for testing
 
-### Declare `tag:container` in the tailnet ACL
+### Configure the test tailnet
 
-Every container sidecar in this repo runs `--advertise-tags=tag:container`. A
-brand-new test tailnet has no tags defined, so before you can create an auth
-key with that tag you must first declare it in the access control policy:
-
-1. Go to https://login.tailscale.com/admin/acls/file
-2. Find (or add) the `tagOwners` section and declare `tag:container` with an
-   owner. The minimum diff is:
-   ```json
-   {
-     "tagOwners": {
-       "tag:container": ["autogroup:admin"]
-     }
-   }
-   ```
-   If a `tagOwners` block already exists, just add the `"tag:container"` line
-   to it. `autogroup:admin` means "anyone in the tailnet who can administer
-   it" — for a personal test tailnet, that's you.
-3. Click **Save**
-
-Without this, the next step (generating an auth key with `tag:container`)
-will fail with "tag:container is invalid" and every container sidecar in the
-test will crashloop with `requested tags [tag:container] are invalid or not
-permitted`.
-
-### Enable HTTPS in the tailnet
-
-Container sidecars in this repo use Tailscale Serve to expose each container
-as `https://<name>.<tailnet>.ts.net` (e.g. `console.example.ts.net` for
-homepage). That requires HTTPS certificates, which Tailscale provisions via
-Let's Encrypt — but only after you opt in for the tailnet.
-
-1. Go to https://login.tailscale.com/admin/dns
-2. Scroll to **"HTTPS Certificates"**
-3. Click **"Enable HTTPS"**
-
-Free, takes effect immediately, applied to every node tagged in your tailnet.
-
-Without this, the test VM will join the tailnet successfully and every
-sidecar's `tailscaled` will report:
-
-> serve proxy: this node is configured as a proxy that exposes an HTTPS
-> endpoint to tailnet... but it is not able to issue TLS certs, so this
-> will likely not work. To make it work, ensure that HTTPS is enabled
-> for your tailnet
-
-The container will still show as "running" in the test report (it is — it
-just can't serve HTTPS), but visiting `https://<name>.<tailnet>.ts.net` in
-a browser returns nothing.
-
-### Generate the auth key
-
-1. Go to https://login.tailscale.com/admin/settings/keys (in your test account)
-2. Click "Generate auth key"
-3. Settings:
-   - **Reusable:** ON (lets you use the same key across multiple test runs —
-     all 6 container sidecars need to register with it)
-   - **Ephemeral:** OFF (we want to test the same flow real users do, not the
-     ephemeral one)
-   - **Tags:** check **`tag:container`** — REQUIRED. Every container sidecar
-     advertises this tag and the control plane will reject registration
-     without it. You must have completed the ACL step above first.
-   - **Expiration:** up to 90 days
-4. Copy the key (starts with `tskey-auth-`)
-
-### Generate the API access token
-
-The API token is used by `setup.sh` to run preflight checks that catch common Tailscale misconfigurations (ACL missing `tag:container`, auth key not reusable or expired) before any container starts. It's also used by the web admin's live Tailscale health panel and by `hetzner-test.sh` to clean up test nodes.
-
-1. Go to https://login.tailscale.com/admin/settings/keys (same page)
-2. Scroll down to "API access tokens" and click "Generate access token"
-3. Description: "do-it-self test cleanup" or similar
-4. Expiration: up to 90 days
-5. Copy the token (starts with `tskey-api-`)
+Follow the [Tailscale Setup Guide](TAILSCALE.md#prerequisites) to configure your test tailnet: declare `tag:container` in the ACL, enable HTTPS certificates, and generate an auth key and API token.
 
 ### Run a Tailscale test
 

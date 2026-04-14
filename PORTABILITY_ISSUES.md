@@ -66,9 +66,9 @@ Dismissed: web admin "no auth" (Unix socket + filesystem permissions IS the auth
 
 ## Documentation (DO LAST — write about the final product)
 
-### 9. Tailscale Setup Guide
+### ~~9. Tailscale Setup Guide~~ — **Done.**
 
-40+ services use the Tailscale sidecar pattern. `docs/TESTING.md` covers the prerequisites but is testing-focused, not a general onboarding guide. New users need a step-by-step guide: create a tailnet, configure ACL with `tag:container`, enable HTTPS Certificates, generate auth key (reusable, tagged) and API token. Write alongside the README rewrite.
+`docs/TAILSCALE.md` covers: why Tailscale, step-by-step tailnet configuration (ACL tag, HTTPS certificates, auth key, API token), what setup.sh automates, credential flow from Infisical to containers, networking patterns (links to README), health checks, and troubleshooting table with diagnostic commands. Duplicated setup steps removed from `docs/TESTING.md` (replaced with a link). Cross-references in `setup.sh` and `README.md` updated.
 
 ### 10. README rewrite
 
