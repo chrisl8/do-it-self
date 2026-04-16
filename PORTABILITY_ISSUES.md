@@ -76,9 +76,9 @@ Dismissed: web admin "no auth" (Unix socket + filesystem permissions IS the auth
 
 Also verified the web admin's "Start All Enabled" button (which the Quickstart tells users to click) works end-to-end by adding `scripts/lib/start-all-via-ws.js` — a helper that drives the same WebSocket path the Dashboard tab uses — and wiring it into `scripts/test-fresh-install.sh` in place of the previous direct `all-containers.sh --start` call. Assertion fails if any stack lands in `failed[]`.
 
-### 11. AGENTS.md and CLAUDE.md are developer-facing
+### ~~11. AGENTS.md and CLAUDE.md are developer-facing~~ — **Done.**
 
-These files help AI tools work with the repo but don't help human newcomers. Update after the product is final so they accurately describe the system.
+`AGENTS.md` rewritten to match the current architecture. Previous version referenced deleted scripts (`enable-all-containers.sh` / `disable-all-containers.sh`), claimed `restart: unless-stopped` (actual convention is `on-failure` to avoid cron-startup collisions), pointed at a stale Tailscale state path, and said nothing about the modules system, ephemeral container dirs, `user-config.yaml`, `mount-permissions.yaml`, `.start-order`, or the `VAR=${VAR}` + Infisical credential flow. New version mirrors `CLAUDE.md`'s architecture shape and keeps AGENTS.md's stronger command recipes and code-style specifics. Every file path, script, flag, and `module.sh` subcommand verified against the filesystem. `CLAUDE.md` audited for drift since Apr 11 — `load_secret()` line range, `all-containers.sh` flags, and `module.sh` subcommands all still match, so no edits were needed.
 
 ### 12. Deploy rigor
 
