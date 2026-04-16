@@ -385,14 +385,20 @@ if [[ "$TS_READY" == true ]]; then
     fail "nextcloud auto_generate secrets missing after enable"
   fi
 
-  # Start them all. Nextcloud (MariaDB + Elasticsearch + app + TS sidecar)
-  # adds significant startup time.
-  printf "${YELLOW}  Starting containers (this may take several minutes)...${NC}\n"
+  # Start them all via the web admin's "Start All Enabled" WebSocket path —
+  # the same flow a user triggers from the Dashboard tab. Verifies the
+  # queue processor, status updates, and per-stack failure handling end
+  # to end. Nextcloud (MariaDB + Elasticsearch + app + TS sidecar) adds
+  # significant startup time, so give the helper a generous timeout.
+  printf "${YELLOW}  Starting containers via web admin Start All (this may take several minutes)...${NC}\n"
   cd "${CONTAINERS_DIR}"
-  if scripts/all-containers.sh --start --no-wait --no-health-check > /tmp/start.log 2>&1; then
-    pass "all-containers.sh --start completed"
+  if NODE_PATH="${CONTAINERS_DIR}/web-admin/backend/node_modules" \
+     node "${CONTAINERS_DIR}/scripts/lib/start-all-via-ws.js" \
+     "$WEB_ADMIN_SOCKET" 900 > /tmp/start-all.log 2>&1; then
+    pass "web admin Start All completed with zero failures"
   else
-    fail "all-containers.sh --start failed (see /tmp/start.log)"
+    fail "web admin Start All failed (see /tmp/start-all.log)"
+    cat /tmp/start-all.log || true
   fi
 
   # Wait for all containers to reach healthy/running state. Nextcloud's
