@@ -70,15 +70,11 @@ Dismissed: web admin "no auth" (Unix socket + filesystem permissions IS the auth
 
 `docs/TAILSCALE.md` covers: why Tailscale, step-by-step tailnet configuration (ACL tag, HTTPS certificates, auth key, API token), what setup.sh automates, credential flow from Infisical to containers, networking patterns (links to README), health checks, and troubleshooting table with diagnostic commands. Duplicated setup steps removed from `docs/TESTING.md` (replaced with a link). Cross-references in `setup.sh` and `README.md` updated.
 
-### 10. README rewrite
+### ~~10. README rewrite~~ — **Done.**
 
-The current README still tells users to manually clone, edit mounts, and run `all-containers.sh --start`, with no mention of `setup.sh` or the web admin. The README needs two distinct sections:
+`README.md` rewritten top-to-bottom. New structure: one-paragraph intro with mirror links → **Quickstart** (`curl|bash setup.sh`, then web admin tab walkthrough ending with "Start All Enabled") → **Prerequisites** (points at `docs/TAILSCALE.md` for the heavy details) → **Architecture** (modules + catalog, ephemeral container dirs, three-layer config merge, Tailscale sidecar pattern with ASCII diagram and a trimmed `homepage/compose.yaml` example, networking options, Infisical credential flow) → **Day-2 operations** (link to `docs/MAINTENANCE.md`) → **Testing** (link to `docs/TESTING.md`) → **Contributing** → **Answers to Questions Nobody Asked** (preserved verbatim) → **License**. Dropped ~800 lines of bare-metal host notes (Samba, Postfix, DuckDNS, APC UPS, Rustdesk, SMART, etc.) that were personal install history rather than platform instructions — `setup.sh` covers everything actually required.
 
-1. **How to set this up** — Quickstart: `curl|bash setup.sh` → open web admin → browse available containers → install and enable → Start All Enabled. This is what a new user reads.
-
-2. **How and why this works the way it does** — Architecture overview: the module/catalog system, why container folders are ephemeral, the three-layer config merge, the Tailscale sidecar pattern, how credentials flow through Infisical. This is what someone reads before deciding to trust and adopt the platform, or before contributing.
-
-Move maintainer-specific notes lower.
+Also verified the web admin's "Start All Enabled" button (which the Quickstart tells users to click) works end-to-end by adding `scripts/lib/start-all-via-ws.js` — a helper that drives the same WebSocket path the Dashboard tab uses — and wiring it into `scripts/test-fresh-install.sh` in place of the previous direct `all-containers.sh --start` call. Assertion fails if any stack lands in `failed[]`.
 
 ### 11. AGENTS.md and CLAUDE.md are developer-facing
 
