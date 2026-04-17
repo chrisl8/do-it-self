@@ -15,6 +15,7 @@ import BackupStatus from "./BackupStatus";
 import ContainerConfig from "./ContainerConfig";
 import Browse from "./Browse";
 import Sources from "./Sources";
+import BorgNotConfiguredBanner from "./BorgNotConfiguredBanner";
 import useDockerStatus from "./hooks/useDockerStatus";
 
 const routes = [
@@ -74,6 +75,7 @@ const App = () => {
   return (
     <BrowserRouter>
       <Navigation />
+      <BorgNotConfiguredBanner />
       <Routes>
         <Route path="/" element={<Navigate to="/docker-status" replace />} />
         <Route

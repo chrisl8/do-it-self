@@ -342,6 +342,23 @@ app.get("/api/borg-status", async (req, res) => {
   }
 });
 
+// Signal for the "borg not configured" banner. Presence of borg-backup.conf
+// means the user has run scripts/setup-borg-backup.sh; absence means backups
+// are off and the user should be nudged.
+app.get("/api/system/backup-status", async (req, res) => {
+  const confPath = join(CONTAINERS_DIR, "scripts/borg-backup.conf");
+  let configured = false;
+  try {
+    await readFile(confPath, "utf8");
+    configured = true;
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error("backup-status: unexpected error reading borg conf:", err);
+    }
+  }
+  res.json({ configured });
+});
+
 app.get("/api/kopia-status", async (req, res) => {
   try {
     const statusFile = join(
