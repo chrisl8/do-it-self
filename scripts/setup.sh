@@ -314,7 +314,14 @@ fi
 TS_KEYS_URL="https://login.tailscale.com/admin/settings/keys"
 if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]] || \
    [[ "$TS_API_TOKEN_NEEDED" = true && -z "${TS_API_TOKEN:-}" ]]; then
-  if [[ -t 0 ]]; then
+  # Under `curl -fsSL ... | bash`, stdin is the pipe (not a tty) so `[[ -t 0 ]]`
+  # is false even when the user has a terminal. Probe /dev/tty directly so the
+  # quickstart install can prompt for hidden input.
+  HAS_TTY=false
+  if [[ -t 0 ]] || { : < /dev/tty; } 2>/dev/null; then
+    HAS_TTY=true
+  fi
+  if [[ "$HAS_TTY" = true ]]; then
     printf "\n${YELLOW}Tailscale credentials required.${NC}\n"
     printf "Both are created at: ${TS_KEYS_URL}\n\n"
     printf "  1. Auth key: click 'Generate auth key'\n"
@@ -324,16 +331,16 @@ if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]] || \
     printf "Your tailnet ACL must define tag:container, and HTTPS Certificates\n"
     printf "must be enabled (DNS → HTTPS Certificates). See docs/TAILSCALE.md.\n\n"
     if [[ "$TS_AUTHKEY_NEEDED" = true && -z "${TS_AUTHKEY:-}" ]]; then
-      read -r -s -p "Tailscale auth key (input hidden): " TS_AUTHKEY
-      echo
+      read -r -s -p "Tailscale auth key (input hidden): " TS_AUTHKEY < /dev/tty
+      echo > /dev/tty
       if [[ -z "$TS_AUTHKEY" ]]; then
         printf "${RED}No auth key provided. Aborting.${NC}\n"
         exit 1
       fi
     fi
     if [[ "$TS_API_TOKEN_NEEDED" = true && -z "${TS_API_TOKEN:-}" ]]; then
-      read -r -s -p "Tailscale API token (input hidden): " TS_API_TOKEN
-      echo
+      read -r -s -p "Tailscale API token (input hidden): " TS_API_TOKEN < /dev/tty
+      echo > /dev/tty
       if [[ -z "$TS_API_TOKEN" ]]; then
         printf "${RED}No API token provided. Aborting.${NC}\n"
         exit 1

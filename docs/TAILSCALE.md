@@ -32,6 +32,8 @@ Every container sidecar runs `--advertise-tags=tag:container`. The Tailscale con
 
 ### 3. Enable HTTPS Certificates
 
+> **Most commonly missed step.** HTTPS Certificates live on a different admin-console page (DNS) from the keys page, so it's easy to skip. Every Tailscale sidecar in this platform uses Tailscale Serve, which cannot function without this setting. If you come back to this doc because your services are unreachable after setup, check this first.
+
 Container sidecars use Tailscale Serve to expose each service as `https://<name>.<tailnet>.ts.net`. Tailscale provisions these certificates via Let's Encrypt, but only after you opt in.
 
 1. Go to https://login.tailscale.com/admin/dns
