@@ -14,7 +14,7 @@
 //   4  pre-backup failed — no mutation
 //
 // Usage:
-//   node update-platform.js [--pre-backup] [--yes] [--remote <name>] [--branch <name>]
+//   node update-platform.js [--pre-backup] [--yes] [--ignore-hooks] [--remote <name>] [--branch <name>]
 
 import { readFile, access } from "fs/promises";
 import { join, dirname } from "path";
@@ -77,15 +77,16 @@ function gitSafe(args) {
 }
 
 function parseFlags(argv) {
-  const flags = { preBackup: false, yes: false, remote: "origin", branch: null };
+  const flags = { preBackup: false, yes: false, ignoreHooks: false, remote: "origin", branch: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--pre-backup") flags.preBackup = true;
     else if (a === "--yes" || a === "-y") flags.yes = true;
+    else if (a === "--ignore-hooks") flags.ignoreHooks = true;
     else if (a === "--remote") flags.remote = argv[++i];
     else if (a === "--branch") flags.branch = argv[++i];
     else if (a === "--help" || a === "-h") {
-      console.log("Usage: update-platform.js [--pre-backup] [--yes] [--remote <name>] [--branch <name>]");
+      console.log("Usage: update-platform.js [--pre-backup] [--yes] [--ignore-hooks] [--remote <name>] [--branch <name>]");
       process.exit(0);
     } else {
       console.error(`Unknown flag: ${a}`);
@@ -295,8 +296,19 @@ async function main() {
       if (out.trim()) process.stdout.write(out);
       if (r.status !== 0) hookFailures.push(containerName);
     }
-    if (hookFailures.length === 0) ok(`all hooks ok (${hookContainers.length} container(s))`);
-    else warn(`${hookFailures.length} container(s) had hook failures: ${hookFailures.join(", ")}`);
+    if (hookFailures.length === 0) {
+      ok(`all hooks ok (${hookContainers.length} container(s))`);
+    } else if (flags.ignoreHooks) {
+      warn(`${hookFailures.length} container(s) had hook failures: ${hookFailures.join(", ")} (--ignore-hooks)`);
+    } else {
+      fail(`${hookFailures.length} container(s) had hook failures: ${hookFailures.join(", ")}`);
+      info("");
+      info(`  ${c.bold}System is now at ${NEW_HEAD_SHORT}.${c.reset} Fix the failing hook(s) and re-run:`);
+      for (const n of hookFailures) info(`    node scripts/run-setup-hooks.js ${n}`);
+      info(`  Or re-run with ${c.cyan}--ignore-hooks${c.reset} to downgrade to a warning.`);
+      printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings: [], dirtyModules, validationFailed: false, hookFailed: true });
+      process.exit(3);
+    }
   }
 
   // Step 9: host package advisory (never fails)
@@ -343,7 +355,7 @@ async function main() {
   process.exit(0);
 }
 
-function printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings, dirtyModules, validationFailed }) {
+function printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings, dirtyModules, validationFailed, hookFailed }) {
   section("Summary");
   info(`${OLD_HEAD_SHORT} → ${NEW_HEAD_SHORT}`);
   if (added.length) info(`Added containers: ${added.join(", ")}`);
@@ -354,11 +366,14 @@ function printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphaned
       info(`  Stop with: cd ${name} && docker compose down && scripts/module.sh uninstall ${name}`);
     }
   }
-  if (hookFailures.length) warn(`setup hook failures: ${hookFailures.join(", ")} (will retry next run)`);
+  if (hookFailures.length) {
+    if (hookFailed) fail(`setup hook failures: ${hookFailures.join(", ")}`);
+    else warn(`setup hook failures: ${hookFailures.join(", ")} (ignored via --ignore-hooks)`);
+  }
   if (pkgWarnings.length) warn(`${pkgWarnings.length} container(s) need host packages (see above)`);
   if (dirtyModules.length) warn(`dirty module clones: ${dirtyModules.join(", ")}`);
 
-  if (!validationFailed) {
+  if (!validationFailed && !hookFailed) {
     info("");
     info(`${c.bold}Next step:${c.reset} run ${c.cyan}scripts/all-containers.sh --stop --start${c.reset} (or click "Restart All" in the web admin) to pick up compose changes.`);
   }

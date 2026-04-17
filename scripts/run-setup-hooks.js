@@ -66,6 +66,7 @@ async function main() {
   const completed = state.setup_hooks_completed || [];
 
   let changed = false;
+  let failed = false;
 
   for (const hook of def.setup_hooks) {
     if (completed.includes(hook)) continue;
@@ -89,7 +90,8 @@ async function main() {
       changed = true;
       console.log(`  setup: ${hook} completed`);
     } catch (e) {
-      console.error(`  setup: ${hook} failed (will retry on next start)`);
+      console.error(`  setup: ${hook} failed`);
+      failed = true;
     }
   }
 
@@ -97,6 +99,11 @@ async function main() {
     state.setup_hooks_completed = completed;
     await writeYaml(INSTALLED_MODULES_PATH, installed);
   }
+
+  if (failed) process.exit(1);
 }
 
-main().catch(() => {});
+main().catch((e) => {
+  console.error(e.stack || e.message);
+  process.exit(1);
+});
