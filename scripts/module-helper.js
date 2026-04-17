@@ -438,6 +438,30 @@ async function updateModules(args) {
     for (const containerName of containerList) {
       const sourceDir = join(modulePath, containerName);
       const targetDir = join(CONTAINERS_DIR, containerName);
+      const stagingDir = `${targetDir}.new`;
+      const oldDir = `${targetDir}.old`;
+
+      // Recovery: handle state from a previous interrupted run of this
+      // container. Order matters — restore targetDir first, before any
+      // existence guards or sweeping, so a crash mid-swap self-heals here.
+      if (!(await dirExists(targetDir)) && (await dirExists(oldDir))) {
+        // Crashed between the two renames below. Roll back to the original.
+        await rename(oldDir, targetDir);
+      }
+      if (!(await dirExists(targetDir)) && (await dirExists(stagingDir))) {
+        // Original is gone but staging survives — promote it as last-ditch
+        // recovery. Preserves from before the crash are lost, matching the
+        // pre-refactor worst-case.
+        await rename(stagingDir, targetDir);
+      }
+      // Any remaining staging/old dir is stale debris from a prior crash
+      // and must be removed before we rebuild.
+      if (await dirExists(stagingDir)) {
+        await rm(stagingDir, { recursive: true, force: true });
+      }
+      if (await dirExists(oldDir)) {
+        await rm(oldDir, { recursive: true, force: true });
+      }
 
       if (!(await dirExists(sourceDir))) {
         console.error(`  Warning: ${containerName} no longer exists in module ${name}, skipping.`);
@@ -449,57 +473,37 @@ async function updateModules(args) {
         continue;
       }
 
-      // Restore orphaned preserves from a previous interrupted update
-      // before collecting items to preserve for this run.
-      for (const item of PRESERVE_ON_UPDATE) {
-        const tmpPath = join(CONTAINERS_DIR, `.preserve-${containerName}-${item.replace(/\//g, "-")}`);
-        if (await fileExists(tmpPath)) {
-          const restoreDest = join(targetDir, item);
-          if (await fileExists(restoreDest)) {
-            await cp(tmpPath, restoreDest, { recursive: true, force: true });
-          } else {
-            await rename(tmpPath, restoreDest);
-            continue;
-          }
-          await rm(tmpPath, { recursive: true, force: true });
-        }
-      }
-
-      // Collect preserved files/dirs that exist in the target
-      const preserved = new Map();
-      for (const item of PRESERVE_ON_UPDATE) {
-        const itemPath = join(targetDir, item);
-        if (await fileExists(itemPath)) {
-          const tmpPath = join(CONTAINERS_DIR, `.preserve-${containerName}-${item.replace(/\//g, "-")}`);
-          await rename(itemPath, tmpPath);
-          preserved.set(item, tmpPath);
-        }
-      }
-
-      // Remove old and copy fresh
-      await rm(targetDir, { recursive: true, force: true });
-      await cp(sourceDir, targetDir, {
+      // Copy module source into a staging dir. targetDir remains intact;
+      // a crash before the atomic swap below leaves only stagingDir as
+      // debris, which the recovery block above will sweep on the next run.
+      await cp(sourceDir, stagingDir, {
         recursive: true,
         filter: (src) => !src.includes(".git"),
       });
 
-      // Restore preserved files — merge into target if module source
-      // created the same directory (e.g. icons/ with a default file)
-      for (const [item, tmpPath] of preserved) {
-        const restoreDest = join(targetDir, item);
-        if (await fileExists(restoreDest)) {
-          await cp(tmpPath, restoreDest, { recursive: true, force: true });
-          await rm(tmpPath, { recursive: true, force: true });
-        } else {
-          await rename(tmpPath, restoreDest);
-        }
+      // Copy preserved files from live targetDir into staging. cp (not
+      // rename) keeps the original tree intact so we can abort by simply
+      // rm'ing stagingDir if anything goes wrong. force:true handles the
+      // merge-with-module-default case (e.g. icons/).
+      for (const item of PRESERVE_ON_UPDATE) {
+        const src = join(targetDir, item);
+        if (!(await fileExists(src))) continue;
+        const dst = join(stagingDir, item);
+        await cp(src, dst, { recursive: true, force: true });
       }
 
-      // Update .start-order if specified in module.yaml
+      // Apply .start-order in staging if specified in module.yaml.
       const containerDef = moduleYaml.containers?.[containerName];
       if (containerDef?.start_order) {
-        await writeFile(join(targetDir, ".start-order"), containerDef.start_order + "\n");
+        await writeFile(join(stagingDir, ".start-order"), containerDef.start_order + "\n");
       }
+
+      // Atomic swap. Between these two renames targetDir does not exist
+      // but oldDir does — the recovery block at the top of the next run
+      // restores it. Same-filesystem renames are atomic.
+      await rename(targetDir, oldDir);
+      await rename(stagingDir, targetDir);
+      await rm(oldDir, { recursive: true, force: true });
 
       console.log(`  ${containerName}: updated.`);
     }
