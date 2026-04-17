@@ -15,6 +15,8 @@ import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import Link from "@mui/material/Link";
 import IconButton from "@mui/material/IconButton";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
@@ -112,6 +114,120 @@ function CatalogRow({ name, entry, added, onAdd, busy }) {
   );
 }
 
+function PlatformUpdateBanner({
+  repo,
+  preBackup,
+  onPreBackupChange,
+  onUpdate,
+  onRefresh,
+  busy,
+  fetchingUpstream,
+}) {
+  if (!repo) return null;
+
+  const refreshAction = (
+    <Tooltip title="Check upstream for new commits">
+      <span>
+        <IconButton
+          size="small"
+          onClick={onRefresh}
+          disabled={busy || fetchingUpstream}
+        >
+          <RefreshIcon fontSize="small" />
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+
+  // Unclean: dirty-repos banner already names the files.
+  if (!repo.clean) {
+    return (
+      <Alert severity="warning" sx={{ mb: 2 }} action={refreshAction}>
+        <AlertTitle>Platform has uncommitted changes</AlertTitle>
+        Platform update is disabled until the working tree is clean. Commit or
+        stash the changes listed below.
+      </Alert>
+    );
+  }
+
+  if (repo.ahead > 0) {
+    return (
+      <Alert severity="error" sx={{ mb: 2 }} action={refreshAction}>
+        <AlertTitle>Platform has local commits not upstream</AlertTitle>
+        This updater only fast-forwards; it will not push or merge. Push your
+        commits upstream, or on the CLI run{" "}
+        <code>git reset --hard {repo.upstream || "origin/main"}</code> (discards
+        local commits).
+      </Alert>
+    );
+  }
+
+  if (!repo.upstream) {
+    return (
+      <Alert severity="warning" sx={{ mb: 2 }} action={refreshAction}>
+        <AlertTitle>Platform branch has no upstream</AlertTitle>
+        Set one on the CLI with{" "}
+        <code>
+          git branch --set-upstream-to=origin/{repo.branch || "main"}{" "}
+          {repo.branch || "main"}
+        </code>
+        .
+      </Alert>
+    );
+  }
+
+  if (repo.behind === 0) {
+    // Up to date — tiny affordance to re-check.
+    return (
+      <Alert severity="success" sx={{ mb: 2 }} action={refreshAction}>
+        Platform is up to date
+        {repo.fetchedAt
+          ? ` (checked ${new Date(repo.fetchedAt).toLocaleTimeString()})`
+          : " (using cached state — click refresh to check upstream)"}
+        .
+      </Alert>
+    );
+  }
+
+  return (
+    <Alert severity="info" sx={{ mb: 2 }} action={refreshAction}>
+      <AlertTitle>
+        Platform is {repo.behind} commit{repo.behind === 1 ? "" : "s"} behind
+        upstream
+      </AlertTitle>
+      <Typography variant="body2" sx={{ mb: 1 }}>
+        Fast-forward pull + validation pass. Restart stacks after to pick up
+        compose changes.
+      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+        <Button
+          size="small"
+          variant="contained"
+          onClick={onUpdate}
+          disabled={busy}
+        >
+          Update platform
+        </Button>
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={preBackup}
+              onChange={(e) => onPreBackupChange(e.target.checked)}
+              disabled={busy}
+            />
+          }
+          label={
+            <Typography variant="body2">
+              Run borg backup first (remote-only, skips DB dumps)
+            </Typography>
+          }
+        />
+      </Box>
+    </Alert>
+  );
+}
+
 function DirtyRepoEntry({ repo, onDevSync, busy }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -168,11 +284,20 @@ function Sources() {
     regenerateRegistry,
   } = useModules();
 
-  const { dirtyRepos, refresh: refreshGit, devSync } = useGitStatus();
+  const {
+    dirtyRepos,
+    platformRepo,
+    refresh: refreshGit,
+    refreshWithFetch,
+    devSync,
+    updatePlatform,
+  } = useGitStatus();
 
   const [dialog, setDialog] = useState({ open: false, title: "", running: false, result: null });
   const [customUrl, setCustomUrl] = useState("");
   const [customName, setCustomName] = useState("");
+  const [preBackup, setPreBackup] = useState(false);
+  const [fetchingUpstream, setFetchingUpstream] = useState(false);
 
   const run = async (title, op) => {
     setDialog({ open: true, title, running: true, result: null });
@@ -212,6 +337,23 @@ function Sources() {
   const handleDevSync = (moduleName) =>
     run(`Dev-syncing ${moduleName}...`, () => devSync(moduleName)).then(() => refreshGit());
 
+  const handleCheckPlatformUpdates = async () => {
+    setFetchingUpstream(true);
+    try {
+      await refreshWithFetch();
+    } finally {
+      setFetchingUpstream(false);
+    }
+  };
+
+  const handlePlatformUpdate = async () => {
+    const title = preBackup
+      ? "Updating platform (with pre-backup)..."
+      : "Updating platform...";
+    await run(title, () => updatePlatform({ preBackup }));
+    await refreshGit();
+  };
+
   const installedEntries = useMemo(
     () => Object.entries(installed?.modules || {}).sort(([a], [b]) => a.localeCompare(b)),
     [installed],
@@ -248,6 +390,16 @@ function Sources() {
         a source clones it into <code>.modules/</code>; its containers then
         appear on the Browse page where you can install them individually.
       </Alert>
+
+      <PlatformUpdateBanner
+        repo={platformRepo}
+        preBackup={preBackup}
+        onPreBackupChange={setPreBackup}
+        onUpdate={handlePlatformUpdate}
+        onRefresh={handleCheckPlatformUpdates}
+        busy={dialog.running}
+        fetchingUpstream={fetchingUpstream}
+      />
 
       {dirtyRepos.length > 0 && (
         <Alert
