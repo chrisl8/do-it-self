@@ -51,7 +51,7 @@ That's the whole loop. Your Homepage dashboard populates itself with tiles for e
 - **Storage** — one or more directories where container volumes will live. The default is `~/container-data`; edit `user-config.yaml` or use the web admin's Configuration tab to add more.
 - **Tailscale tailnet** with three things configured:
   1. A `tag:container` in your ACL policy. Containers advertise this tag themselves via `TS_EXTRA_ARGS=--advertise-tags=tag:container`.
-  2. **HTTPS Certificates enabled** at [login.tailscale.com/admin/dns](https://login.tailscale.com/admin/dns). Every sidecar uses Tailscale Serve, which needs a MagicDNS cert.
+  2. **HTTPS Certificates enabled** at [login.tailscale.com/admin/dns](https://login.tailscale.com/admin/dns). Every sidecar uses Tailscale Serve, which needs a MagicDNS cert. **This is the most commonly missed step** — it lives on a different admin-console page from the keys, so it's easy to overlook. See [docs/TAILSCALE.md § Enable HTTPS Certificates](docs/TAILSCALE.md#3-enable-https-certificates).
   3. A **reusable auth key** (`Reusable=ON`, `Tags=tag:container`) and an **API token**, both from [Settings → Keys](https://login.tailscale.com/admin/settings/keys).
 
 Walkthrough with screenshots: [docs/TAILSCALE.md](docs/TAILSCALE.md). That doc is the source of truth for tailnet setup; the Quickstart assumes it's done.
