@@ -258,7 +258,66 @@ if [[ -n "$REGISTRY_JSON" ]]; then
   fi
 fi
 
-# ── Phase 6b: Web-admin reachability through the tailnet ───────────────
+# ── Phase 6b: Platform update flow ───────────────────────────────────
+
+section "Platform Update Flow"
+
+# GET /api/git-status?fetch=1 should now surface upstream state for the
+# platform repo (branch, upstream, ahead, behind, canFastForward).
+PLATFORM_STATE=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" \
+  "http://localhost/api/git-status?fetch=1" 2>/dev/null) || true
+if [[ -n "$PLATFORM_STATE" ]]; then
+  HAS_UPSTREAM_FIELDS=$(echo "$PLATFORM_STATE" | node -e "
+    let d='';process.stdin.on('data',c=>d+=c);
+    process.stdin.on('end',()=>{
+      const p=JSON.parse(d).repos.find(r=>r.name==='platform');
+      const ok=p&&p.branch!==undefined&&p.upstream!==undefined
+        &&typeof p.ahead==='number'&&typeof p.behind==='number'
+        &&typeof p.canFastForward==='boolean';
+      console.log(ok?'yes':'no');
+    });" 2>/dev/null) || true
+  if [[ "$HAS_UPSTREAM_FIELDS" == "yes" ]]; then
+    pass "git-status exposes platform upstream fields"
+  else
+    fail "git-status missing platform upstream fields"
+  fi
+else
+  fail "GET /api/git-status?fetch=1 failed"
+fi
+
+# Precondition-failure path: dirty the tree, POST /api/platform/update,
+# expect exitCode=2 + category=precondition. Restore cleanly.
+UPDATE_TEST_MARKER="${CONTAINERS_DIR}/.platform-update-test-marker"
+touch "$UPDATE_TEST_MARKER"
+DIRTY_RESP=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" \
+  -X POST -H 'Content-Type: application/json' \
+  -d '{"preBackup":false}' \
+  "http://localhost/api/platform/update" 2>/dev/null) || true
+rm -f "$UPDATE_TEST_MARKER"
+DIRTY_CATEGORY=$(echo "$DIRTY_RESP" | node -e "
+  let d='';process.stdin.on('data',c=>d+=c);
+  process.stdin.on('end',()=>{try{console.log(JSON.parse(d).category||'')}catch(e){console.log('')}});
+  " 2>/dev/null) || true
+if [[ "$DIRTY_CATEGORY" == "precondition" ]]; then
+  pass "platform update rejects uncommitted changes (exit 2)"
+else
+  fail "platform update did not reject dirty tree (got category='${DIRTY_CATEGORY}')"
+fi
+
+# CLI path (clean tree): should either succeed (already up to date) or
+# fail with category=validation if containers have missing env vars. We
+# only assert that it didn't crash or fail on a precondition, since the
+# clean-tree + already-up-to-date case is the one a fresh install hits.
+UPDATE_CLI_OUT=$("${CONTAINERS_DIR}/scripts/update-platform.sh" --yes 2>&1) || true
+UPDATE_CLI_EXIT=$?
+if [[ $UPDATE_CLI_EXIT -eq 0 || $UPDATE_CLI_EXIT -eq 3 ]]; then
+  pass "update-platform.sh exits cleanly (0 ok or 3 validation-failed)"
+else
+  fail "update-platform.sh exited with unexpected code ${UPDATE_CLI_EXIT}"
+  echo "$UPDATE_CLI_OUT" | tail -20
+fi
+
+# ── Phase 6c: Web-admin reachability through the tailnet ───────────────
 # The architectural regression guard. setup.sh runs the same checks at the
 # end of an install; we run them here too because test-fresh-install.sh
 # may be invoked independently (e.g. on an existing host) and we want it

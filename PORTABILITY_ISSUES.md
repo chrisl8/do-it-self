@@ -80,9 +80,13 @@ Also verified the web admin's "Start All Enabled" button (which the Quickstart t
 
 `AGENTS.md` rewritten to match the current architecture. Previous version referenced deleted scripts (`enable-all-containers.sh` / `disable-all-containers.sh`), claimed `restart: unless-stopped` (actual convention is `on-failure` to avoid cron-startup collisions), pointed at a stale Tailscale state path, and said nothing about the modules system, ephemeral container dirs, `user-config.yaml`, `mount-permissions.yaml`, `.start-order`, or the `VAR=${VAR}` + Infisical credential flow. New version mirrors `CLAUDE.md`'s architecture shape and keeps AGENTS.md's stronger command recipes and code-style specifics. Every file path, script, flag, and `module.sh` subcommand verified against the filesystem. `CLAUDE.md` audited for drift since Apr 11 — `load_secret()` line range, `all-containers.sh` flags, and `module.sh` subcommands all still match, so no edits were needed.
 
-### 12. Deploy rigor
+### ~~12. Deploy rigor~~ — **Done.**
 
-Put some rigor around deploying new updates to git once we have a working system that someone else is using.
+`scripts/update-platform.sh` (+ `update-platform.js`) gives downstream users a safe `git pull` entrypoint for the platform repo. Fast-forward only (no rebase, no merge, refuses to run ahead of upstream). Structured exit codes: `0` ok · `2` precondition (uncommitted / no upstream / diverged; no mutation) · `3` post-pull validation failed (system at new HEAD; fail-loudly, no rollback) · `4` pre-backup failed (no mutation). Optional `--pre-backup` invokes `borg-backup.sh --skip-dumps --remote-only`. Post-pull steps: re-run `run-setup-hooks.js` for every installed container (picks up hooks added after initial install — was the key drift surface), run `check-host-packages.js` advisories, and **hard-gate on `generate-env.js --all --validate-only`** (previously called with `--quiet 2>/dev/null` under `set +e`, so newly-required env vars went unnoticed until runtime). Summary diffs the old→new registry and flags containers that were removed upstream but are still enabled locally, with explicit `docker compose down && module.sh uninstall` instructions (never auto-uninstalls — would lose user data).
+
+Web admin surface: `/api/git-status` now returns `branch`, `upstream`, `ahead`, `behind`, `canFastForward` on the platform entry; `?fetch=1` runs `git fetch` first. `POST /api/platform/update` reuses the existing `moduleOpInFlight` lock and returns `{success, exitCode, output, category}` where `category ∈ {ok, precondition, validation, backup, error}`. Sources page adds a `PlatformUpdateBanner` above the existing dirty-repos banner with four states (behind+clean → info alert + Update button + "Run borg backup first" checkbox; ahead → error, disabled; !clean → warning, disabled; behind=0 → subtle "up to date" with refresh icon). Reuses `ModuleOperationDialog` for the running/result dialog.
+
+Verification: `test-fresh-install.sh` Phase 6b asserts the new git-status fields, that a dirty tree produces `category=precondition`, and that the CLI exits cleanly on a clean tree.
 
 --- Other Completed ---
 

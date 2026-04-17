@@ -829,6 +829,60 @@ const execFileAsync = promisify(execFile);
 const MODULES_DIR = join(CONTAINERS_DIR, ".modules");
 const MAX_CHANGES_PER_REPO = 50;
 
+async function getUpstreamState(repoPath) {
+  // Returns { branch, upstream, ahead, behind, canFastForward } for a repo,
+  // reading cached refs only. Does not run `git fetch` — caller decides when
+  // to fetch.
+  const env = { ...childEnv(), GIT_OPTIONAL_LOCKS: "0" };
+  const state = {
+    branch: null,
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    canFastForward: false,
+  };
+  try {
+    const { stdout: branchOut } = await execFileAsync(
+      "git", ["rev-parse", "--abbrev-ref", "HEAD"],
+      { cwd: repoPath, env },
+    );
+    state.branch = branchOut.trim();
+    if (!state.branch || state.branch === "HEAD") return state;
+  } catch { return state; }
+  try {
+    const { stdout: upOut } = await execFileAsync(
+      "git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${state.branch}@{u}`],
+      { cwd: repoPath, env },
+    );
+    state.upstream = upOut.trim();
+  } catch {
+    // No upstream configured.
+    return state;
+  }
+  try {
+    const { stdout: countOut } = await execFileAsync(
+      "git", ["rev-list", "--left-right", "--count", `${state.upstream}...HEAD`],
+      { cwd: repoPath, env },
+    );
+    const [behindStr, aheadStr] = countOut.trim().split(/\s+/);
+    state.behind = parseInt(behindStr, 10) || 0;
+    state.ahead = parseInt(aheadStr, 10) || 0;
+    state.canFastForward = state.behind > 0 && state.ahead === 0;
+  } catch { /* leave zeros */ }
+  return state;
+}
+
+async function fetchRemote(repoPath, remote, branch) {
+  await execFileAsync(
+    "git", ["fetch", "--quiet", remote || "origin", branch || "HEAD"],
+    {
+      cwd: repoPath,
+      env: { ...childEnv(), GIT_OPTIONAL_LOCKS: "0" },
+      timeout: 60000,
+    },
+  );
+}
+
 async function getRepoStatus(name, label, repoPath, isModule) {
   const result = { name, label, isModule, clean: true, changes: [] };
   try {
@@ -851,13 +905,33 @@ async function getRepoStatus(name, label, repoPath, isModule) {
   } catch (err) {
     result.error = err.message;
   }
+  // Attach upstream state only for the platform repo — modules have their
+  // own update flow (module.sh update) and keeping this endpoint cheap.
+  if (!isModule) {
+    Object.assign(result, await getUpstreamState(repoPath));
+  }
   return result;
 }
 
 app.get("/api/git-status", async (req, res) => {
   try {
+    const doFetch = req.query.fetch === "1" || req.query.fetch === "true";
+    if (doFetch) {
+      // Best-effort — a fetch failure shouldn't blank the whole response.
+      const branch = (await execFileAsync(
+        "git", ["rev-parse", "--abbrev-ref", "HEAD"],
+        { cwd: CONTAINERS_DIR, env: { ...childEnv(), GIT_OPTIONAL_LOCKS: "0" } },
+      )).stdout.trim();
+      try {
+        await fetchRemote(CONTAINERS_DIR, "origin", branch);
+      } catch (err) {
+        console.warn("git fetch failed for platform:", err.message);
+      }
+    }
     const repos = [];
-    repos.push(await getRepoStatus("platform", "Platform", CONTAINERS_DIR, false));
+    const platformStatus = await getRepoStatus("platform", "Platform", CONTAINERS_DIR, false);
+    if (doFetch) platformStatus.fetchedAt = new Date().toISOString();
+    repos.push(platformStatus);
     const installed = await getInstalledModules();
     for (const moduleName of Object.keys(installed.modules || {})) {
       const modulePath = join(MODULES_DIR, moduleName);
@@ -976,6 +1050,40 @@ app.delete("/api/modules/containers/:name", async (req, res) => {
 app.post("/api/modules/dev-sync/:name", async (req, res) => {
   if (!validateName(res, req.params.name, "module name")) return;
   await handleModuleMutation(res, ["dev-sync", req.params.name, "--yes"]);
+});
+
+// Safe platform repo update. Reuses the module lock because the flow writes
+// to installed-modules.yaml (setup hook completions). Maps structured exit
+// codes from update-platform.js to a category so the UI can pick severity.
+const UPDATE_PLATFORM_SH = join(os.homedir(), "containers/scripts/update-platform.sh");
+function categorizePlatformUpdateExit(code) {
+  if (code === 0) return "ok";
+  if (code === 2) return "precondition";
+  if (code === 3) return "validation";
+  if (code === 4) return "backup";
+  return "error";
+}
+
+app.post("/api/platform/update", async (req, res) => {
+  if (!acquireModuleLock(res)) return;
+  try {
+    const args = ["--yes"];
+    if (req.body?.preBackup) args.push("--pre-backup");
+    const { promise } = spawnTracked(UPDATE_PLATFORM_SH, args, 15 * 60 * 1000);
+    const { exitCode, output } = await promise;
+    await refreshDockerStatusAfterModuleOp();
+    res.json({
+      success: exitCode === 0,
+      exitCode,
+      output,
+      category: categorizePlatformUpdateExit(exitCode),
+    });
+  } catch (err) {
+    console.error("Error running update-platform.sh:", err);
+    res.status(500).json({ success: false, output: err.message, category: "error" });
+  } finally {
+    moduleOpInFlight = false;
+  }
 });
 
 app.use((req, res, next) => {
