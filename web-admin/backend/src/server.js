@@ -26,6 +26,7 @@ import {
   getModuleCatalog,
   getInstalledModules,
   getAvailableContainers,
+  getContainerSources,
 } from "./moduleRegistry.js";
 import {
   isAvailable as isInfisicalAvailable,
@@ -33,6 +34,10 @@ import {
   setContainerSecrets,
   setSharedSecrets,
   listSecrets,
+  getSecret,
+  setSecret,
+  deleteSecret,
+  createFolder,
 } from "./infisicalClient.js";
 
 const fileName = fileURLToPath(import.meta.url);
@@ -620,7 +625,8 @@ app.get("/api/borg-log", async (req, res) => {
 app.get("/api/registry", async (req, res) => {
   try {
     const registry = await getRegistry();
-    res.json(registry);
+    const sources = await getContainerSources();
+    res.json({ ...registry, sources });
   } catch (err) {
     console.error("Error reading registry:", err);
     res.status(500).json({ error: "Failed to read container registry" });
@@ -707,6 +713,74 @@ app.put("/api/config/shared", async (req, res) => {
   } catch (err) {
     console.error("Error saving shared config:", err);
     res.status(500).json({ error: "Failed to save shared config" });
+  }
+});
+
+// Healthcheck URLs for backup-related cron scripts. These secrets live in
+// Infisical but aren't attached to a registered container, so they don't
+// surface in the normal Container Variables editor. Edited on the Backups tab.
+const HEALTHCHECK_SECRETS = {
+  kopia: { path: "/kopia-backup-check", key: "HEALTHCHECK_URL" },
+  borg: { path: "/borgbackup", key: "BORG_HEALTHCHECK_URL" },
+  borgRestore: { path: "/borgbackup", key: "BORG_RESTORE_TEST_HEALTHCHECK_URL" },
+};
+
+app.get("/api/config/backup-healthchecks", async (req, res) => {
+  try {
+    if (!(await isInfisicalAvailable())) {
+      return res.json({ available: false });
+    }
+    const entries = await Promise.all(
+      Object.entries(HEALTHCHECK_SECRETS).map(async ([name, { path, key }]) => [
+        name,
+        await getSecret(key, path),
+      ]),
+    );
+    res.json({ available: true, ...Object.fromEntries(entries) });
+  } catch (err) {
+    console.error("Error loading backup healthcheck URLs:", err);
+    res.status(500).json({ error: "Failed to load healthcheck URLs" });
+  }
+});
+
+app.put("/api/config/backup-healthchecks", async (req, res) => {
+  try {
+    if (!(await isInfisicalAvailable())) {
+      return res.status(503).json({ error: "Infisical is not available" });
+    }
+    for (const [name, value] of Object.entries(req.body)) {
+      if (!(name in HEALTHCHECK_SECRETS)) {
+        return res.status(400).json({ error: `Unknown healthcheck: ${name}` });
+      }
+      if (value && typeof value !== "string") {
+        return res.status(400).json({ error: `Invalid value for ${name}` });
+      }
+      if (value && !/^https?:\/\//.test(value)) {
+        return res.status(400).json({
+          error: `${name} must start with http:// or https://`,
+        });
+      }
+    }
+    for (const [name, value] of Object.entries(req.body)) {
+      const { path, key } = HEALTHCHECK_SECRETS[name];
+      if (value === "" || value === null) {
+        try {
+          await deleteSecret(key, path);
+        } catch (err) {
+          // Swallow "not found" — deleting an absent secret is a no-op
+          if (!/404/.test(err.message)) throw err;
+        }
+      } else if (typeof value === "string") {
+        // Ensure folder exists before writing (idempotent)
+        const folderName = path.replace(/^\//, "");
+        await createFolder(folderName, "/");
+        await setSecret(key, value, path);
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error saving backup healthcheck URLs:", err);
+    res.status(500).json({ error: "Failed to save healthcheck URLs" });
   }
 });
 

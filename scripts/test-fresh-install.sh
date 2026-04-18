@@ -59,6 +59,16 @@ check "repo cloned to ~/containers" test -d "${CONTAINERS_DIR}/scripts"
 check "container-registry.yaml exists" test -f "${CONTAINERS_DIR}/container-registry.yaml"
 check "user-config.yaml created" test -f "${CONTAINERS_DIR}/user-config.yaml"
 
+# Direct regression test for the "update-platform.sh blocked after setup" bug:
+# setup.sh must not mutate any tracked file. Any dirty tracked file here means
+# a downstream user's update-platform.sh will fail its precondition check.
+DIRTY=$(git -C "${CONTAINERS_DIR}" status --porcelain 2>/dev/null | grep -v '^??' || true)
+if [[ -z "$DIRTY" ]]; then
+  pass "no tracked files dirtied by setup.sh (update-platform.sh can run)"
+else
+  fail "setup.sh left tracked files dirty: $(echo "$DIRTY" | tr '\n' ' ')"
+fi
+
 # Verify auto-detected shared variables made it into Infisical. After the
 # shared-vars-consolidation, HOST_NAME and DOCKER_GID live in Infisical at
 # /shared (not in user-config.yaml's `shared:` block, which no longer
@@ -238,15 +248,30 @@ else
   fail "installed-modules.yaml has no tracked containers"
 fi
 
-# Verify registry contains module-system fields (source, cron_jobs, required_accounts)
+# Verify registry contains module-system fields (cron_jobs, required_accounts)
+# and that every installed container has a matching catalog entry.
 REGISTRY_JSON=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/registry 2>/dev/null) || true
+INSTALLED_JSON=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" http://localhost/api/modules/installed 2>/dev/null) || true
 if [[ -n "$REGISTRY_JSON" ]]; then
-  # Every container should have a source field
-  HAS_SOURCE=$(echo "$REGISTRY_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const c=JSON.parse(d).containers||{};const all=Object.values(c).every(v=>v.source);console.log(all?'yes':'no')})" 2>/dev/null) || true
-  if [[ "$HAS_SOURCE" == "yes" ]]; then
-    pass "all registry containers have source field"
+  # Every installed container (from installed-modules.yaml) must have an entry
+  # in the catalog (container-registry.yaml). The registry no longer carries a
+  # per-container `source:` field — that's derived at request time from
+  # installed-modules.yaml and exposed as registry.sources[name].
+  MISSING=$(node -e "
+    const reg=JSON.parse(process.argv[1]);
+    const inst=JSON.parse(process.argv[2]||'{}');
+    const names=[];
+    for (const m of Object.values(inst.modules||{})) {
+      for (const c of (m.installed_containers||[])) names.push(c);
+    }
+    for (const c of (inst.personal_containers||[])) names.push(c);
+    const missing=names.filter(n => !reg.containers?.[n]);
+    console.log(missing.length===0 ? 'none' : missing.join(','));
+  " "$REGISTRY_JSON" "${INSTALLED_JSON:-{\}}" 2>/dev/null) || true
+  if [[ "$MISSING" == "none" ]]; then
+    pass "every installed container has a catalog entry"
   else
-    fail "some registry containers missing source field"
+    fail "installed containers missing from catalog: ${MISSING}"
   fi
 
   # Nextcloud should have cron_jobs

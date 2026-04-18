@@ -50,6 +50,23 @@ export async function getModuleYaml(moduleName) {
   return await readYaml(path, null);
 }
 
+const PLATFORM_CONTAINERS = new Set(["web-admin"]);
+
+// Build a map of { containerName: source } for every installed container.
+// source is the module name, "personal", or "platform". Mirrors the logic in
+// scripts/lib/container-source.js — the registry itself no longer carries
+// the source field, so this is computed at request time from installed-modules.yaml.
+export async function getContainerSources() {
+  const installed = await readYaml(INSTALLED_MODULES_PATH, { modules: {} });
+  const sources = {};
+  for (const name of PLATFORM_CONTAINERS) sources[name] = "platform";
+  for (const [moduleName, entry] of Object.entries(installed.modules || {})) {
+    for (const c of entry?.installed_containers || []) sources[c] = moduleName;
+  }
+  for (const c of installed.personal_containers || []) sources[c] = "personal";
+  return sources;
+}
+
 // Walks each cloned module in .modules/, reads its module.yaml, and returns
 // container entries that exist in the module but are NOT in that module's
 // installed_containers list. Each entry includes the source_module name and

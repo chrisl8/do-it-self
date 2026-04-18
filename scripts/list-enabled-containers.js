@@ -12,11 +12,13 @@
 import { readFile, access } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { installedContainerSet } from "./lib/container-source.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
 const REGISTRY_PATH = join(CONTAINERS_DIR, "container-registry.yaml");
 const USER_CONFIG_PATH = join(CONTAINERS_DIR, "user-config.yaml");
+const INSTALLED_MODULES_PATH = join(CONTAINERS_DIR, "installed-modules.yaml");
 
 // Reuse the minimal YAML parser from generate-env.js
 function parseYaml(text) {
@@ -114,10 +116,18 @@ async function main() {
     userConfig = parseYaml(await readFile(USER_CONFIG_PATH, "utf8")) || { containers: {} };
   }
 
+  let installed = { modules: {} };
+  if (await fileExists(INSTALLED_MODULES_PATH)) {
+    installed = parseYaml(await readFile(INSTALLED_MODULES_PATH, "utf8")) || { modules: {} };
+  }
+  const installedSet = installedContainerSet(installed);
+
   const containers = registry.containers || {};
   const userContainers = userConfig.containers || {};
 
   for (const name of Object.keys(containers).sort()) {
+    // Registry is the full catalog; only emit containers actually installed on this host.
+    if (!installedSet.has(name)) continue;
     const def = containers[name];
     const cc = userContainers[name];
     // Explicit user override wins

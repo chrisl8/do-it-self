@@ -14,6 +14,7 @@ import { fileURLToPath } from "url";
 import { execSync, execFileSync } from "child_process";
 import { createInterface } from "readline";
 import YAML from "yaml";
+import { PLATFORM_CONTAINERS, getContainerSource } from "./lib/container-source.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
@@ -240,9 +241,8 @@ async function installContainer(args) {
 
   // Check target doesn't already exist
   if (await dirExists(targetDir)) {
-    const registry = await readRegistry();
-    const existing = registry.containers?.[containerName];
-    const source = existing?.source || "unknown";
+    const installedCheck = await readInstalledModules();
+    const source = getContainerSource(containerName, installedCheck) || "unknown";
     console.error(`Error: Container "${containerName}" already exists at ${targetDir}`);
     console.error(`  Current source: ${source}`);
     process.exit(1);
@@ -267,20 +267,6 @@ async function installContainer(args) {
   if (containerDef.start_order) {
     await writeFile(join(targetDir, ".start-order"), containerDef.start_order + "\n");
   }
-
-  // Update container-registry.yaml
-  const registry = await readRegistry();
-  registry.containers = registry.containers || {};
-  registry.containers[containerName] = { source: moduleName, ...containerDef };
-
-  // Sort containers alphabetically
-  const sorted = {};
-  for (const key of Object.keys(registry.containers).sort()) {
-    sorted[key] = registry.containers[key];
-  }
-  registry.containers = sorted;
-
-  await writeRegistry(registry);
 
   // Update installed-modules.yaml
   const installed = await readInstalledModules();
@@ -314,23 +300,23 @@ async function uninstallContainer(args) {
   const containerName = args[0];
   const targetDir = join(CONTAINERS_DIR, containerName);
 
-  // Read registry to find source
-  const registry = await readRegistry();
-  const containerDef = registry.containers?.[containerName];
+  // Resolve source from installed-modules.yaml (and the platform allowlist).
+  const installed = await readInstalledModules();
+  const source = getContainerSource(containerName, installed);
 
-  if (!containerDef) {
-    console.error(`Error: Container "${containerName}" not found in container-registry.yaml.`);
+  if (!source) {
+    console.error(`Error: Container "${containerName}" is not tracked in installed-modules.yaml.`);
     process.exit(1);
   }
 
-  if (containerDef.source === "personal" || containerDef.source === "platform") {
-    console.error(`Error: Container "${containerName}" has source: ${containerDef.source}.`);
+  if (source === "personal" || source === "platform") {
+    console.error(`Error: Container "${containerName}" has source: ${source}.`);
     console.error("Only module-sourced containers can be uninstalled via the module system.");
     console.error("Delete the directory manually if you want to remove it.");
     process.exit(1);
   }
 
-  const moduleName = containerDef.source;
+  const moduleName = source;
 
   // Remove cron jobs before deleting the container directory
   const cronHelper = join(__dirname, "manage-cron-jobs.js");
@@ -356,22 +342,15 @@ async function uninstallContainer(args) {
     await rm(targetDir, { recursive: true, force: true });
   }
 
-  // Remove from registry
-  delete registry.containers[containerName];
-  await writeRegistry(registry);
-
   // Update installed-modules.yaml (including setup_hooks state)
-  if (moduleName) {
-    const installed = await readInstalledModules();
-    const moduleEntry = installed.modules[moduleName];
-    if (moduleEntry) {
-      moduleEntry.installed_containers = (moduleEntry.installed_containers || [])
-        .filter((c) => c !== containerName);
-      if (moduleEntry.container_state?.[containerName]) {
-        delete moduleEntry.container_state[containerName];
-      }
-      await writeInstalledModules(installed);
+  const moduleEntry = installed.modules?.[moduleName];
+  if (moduleEntry) {
+    moduleEntry.installed_containers = (moduleEntry.installed_containers || [])
+      .filter((c) => c !== containerName);
+    if (moduleEntry.container_state?.[containerName]) {
+      delete moduleEntry.container_state[containerName];
     }
+    await writeInstalledModules(installed);
   }
 
   console.log(`Container "${containerName}" uninstalled.`);
@@ -508,24 +487,6 @@ async function updateModules(args) {
       console.log(`  ${containerName}: updated.`);
     }
 
-    // Update registry entries for installed containers
-    const registry = await readRegistry();
-    for (const containerName of containerList) {
-      const containerDef = moduleYaml.containers?.[containerName];
-      if (containerDef) {
-        registry.containers[containerName] = { source: name, ...containerDef };
-      }
-    }
-
-    // Sort containers alphabetically
-    const sorted = {};
-    for (const key of Object.keys(registry.containers).sort()) {
-      sorted[key] = registry.containers[key];
-    }
-    registry.containers = sorted;
-
-    await writeRegistry(registry);
-
     // Update tracking
     moduleEntry.commit = newCommit;
     moduleEntry.updated = new Date().toISOString();
@@ -555,10 +516,13 @@ async function listContainers(args) {
     }
 
     // Also include personal and platform containers
-    for (const [name, def] of Object.entries(registry.containers || {})) {
-      if (def.source === "personal" || def.source === "platform") {
-        installedContainers.push({ name, module: def.source, description: def.description || "" });
-      }
+    for (const name of installed.personal_containers || []) {
+      const desc = registry.containers?.[name]?.description || "";
+      installedContainers.push({ name, module: "personal", description: desc });
+    }
+    for (const name of PLATFORM_CONTAINERS) {
+      const desc = registry.containers?.[name]?.description || "";
+      installedContainers.push({ name, module: "platform", description: desc });
     }
 
     installedContainers.sort((a, b) => a.name.localeCompare(b.name));
@@ -586,11 +550,8 @@ async function listContainers(args) {
       }
     }
     // Also count personal and platform containers as installed
-    for (const [name, def] of Object.entries(registry.containers || {})) {
-      if (def.source === "personal" || def.source === "platform") {
-        installedNames.add(name);
-      }
-    }
+    for (const c of installed.personal_containers || []) installedNames.add(c);
+    for (const c of PLATFORM_CONTAINERS) installedNames.add(c);
 
     const availableContainers = [];
     for (const [moduleName, _entry] of Object.entries(installed.modules)) {
@@ -626,37 +587,45 @@ async function listContainers(args) {
   }
 }
 
+// Maintainer-side tool. Rebuilds container-registry.yaml as a union of every
+// container schema declared in any cloned .modules/*/module.yaml, plus any
+// platform-container entries that were already in the registry (those are
+// not module-sourced and have to persist). Preserves shared_variables.
+//
+// Downstream users do NOT run this. It exists so the platform maintainer can
+// refresh the committed catalog after module repos change.
 async function regenerateRegistry() {
-  const installed = await readInstalledModules();
   const registry = await readRegistry();
 
-  // Preserve shared_variables and personal containers
   const newRegistry = {
     shared_variables: registry.shared_variables || {},
     containers: {},
   };
 
-  // Keep personal and platform containers
-  for (const [name, def] of Object.entries(registry.containers || {})) {
-    if (def.source === "personal" || def.source === "platform") {
-      newRegistry.containers[name] = def;
+  // Preserve platform containers verbatim from the existing registry.
+  for (const name of PLATFORM_CONTAINERS) {
+    const existing = registry.containers?.[name];
+    if (existing) {
+      // Drop any stale `source:` field from the legacy format.
+      const { source: _drop, ...rest } = existing;
+      newRegistry.containers[name] = rest;
     }
   }
 
-  // Merge module containers
-  for (const [moduleName, entry] of Object.entries(installed.modules)) {
+  // Iterate EVERY cloned module, not just installed ones.
+  const moduleNames = (await readdir(MODULES_DIR).catch(() => []))
+    .filter((n) => !n.startsWith("."));
+
+  let moduleCount = 0;
+  for (const moduleName of moduleNames) {
     const modulePath = join(MODULES_DIR, moduleName);
     if (!(await dirExists(modulePath))) continue;
-
     const moduleYaml = await readYaml(join(modulePath, "module.yaml"));
-    if (!moduleYaml) continue;
-
-    // Add installed containers from this module
-    for (const containerName of entry.installed_containers || []) {
-      const containerDef = moduleYaml.containers?.[containerName];
-      if (containerDef) {
-        newRegistry.containers[containerName] = { source: moduleName, ...containerDef };
-      }
+    if (!moduleYaml?.containers) continue;
+    moduleCount++;
+    for (const [containerName, def] of Object.entries(moduleYaml.containers)) {
+      // Overwrite any earlier entry; last-module-wins for duplicates.
+      newRegistry.containers[containerName] = { ...def };
     }
   }
 
@@ -669,8 +638,8 @@ async function regenerateRegistry() {
 
   await writeRegistry(newRegistry);
   const total = Object.keys(newRegistry.containers).length;
-  const personal = Object.values(newRegistry.containers).filter((d) => d.source === "personal").length;
-  console.log(`Registry regenerated: ${total} containers (${personal} personal, ${total - personal} from modules).`);
+  console.log(`Registry rebuilt from module catalogs: ${total} containers from ${moduleCount} modules.`);
+  console.log("This is a maintainer-side tool; commit the result to the platform repo.");
 }
 
 // --- Dev-sync ---
@@ -790,11 +759,12 @@ async function devSync(args) {
         console.error(`Error: "${arg}" is not a known module or container name.`);
         process.exit(1);
       }
-      if (!containerDef.source || containerDef.source === "personal" || containerDef.source === "platform") {
-        console.error(`Error: Container "${arg}" is not from a module (source: ${containerDef.source || "unknown"}). dev-sync only works with module-sourced containers.`);
+      const source = getContainerSource(arg, installed);
+      if (!source || source === "personal" || source === "platform") {
+        console.error(`Error: Container "${arg}" is not from a module (source: ${source || "unknown"}). dev-sync only works with module-sourced containers.`);
         process.exit(1);
       }
-      moduleName = containerDef.source;
+      moduleName = source;
       containerNames = [arg];
     }
   }
