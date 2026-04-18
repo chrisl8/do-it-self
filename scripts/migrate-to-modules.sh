@@ -131,11 +131,9 @@ for (const name of Object.keys(meta.containers || {})) {
     done <<< "${CONTAINER_NAMES}"
   done
 
-  # Rebuild the registry from only what's actually installed. The committed
-  # registry may have entries for modules that failed to clone (e.g. private
-  # repos without credentials), so regenerating drops orphaned entries.
-  step "Regenerating registry from installed containers"
-  run_node "${SCRIPT_DIR}/module-helper.js" regenerate-registry 2>/dev/null || true
+  # The committed container-registry.yaml already ships as the full catalog,
+  # and install paths no longer mutate it, so no regeneration step is needed
+  # here. Installed state is tracked in installed-modules.yaml.
 
   ok "All module containers installed"
   exit 0
@@ -151,9 +149,8 @@ import { execSync } from "child_process";
 import YAML from "yaml";
 
 const modulesDir = process.argv[1];
-const registryPath = process.argv[2];
-const installedPath = process.argv[3];
-const existingContainers = process.argv.slice(4);
+const installedPath = process.argv[2];
+const existingContainers = process.argv.slice(3);
 
 // Load all module.yaml files to build a container->module map
 const containerToModule = new Map();
@@ -183,22 +180,17 @@ for (const name of readdirSync(modulesDir)) {
 
 // Match existing containers to modules
 let matched = 0, personal = 0;
-const registry = YAML.parse(readFileSync(registryPath, "utf8"));
+const personalContainers = [];
 
 for (const containerName of existingContainers) {
   const moduleName = containerToModule.get(containerName);
   if (moduleName && modules[moduleName]) {
     // Container found in a module — record as installed from that module
     modules[moduleName].installed_containers.push(containerName);
-    if (registry.containers?.[containerName]) {
-      registry.containers[containerName].source = moduleName;
-    }
     matched++;
   } else {
-    // Container not found in any module — mark as personal
-    if (registry.containers?.[containerName]) {
-      registry.containers[containerName].source = "personal";
-    }
+    // Container not found in any module — record as personal
+    personalContainers.push(containerName);
     personal++;
   }
 }
@@ -207,11 +199,14 @@ for (const containerName of existingContainers) {
 for (const mod of Object.values(modules)) {
   mod.installed_containers.sort();
 }
+personalContainers.sort();
 
-writeFileSync(installedPath, YAML.stringify({ modules }, { lineWidth: 0 }));
-writeFileSync(registryPath, YAML.stringify(registry, { lineWidth: 0 }));
+writeFileSync(installedPath, YAML.stringify({
+  modules,
+  personal_containers: personalContainers,
+}, { lineWidth: 0 }));
 
 console.log(`Matched ${matched} containers to modules, ${personal} marked as personal`);
-' "${MODULES_DIR}" "${CONTAINERS_DIR}/container-registry.yaml" "${INSTALLED_MODULES}" "${EXISTING_CONTAINERS[@]}" 2>/dev/null
+' "${MODULES_DIR}" "${INSTALLED_MODULES}" "${EXISTING_CONTAINERS[@]}" 2>/dev/null
 
 ok "Migration complete — ${#EXISTING_CONTAINERS[*]} containers recorded"

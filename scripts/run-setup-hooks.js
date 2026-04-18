@@ -12,6 +12,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
 import YAML from "yaml";
+import { getContainerSource } from "./lib/container-source.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
@@ -47,12 +48,12 @@ async function main() {
   const def = registry.containers?.[containerName];
   if (!def?.setup_hooks?.length) return;
 
-  const moduleName = def.source;
+  const installed = (await readYaml(INSTALLED_MODULES_PATH)) || {};
+  const moduleName = getContainerSource(containerName, installed);
   if (!moduleName || moduleName === "personal" || moduleName === "platform") {
     return;
   }
 
-  const installed = (await readYaml(INSTALLED_MODULES_PATH)) || {};
   const moduleEntry = installed.modules?.[moduleName];
   if (!moduleEntry) return;
 

@@ -20,7 +20,6 @@ shared_variables:
     default: "985"
 containers:
   actual-budget:
-    source: do-it-self-containers
     description: Privacy-focused personal budgeting app
     homepage_group: Finance
     tags: []
@@ -32,7 +31,6 @@ containers:
         container_path: /data
     default_disabled: true
   actual-budget-api:
-    source: do-it-self-containers
     description: Actual Budget API server
     homepage_group: Finance
     tags: []
@@ -57,13 +55,11 @@ containers:
         container_path: /data
     default_disabled: true
   adminer:
-    source: do-it-self-containers
     description: Lightweight database management web UI
     homepage_group: Tools
     tags: []
     default_disabled: true
   beszel:
-    source: do-it-self-containers
     description: Server monitoring dashboard
     homepage_group: System Monitoring
     tags: []
@@ -94,7 +90,6 @@ containers:
         container_path: /beszel_data
     default_disabled: true
   borgitory:
-    source: do-it-self-containers
     description: Web UI for browsing BorgBackup repositories
     homepage_group: Tools
     tags: []
@@ -110,7 +105,6 @@ containers:
         container_path: /mnt/repos/local
     default_disabled: true
   caddy:
-    source: do-it-self-personal
     description: Reverse proxy and web server with automatic HTTPS
     homepage_group: Infrastructure
     tags: []
@@ -168,7 +162,6 @@ containers:
         container_path: /var/log/caddy
     default_disabled: true
   changedetection:
-    source: do-it-self-containers
     description: Website change detection and notification
     homepage_group: Reading
     tags: []
@@ -185,7 +178,6 @@ containers:
         container_path: /datastore
     default_disabled: true
   cloudflared:
-    source: do-it-self-containers
     description: Cloudflare Tunnel for external access without port forwarding
     homepage_group: Infrastructure
     tags: []
@@ -208,7 +200,6 @@ containers:
         container_path: /home/nonroot/.cloudflared
     default_disabled: true
   code:
-    source: do-it-self-containers
     description: VS Code Server in the browser
     homepage_group: Development
     tags: []
@@ -220,7 +211,6 @@ containers:
         container_path: /home/coder
     default_disabled: true
   crater-manipulator:
-    source: do-it-self-personal
     description: Crater Manipulator game server component
     homepage_group: Personal Projects
     tags: []
@@ -232,7 +222,6 @@ containers:
         container_path: /crater-manipulator
     default_disabled: true
   dawarich:
-    source: do-it-self-containers
     description: Self-hosted location history and tracking
     homepage_group: Productivity
     tags: []
@@ -284,7 +273,6 @@ containers:
         container_path: /var/app/storage
     default_disabled: true
   diun:
-    source: do-it-self-containers
     description: Docker Image Update Notifier
     homepage_group: System Monitoring
     tags: []
@@ -300,7 +288,6 @@ containers:
         container_path: /script
     default_disabled: true
   factorio:
-    source: do-it-self-containers
     description: Factorio dedicated game server
     homepage_group: Gaming
     tags: []
@@ -328,7 +315,6 @@ containers:
         container_path: /factorio
     default_disabled: true
   filez:
-    source: do-it-self-containers
     description: Simple file browser and manager
     homepage_group: Productivity
     tags: []
@@ -344,7 +330,6 @@ containers:
         container_path: /data/downloads
     default_disabled: true
   forgejo:
-    source: do-it-self-containers
     description: Self-hosted Git forge (Gitea fork)
     homepage_group: Development
     tags: []
@@ -357,7 +342,6 @@ containers:
         container_path: /data
     default_disabled: true
   formbricks:
-    source: do-it-self-containers
     description: Open-source survey and feedback platform
     homepage_group: Tools
     tags: []
@@ -405,7 +389,6 @@ containers:
         container_path: /home/nextjs/apps/web/saml-connection
     default_disabled: true
   freshrss:
-    source: do-it-self-containers
     description: Self-hosted RSS feed reader
     homepage_group: Reading
     tags: []
@@ -430,7 +413,6 @@ containers:
         container_path: /var/www/FreshRSS/extensions
     default_disabled: true
   geomyidae:
-    source: do-it-self-personal
     description: Gopher protocol server
     homepage_group: Personal Projects
     tags: []
@@ -442,7 +424,6 @@ containers:
         container_path: /geomyidae
     default_disabled: true
   homarr:
-    source: do-it-self-containers
     description: Customizable dashboard for self-hosted services
     homepage_group: Tools
     tags: []
@@ -468,7 +449,6 @@ containers:
         container_path: /appdata
     default_disabled: true
   homepage:
-    source: do-it-self-containers
     description: Application dashboard with service widgets
     homepage_group: Infrastructure
     tags: []
@@ -481,7 +461,6 @@ containers:
         url: https://github.com/homarr-labs/dashboard-icons.git
         shallow: true
   immich:
-    source: do-it-self-containers
     description: Self-hosted photo and video backup
     homepage_group: Media
     tags: []
@@ -508,7 +487,6 @@ containers:
         container_path: /var/lib/postgresql/data
     default_disabled: true
   infisical:
-    source: do-it-self-containers
     description: Self-hosted secret manager for credential injection
     homepage_group: Infrastructure
     tags: []
@@ -524,7 +502,6 @@ containers:
         host_subpath: container-mounts/infisical/redis
         container_path: /data
   jellyfin:
-    source: do-it-self-containers
     description: Media server for movies, TV, music, and audiobooks
     homepage_group: Media
     tags: []
@@ -570,7 +547,6 @@ containers:
         container_path: /media/recon
     default_disabled: true
   kanboard:
-    source: do-it-self-containers
     description: Kanban project management board
     homepage_group: Tools
     tags: []
@@ -590,7 +566,6 @@ containers:
         container_path: /etc/nginx/ssl
     default_disabled: true
   karakeep:
-    source: do-it-self-containers
     description: Bookmark and read-it-later manager
     homepage_group: Reading
     tags: []
@@ -626,7 +601,6 @@ containers:
         container_path: /meili_data
     default_disabled: true
   kopia:
-    source: do-it-self-containers
     description: Backup repository server with web UI
     homepage_group: Infrastructure
     tags: []
@@ -674,8 +648,31 @@ containers:
         host_subpath: container-mounts/kopia/tmp
         container_path: /tmp:shared
     default_disabled: true
+  mame:
+    description: MAME arcade emulator in the browser
+    homepage_group: Gaming
+    tags: []
+    uses_tailscale: true
+    requires_gpu: true
+    default_disabled: true
+    volumes:
+      config:
+        var: VOL_MAME_CONFIG
+        host_subpath: container-mounts/mame/config
+        container_path: /config
+      extras:
+        var: VOL_MAME_EXTRAS
+        host_subpath: container-mounts/secure-webtop/downloads/mame/MAME 0.276 EXTRAs
+        container_path: /mame
+      roms:
+        var: VOL_MAME_ROMS
+        host_subpath: container-mounts/secure-webtop/downloads/mame/MAME 0.279 ROMs (merged)
+        container_path: /mame/roms
+      chds:
+        var: VOL_MAME_CHDS
+        host_subpath: container-mounts/secure-webtop/downloads/mame/MAME 0.279 CHDs (merged)
+        container_path: /mame/chds
   mariadb:
-    source: do-it-self-containers
     description: Shared MariaDB database server
     homepage_group: Infrastructure
     tags: []
@@ -692,8 +689,27 @@ containers:
         host_subpath: container-mounts/mariadb/db
         container_path: /var/lib/mysql
     default_disabled: true
+  meshtastic:
+    description: Meshtastic mesh networking web client
+    homepage_group: Communication
+    tags: []
+    start_order: "031"
+    default_disabled: true
+    variables:
+      MESHTASTIC_DB_USER:
+        type: string
+        required: true
+        description: Database username
+      MESHTASTIC_DB_PASSWORD:
+        type: secret
+        required: true
+        description: Database password
+        auto_generate: true
+      ADMIN_PASSWORD:
+        type: secret
+        required: true
+        description: Admin panel password
   minecraft:
-    source: do-it-self-containers
     description: Minecraft Bedrock Edition dedicated server
     homepage_group: Gaming
     tags: []
@@ -708,7 +724,6 @@ containers:
         container_path: /data
     default_disabled: true
   netdata:
-    source: do-it-self-containers
     description: Real-time server performance monitoring
     homepage_group: System Monitoring
     tags: []
@@ -730,7 +745,6 @@ containers:
         container_path: /var/cache/netdata
     default_disabled: true
   nextcloud:
-    source: do-it-self-containers
     description: Self-hosted cloud storage, calendar, and contacts
     homepage_group: Productivity
     tags: []
@@ -794,8 +808,20 @@ containers:
       - schedule: "*/5 * * * *"
         script: nextcloud-cron-job.sh
         description: Nextcloud background jobs
+  nextcloud-whiteboard:
+    description: Collaborative whiteboard for Nextcloud
+    homepage_group: Productivity
+    tags: []
+    uses_tailscale: true
+    start_order: "012"
+    default_disabled: true
+    variables:
+      WHITEBOARD_JWT_SECRET_KEY:
+        type: secret
+        required: true
+        description: JWT secret for whiteboard authentication
+        auto_generate: true
   obsidian:
-    source: do-it-self-containers
     description: Obsidian note-taking app in the browser via KasmVNC
     homepage_group: Desktop Apps
     tags: []
@@ -808,7 +834,6 @@ containers:
         container_path: /config
     default_disabled: true
   obsidian-babel-livesync:
-    source: do-it-self-containers
     description: CouchDB sync server for Obsidian LiveSync plugin
     homepage_group: Productivity
     tags: []
@@ -830,7 +855,6 @@ containers:
         container_path: /opt/couchdb/data
     default_disabled: true
   onlyoffice:
-    source: do-it-self-containers
     description: Online office suite for document editing
     homepage_group: Productivity
     tags: []
@@ -869,7 +893,6 @@ containers:
         container_path: /var/lib/postgresql/data
     default_disabled: true
   paperless:
-    source: do-it-self-containers
     description: Document management system with OCR
     homepage_group: Productivity
     tags: []
@@ -912,7 +935,6 @@ containers:
         container_path: /var/lib/postgresql/data
     default_disabled: true
   paste:
-    source: do-it-self-containers
     description: Self-hosted pastebin and code sharing
     homepage_group: Tools
     tags: []
@@ -934,8 +956,21 @@ containers:
         host_subpath: container-mounts/paste/data
         container_path: /var/lib/mysql
     default_disabled: true
+  pihole:
+    description: Network-wide ad blocking via DNS
+    homepage_group: Infrastructure
+    tags: []
+    default_disabled: true
+    volumes:
+      etc:
+        var: VOL_PIHOLE_ETC
+        host_subpath: container-mounts/pihole/etc
+        container_path: /etc/pihole
+      dnsmasq:
+        var: VOL_PIHOLE_DNSMASQ
+        host_subpath: container-mounts/pihole/dnsmasq
+        container_path: /etc/dnsmasq.d
   portainer:
-    source: do-it-self-containers
     description: Docker container management web UI
     homepage_group: System Monitoring
     tags: []
@@ -948,7 +983,6 @@ containers:
         container_path: /data
     default_disabled: true
   pure-ftpd:
-    source: do-it-self-containers
     description: FTP server for scanner file uploads
     homepage_group: Infrastructure
     tags: []
@@ -972,7 +1006,6 @@ containers:
         container_path: /etc/ssl/private
     default_disabled: true
   quicken:
-    source: do-it-self-personal
     description: Quicken Classic web companion
     homepage_group: Finance
     tags: []
@@ -984,7 +1017,6 @@ containers:
         container_path: /data
     default_disabled: true
   recon:
-    source: do-it-self-containers
     description: Media acquisition stack (Sonarr, Radarr, SABnzbd, etc.)
     homepage_group: Media
     tags: []
@@ -1083,8 +1115,34 @@ containers:
         host_subpath: container-mounts/recon/sabnzbd/config
         container_path: /config
     default_disabled: true
+  retroarch:
+    description: RetroArch game emulator in the browser
+    homepage_group: Gaming
+    tags: []
+    uses_tailscale: true
+    requires_gpu: true
+    default_disabled: true
+    volumes:
+      config:
+        var: VOL_RETROARCH_CONFIG
+        host_subpath: container-mounts/retroarch/config
+        container_path: /config
+      secure_webtop_downloads_mame:
+        var: VOL_RETROARCH_SECURE_WEBTOP_DOWNLOADS_MAME
+        host_subpath: container-mounts/secure-webtop/downloads/mame
+        container_path: /mame:ro
+  rustdesk:
+    description: Self-hosted remote desktop server
+    homepage_group: Tools
+    tags: []
+    uses_tailscale: true
+    default_disabled: true
+    volumes:
+      data:
+        var: VOL_RUSTDESK_DATA
+        host_subpath: container-mounts/rustdesk/data
+        container_path: /root
   searxng:
-    source: do-it-self-containers
     description: Privacy-respecting metasearch engine
     homepage_group: Tools
     tags: []
@@ -1100,7 +1158,6 @@ containers:
         container_path: /etc/searxng:rw
     default_disabled: true
   secure-browser:
-    source: do-it-self-containers
     description: Isolated browser via KasmVNC with VPN
     homepage_group: Desktop Apps
     tags: []
@@ -1139,7 +1196,6 @@ containers:
         description: WireGuard client IP address (e.g. 10.x.x.x/32)
     default_disabled: true
   seerr:
-    source: do-it-self-containers
     description: Media request management for Jellyfin
     homepage_group: Media
     tags: []
@@ -1151,7 +1207,6 @@ containers:
         container_path: /app/config
     default_disabled: true
   space-game:
-    source: do-it-self-personal
     description: Space game web application
     homepage_group: Personal Projects
     tags: []
@@ -1163,14 +1218,12 @@ containers:
         container_path: /space-game
     default_disabled: true
   spacymote:
-    source: do-it-self-personal
     description: SpacyMote remote control web app
     homepage_group: Personal Projects
     tags: []
     start_order: "031"
     default_disabled: true
   speedtest:
-    source: do-it-self-containers
     description: Self-hosted internet speed test tracker
     homepage_group: System Monitoring
     tags: []
@@ -1187,7 +1240,6 @@ containers:
         container_path: /config
     default_disabled: true
   starbound:
-    source: do-it-self-containers
     description: Starbound dedicated game server
     homepage_group: Gaming
     tags: []
@@ -1209,7 +1261,6 @@ containers:
         container_path: /starbound
     default_disabled: true
   stirling-pdf:
-    source: do-it-self-containers
     description: PDF manipulation toolkit
     homepage_group: Tools
     tags: []
@@ -1225,14 +1276,12 @@ containers:
         container_path: /configs
     default_disabled: true
   the-lounge:
-    source: do-it-self-containers
     description: Self-hosted IRC web client
     homepage_group: Communication
     tags: []
     uses_tailscale: true
     default_disabled: true
   trilium:
-    source: do-it-self-containers
     description: Hierarchical note-taking application
     homepage_group: Productivity
     tags: []
@@ -1244,7 +1293,6 @@ containers:
         container_path: /home/node/trilium-data
     default_disabled: true
   tsidp:
-    source: do-it-self-containers
     description: Tailscale Identity Provider
     homepage_group: Infrastructure
     tags: []
@@ -1259,7 +1307,6 @@ containers:
         container_path: /data
     default_disabled: true
   uptime:
-    source: do-it-self-containers
     description: Uptime Kuma service monitoring
     homepage_group: System Monitoring
     tags: []
@@ -1272,7 +1319,6 @@ containers:
         container_path: /app/data
     default_disabled: true
   valheim:
-    source: do-it-self-containers
     description: Valheim dedicated game server
     homepage_group: Gaming
     tags: []
@@ -1309,14 +1355,23 @@ containers:
         host_subpath: container-mounts/valheim/data
         container_path: /opt/valheim
     default_disabled: true
+  vaultwarden:
+    description: Bitwarden-compatible password manager server
+    homepage_group: Tools
+    tags: []
+    uses_tailscale: true
+    default_disabled: true
+    volumes:
+      data:
+        var: VOL_VAULTWARDEN_DATA
+        host_subpath: container-mounts/vaultwarden/data
+        container_path: /data/
   voidship-ephemeral:
-    source: do-it-self-personal
     description: Voidship Ephemeral web application
     homepage_group: Personal Projects
     tags: []
     default_disabled: true
   wallabag:
-    source: do-it-self-containers
     description: Self-hosted read-it-later and article archiver
     homepage_group: Reading
     tags: []
@@ -1348,13 +1403,11 @@ containers:
         container_path: /var/www/wallabag/data
     default_disabled: true
   web-admin:
-    source: platform
     description: Self-hosted container management dashboard (Tailscale sidecar; the backend is a PM2 process on the host bound to 127.0.0.1)
     homepage_group: System Monitoring
     tags: []
     uses_tailscale: true
   witchazzan:
-    source: do-it-self-personal
     description: Witchazzan multiplayer web game
     homepage_group: Personal Projects
     tags: []
@@ -1366,7 +1419,6 @@ containers:
         container_path: /app/persistentData
     default_disabled: true
   your-spotify:
-    source: do-it-self-containers
     description: Personal Spotify listening statistics
     homepage_group: Media
     tags: []
@@ -1394,7 +1446,6 @@ containers:
         container_path: /data/db
     default_disabled: true
   zipline:
-    source: do-it-self-containers
     description: File and image hosting with ShareX support
     homepage_group: Tools
     tags: []

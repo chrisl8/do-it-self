@@ -282,7 +282,7 @@ function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
   );
 }
 
-function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdate, onUninstall, saving, moduleBusy }) {
+function ContainerCard({ name, def, source, containerConfig, validation, mounts, onUpdate, onUninstall, saving, moduleBusy }) {
   const [vars, setVars] = useState(containerConfig?.variables || {});
   const [volMounts, setVolMounts] = useState(containerConfig?.volume_mounts || {});
   const [enabled, setEnabled] = useState(() => {
@@ -347,7 +347,7 @@ function ContainerCard({ name, def, containerConfig, validation, mounts, onUpdat
             <Chip key={f} label={f} size="small" variant="outlined" />
           ))}
           <ReadinessBadge status={validation} />
-          {def.source && def.source !== "personal" && def.source !== "platform" && (
+          {source && source !== "personal" && source !== "platform" && (
             <Tooltip title="Uninstall container">
               <span>
                 <IconButton
@@ -485,9 +485,13 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
   const mounts = userConfig?.mounts || [{ path: "", label: "Default" }];
 
   const containersByGroup = useMemo(() => {
-    if (!registry?.containers) return {};
+    if (!registry?.containers || !registry?.sources) return {};
     const grouped = {};
+    // registry.containers is the full catalog; registry.sources keys are the
+    // containers actually installed on this host. Filter to installed only
+    // — the Browse page handles available-but-not-installed.
     for (const [name, def] of Object.entries(registry.containers)) {
+      if (!registry.sources[name]) continue;
       const group = def.homepage_group || "Uncategorized";
       if (!grouped[group]) grouped[group] = [];
       grouped[group].push({ name, def });
@@ -675,6 +679,7 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
               key={name}
               name={name}
               def={def}
+              source={registry?.sources?.[name]}
               containerConfig={userConfig?.containers?.[name]}
               validation={validationStatus?.containers?.[name]}
               mounts={mounts}
