@@ -15,14 +15,13 @@ import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import Link from "@mui/material/Link";
 import IconButton from "@mui/material/IconButton";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Checkbox from "@mui/material/Checkbox";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import useModules from "./hooks/useModules";
 import useGitStatus from "./hooks/useGitStatus";
 import ModuleOperationDialog from "./ModuleOperationDialog";
+import SystemUpdatesPanel from "./SystemUpdatesPanel";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -33,7 +32,7 @@ function formatDate(iso) {
   }
 }
 
-function InstalledSourceRow({ name, entry, onUpdate, onRemove, busy }) {
+function InstalledSourceRow({ name, entry, onRemove, busy }) {
   const installedCount = (entry.installed_containers || []).length;
   const canRemove = installedCount === 0;
   return (
@@ -56,9 +55,6 @@ function InstalledSourceRow({ name, entry, onUpdate, onRemove, busy }) {
         </Typography>
       </CardContent>
       <CardActions sx={{ px: 2, pb: 1.5, gap: 1 }}>
-        <Button size="small" variant="outlined" disabled={busy} onClick={() => onUpdate(name)}>
-          Update
-        </Button>
         <Tooltip
           title={canRemove ? "" : "Uninstall all containers from this source first"}
         >
@@ -114,120 +110,6 @@ function CatalogRow({ name, entry, added, onAdd, busy }) {
   );
 }
 
-function PlatformUpdateBanner({
-  repo,
-  preBackup,
-  onPreBackupChange,
-  onUpdate,
-  onRefresh,
-  busy,
-  fetchingUpstream,
-}) {
-  if (!repo) return null;
-
-  const refreshAction = (
-    <Tooltip title="Check upstream for new commits">
-      <span>
-        <IconButton
-          size="small"
-          onClick={onRefresh}
-          disabled={busy || fetchingUpstream}
-        >
-          <RefreshIcon fontSize="small" />
-        </IconButton>
-      </span>
-    </Tooltip>
-  );
-
-  // Unclean: dirty-repos banner already names the files.
-  if (!repo.clean) {
-    return (
-      <Alert severity="warning" sx={{ mb: 2 }} action={refreshAction}>
-        <AlertTitle>Platform has uncommitted changes</AlertTitle>
-        Platform update is disabled until the working tree is clean. Commit or
-        stash the changes listed below.
-      </Alert>
-    );
-  }
-
-  if (repo.ahead > 0) {
-    return (
-      <Alert severity="error" sx={{ mb: 2 }} action={refreshAction}>
-        <AlertTitle>Platform has local commits not upstream</AlertTitle>
-        This updater only fast-forwards; it will not push or merge. Push your
-        commits upstream, or on the CLI run{" "}
-        <code>git reset --hard {repo.upstream || "origin/main"}</code> (discards
-        local commits).
-      </Alert>
-    );
-  }
-
-  if (!repo.upstream) {
-    return (
-      <Alert severity="warning" sx={{ mb: 2 }} action={refreshAction}>
-        <AlertTitle>Platform branch has no upstream</AlertTitle>
-        Set one on the CLI with{" "}
-        <code>
-          git branch --set-upstream-to=origin/{repo.branch || "main"}{" "}
-          {repo.branch || "main"}
-        </code>
-        .
-      </Alert>
-    );
-  }
-
-  if (repo.behind === 0) {
-    // Up to date — tiny affordance to re-check.
-    return (
-      <Alert severity="success" sx={{ mb: 2 }} action={refreshAction}>
-        Platform is up to date
-        {repo.fetchedAt
-          ? ` (checked ${new Date(repo.fetchedAt).toLocaleTimeString()})`
-          : " (using cached state — click refresh to check upstream)"}
-        .
-      </Alert>
-    );
-  }
-
-  return (
-    <Alert severity="info" sx={{ mb: 2 }} action={refreshAction}>
-      <AlertTitle>
-        Platform is {repo.behind} commit{repo.behind === 1 ? "" : "s"} behind
-        upstream
-      </AlertTitle>
-      <Typography variant="body2" sx={{ mb: 1 }}>
-        Fast-forward pull + validation pass. Restart stacks after to pick up
-        compose changes.
-      </Typography>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-        <Button
-          size="small"
-          variant="contained"
-          onClick={onUpdate}
-          disabled={busy}
-        >
-          Update platform
-        </Button>
-        <FormControlLabel
-          control={
-            <Checkbox
-              size="small"
-              checked={preBackup}
-              onChange={(e) => onPreBackupChange(e.target.checked)}
-              disabled={busy}
-            />
-          }
-          label={
-            <Typography variant="body2">
-              Run borg backup first (remote-only, skips DB dumps)
-            </Typography>
-          }
-        />
-      </Box>
-    </Alert>
-  );
-}
-
 function DirtyRepoEntry({ repo, onDevSync, busy }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -280,17 +162,17 @@ function Sources() {
     addSource,
     removeSource,
     updateSource,
-    updateAllSources,
     regenerateRegistry,
   } = useModules();
 
   const {
+    gitStatus,
     dirtyRepos,
-    platformRepo,
     refresh: refreshGit,
     refreshWithFetch,
     devSync,
     updatePlatform,
+    updateEverything,
   } = useGitStatus();
 
   const [dialog, setDialog] = useState({ open: false, title: "", running: false, result: null });
@@ -324,8 +206,6 @@ function Sources() {
     });
   };
 
-  const handleUpdate = (name) => run(`Updating ${name}...`, () => updateSource(name));
-  const handleUpdateAll = () => run(`Updating all sources...`, () => updateAllSources());
   const handleRemove = (name) => {
     if (!window.confirm(`Remove module source "${name}"? The clone at .modules/${name}/ will be deleted.`)) return;
     run(`Removing ${name}...`, () => removeSource(name));
@@ -352,6 +232,31 @@ function Sources() {
       : "Updating platform...";
     await run(title, () => updatePlatform({ preBackup }));
     await refreshGit();
+  };
+
+  const handleUpdateModule = async (repo) => {
+    await run(`Updating ${repo.name}...`, () => updateSource(repo.name));
+    await refreshGit();
+  };
+
+  const handleUpdateEverything = async () => {
+    const title = preBackup
+      ? "Updating everything (with pre-backup)..."
+      : "Updating everything...";
+    await run(title, () => updateEverything({ preBackup }));
+    await refreshGit();
+  };
+
+  // Derive role (platform / required / optional / user-added) for a repo name.
+  // `optional` is technically never shown here because an optional catalog
+  // entry that isn't installed has no .modules/ clone and therefore no row,
+  // but we keep it in the mapping for completeness.
+  const roleFor = (name) => {
+    if (name === "platform") return "platform";
+    const catalogEntry = catalog?.catalogs?.[name];
+    if (catalogEntry?.required === true) return "required";
+    if (catalogEntry) return "optional";
+    return "user-added";
   };
 
   const installedEntries = useMemo(
@@ -391,14 +296,18 @@ function Sources() {
         appear on the Browse page where you can install them individually.
       </Alert>
 
-      <PlatformUpdateBanner
-        repo={platformRepo}
+      <SystemUpdatesPanel
+        repos={gitStatus?.repos || []}
+        roleFor={roleFor}
+        onRefresh={handleCheckPlatformUpdates}
+        fetchingUpstream={fetchingUpstream}
         preBackup={preBackup}
         onPreBackupChange={setPreBackup}
-        onUpdate={handlePlatformUpdate}
-        onRefresh={handleCheckPlatformUpdates}
+        onUpdatePlatform={handlePlatformUpdate}
+        onUpdateModule={handleUpdateModule}
+        onUpdateEverything={handleUpdateEverything}
         busy={dialog.running}
-        fetchingUpstream={fetchingUpstream}
+        lastTickAt={gitStatus?.lastTickAt}
       />
 
       {dirtyRepos.length > 0 && (
@@ -424,17 +333,10 @@ function Sources() {
       )}
 
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-          <Typography variant="h6">Installed Sources</Typography>
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={dialog.running || installedEntries.length === 0}
-            onClick={handleUpdateAll}
-          >
-            Update All
-          </Button>
-        </Box>
+        <Typography variant="h6" sx={{ mb: 1 }}>Installed Sources</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+          Update status is shown in the System Updates panel above. Removing a source here deletes its clone under .modules/; installed containers from it must be uninstalled first.
+        </Typography>
         <Divider sx={{ mb: 1.5 }} />
         {installedEntries.length === 0 ? (
           <Alert severity="warning">No module sources added yet.</Alert>
@@ -444,7 +346,6 @@ function Sources() {
               key={name}
               name={name}
               entry={entry}
-              onUpdate={handleUpdate}
               onRemove={handleRemove}
               busy={dialog.running}
             />

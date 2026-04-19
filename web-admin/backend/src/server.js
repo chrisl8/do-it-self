@@ -1118,6 +1118,48 @@ app.post("/api/platform/update", async (req, res) => {
   }
 });
 
+// "Update everything": platform update first (it can bring in new module
+// catalog entries), then module update --all. Stops after platform on failure
+// since a broken platform state could leave modules in an inconsistent place.
+app.post("/api/platform/update-everything", async (req, res) => {
+  if (!acquireModuleLock(res)) return;
+  try {
+    const out = [];
+    out.push("── Platform update ──");
+    const platformArgs = ["--yes"];
+    if (req.body?.preBackup) platformArgs.push("--pre-backup");
+    const { promise: platformPromise } = spawnTracked(
+      UPDATE_PLATFORM_SH, platformArgs, 15 * 60 * 1000,
+    );
+    const platform = await platformPromise;
+    out.push(platform.output);
+
+    let modules = { exitCode: 0, output: "" };
+    if (platform.exitCode === 0) {
+      out.push("\n── Module update ──");
+      const { promise: modPromise } = spawnTracked(MODULE_SH, ["update"], 15 * 60 * 1000);
+      modules = await modPromise;
+      out.push(modules.output);
+    } else {
+      out.push("\n── Module update — skipped (platform update failed) ──");
+    }
+
+    await refreshDockerStatusAfterModuleOp();
+    res.json({
+      success: platform.exitCode === 0 && modules.exitCode === 0,
+      platformExitCode: platform.exitCode,
+      platformCategory: categorizePlatformUpdateExit(platform.exitCode),
+      moduleExitCode: modules.exitCode,
+      output: out.join("\n"),
+    });
+  } catch (err) {
+    console.error("Error running update-everything:", err);
+    res.status(500).json({ success: false, output: err.message, category: "error" });
+  } finally {
+    moduleOpInFlight = false;
+  }
+});
+
 app.use((req, res, next) => {
   if (
     req.path.startsWith("/api/") ||
