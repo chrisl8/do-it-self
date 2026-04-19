@@ -11,6 +11,7 @@ import os from "os";
 import getFormattedDockerContainers from "./dockerStatus.js";
 import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 import { getReleaseNotesForStack } from "./githubReleases.js";
+import { getUpstreamState, fetchRemote, bestEffortFetch } from "./gitRepoStatus.js";
 import {
   getRegistry,
   getUserConfig,
@@ -920,60 +921,6 @@ const execFileAsync = promisify(execFile);
 const MODULES_DIR = join(CONTAINERS_DIR, ".modules");
 const MAX_CHANGES_PER_REPO = 50;
 
-async function getUpstreamState(repoPath) {
-  // Returns { branch, upstream, ahead, behind, canFastForward } for a repo,
-  // reading cached refs only. Does not run `git fetch` — caller decides when
-  // to fetch.
-  const env = { ...childEnv(), GIT_OPTIONAL_LOCKS: "0" };
-  const state = {
-    branch: null,
-    upstream: null,
-    ahead: 0,
-    behind: 0,
-    canFastForward: false,
-  };
-  try {
-    const { stdout: branchOut } = await execFileAsync(
-      "git", ["rev-parse", "--abbrev-ref", "HEAD"],
-      { cwd: repoPath, env },
-    );
-    state.branch = branchOut.trim();
-    if (!state.branch || state.branch === "HEAD") return state;
-  } catch { return state; }
-  try {
-    const { stdout: upOut } = await execFileAsync(
-      "git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${state.branch}@{u}`],
-      { cwd: repoPath, env },
-    );
-    state.upstream = upOut.trim();
-  } catch {
-    // No upstream configured.
-    return state;
-  }
-  try {
-    const { stdout: countOut } = await execFileAsync(
-      "git", ["rev-list", "--left-right", "--count", `${state.upstream}...HEAD`],
-      { cwd: repoPath, env },
-    );
-    const [behindStr, aheadStr] = countOut.trim().split(/\s+/);
-    state.behind = parseInt(behindStr, 10) || 0;
-    state.ahead = parseInt(aheadStr, 10) || 0;
-    state.canFastForward = state.behind > 0 && state.ahead === 0;
-  } catch { /* leave zeros */ }
-  return state;
-}
-
-async function fetchRemote(repoPath, remote, branch) {
-  await execFileAsync(
-    "git", ["fetch", "--quiet", remote || "origin", branch || "HEAD"],
-    {
-      cwd: repoPath,
-      env: { ...childEnv(), GIT_OPTIONAL_LOCKS: "0" },
-      timeout: 60000,
-    },
-  );
-}
-
 async function getRepoStatus(name, label, repoPath, isModule) {
   const result = { name, label, isModule, clean: true, changes: [] };
   try {
@@ -996,38 +943,32 @@ async function getRepoStatus(name, label, repoPath, isModule) {
   } catch (err) {
     result.error = err.message;
   }
-  // Attach upstream state only for the platform repo — modules have their
-  // own update flow (module.sh update) and keeping this endpoint cheap.
-  if (!isModule) {
-    Object.assign(result, await getUpstreamState(repoPath));
-  }
+  Object.assign(result, await getUpstreamState(repoPath));
   return result;
 }
 
 app.get("/api/git-status", async (req, res) => {
   try {
     const doFetch = req.query.fetch === "1" || req.query.fetch === "true";
+    const installed = await getInstalledModules();
+    const moduleNames = Object.keys(installed.modules || {})
+      .filter((name) => existsSync(join(MODULES_DIR, name)));
+
     if (doFetch) {
-      // Best-effort — a fetch failure shouldn't blank the whole response.
-      const branch = (await execFileAsync(
-        "git", ["rev-parse", "--abbrev-ref", "HEAD"],
-        { cwd: CONTAINERS_DIR, env: { ...childEnv(), GIT_OPTIONAL_LOCKS: "0" } },
-      )).stdout.trim();
-      try {
-        await fetchRemote(CONTAINERS_DIR, "origin", branch);
-      } catch (err) {
-        console.warn("git fetch failed for platform:", err.message);
-      }
+      await bestEffortFetch(CONTAINERS_DIR, "platform");
+      await Promise.all(
+        moduleNames.map((name) => bestEffortFetch(join(MODULES_DIR, name), name)),
+      );
     }
+
     const repos = [];
     const platformStatus = await getRepoStatus("platform", "Platform", CONTAINERS_DIR, false);
     if (doFetch) platformStatus.fetchedAt = new Date().toISOString();
     repos.push(platformStatus);
-    const installed = await getInstalledModules();
-    for (const moduleName of Object.keys(installed.modules || {})) {
-      const modulePath = join(MODULES_DIR, moduleName);
-      if (!existsSync(modulePath)) continue;
-      repos.push(await getRepoStatus(moduleName, moduleName, modulePath, true));
+    for (const moduleName of moduleNames) {
+      const status = await getRepoStatus(moduleName, moduleName, join(MODULES_DIR, moduleName), true);
+      if (doFetch) status.fetchedAt = new Date().toISOString();
+      repos.push(status);
     }
     res.json({ repos });
   } catch (err) {
