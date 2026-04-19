@@ -13,14 +13,17 @@
 // Usage: node generate-env.js <container-name> [--all] [--validate-only] [--quiet]
 
 import { readFile, writeFile, appendFile, access, chmod } from "fs/promises";
+import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
+import { spawnSync } from "child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
 const REGISTRY_PATH = join(CONTAINERS_DIR, "container-registry.yaml");
 const USER_CONFIG_PATH = join(CONTAINERS_DIR, "user-config.yaml");
+const INFISICAL_CRED_PATH = join(homedir(), "credentials", "infisical.env");
 const DEFAULT_MOUNT_PATH = join(homedir(), "container-data");
 
 // Minimal YAML parser for our specific format
@@ -136,6 +139,106 @@ function getMountPath(mounts, index) {
   return mount ? resolveHomePath(mount.path || DEFAULT_MOUNT_PATH) : DEFAULT_MOUNT_PATH;
 }
 
+// Per-container secrets that live in Infisical rather than user-config.yaml.
+// Equivalent to the merge configRegistry.js does for the web admin and the
+// runtime export scripts/all-containers.sh does right before `docker compose
+// up`. Populated lazily via fetchInfisicalSecrets; empty object if Infisical
+// is unavailable or has no values at /<container>.
+const infisicalSecretsCache = new Map();
+
+function loadInfisicalCreds() {
+  try {
+    if (!existsSync(INFISICAL_CRED_PATH)) return null;
+    const raw = readFileSync(INFISICAL_CRED_PATH, "utf8");
+    const creds = {};
+    for (const line of raw.split("\n")) {
+      if (!line.trim() || line.trim().startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      let val = line.slice(eq + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      creds[key] = val;
+    }
+    if (!creds.INFISICAL_TOKEN || !creds.INFISICAL_PROJECT_ID || !creds.INFISICAL_API_URL) {
+      return null;
+    }
+    return creds;
+  } catch {
+    return null;
+  }
+}
+
+function isInfisicalRunning() {
+  const r = spawnSync(
+    "docker",
+    ["ps", "--filter", "name=infisical", "--filter", "status=running", "-q"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+  );
+  return r.status === 0 && r.stdout.trim().length > 0;
+}
+
+// Parse dotenv output from `infisical export --format=dotenv`.
+// Lines look like: KEY='value' (single-quoted; values may contain anything
+// except unescaped single quotes, which Infisical emits as '\''). Unknown
+// lines (e.g., release-notice noise if it ever leaks to stdout) are ignored.
+function parseDotenv(text) {
+  const out = {};
+  for (const line of text.split("\n")) {
+    const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!m) continue;
+    let value = m[2];
+    if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) {
+      value = value.slice(1, -1).replace(/'\\''/g, "'");
+    } else if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+      value = value.slice(1, -1).replace(/\\"/g, '"');
+    }
+    out[m[1]] = value;
+  }
+  return out;
+}
+
+let infisicalAvailability = null;
+function getInfisicalCreds() {
+  if (infisicalAvailability !== null) return infisicalAvailability;
+  const creds = loadInfisicalCreds();
+  if (!creds) { infisicalAvailability = null; return null; }
+  if (!isInfisicalRunning()) { infisicalAvailability = null; return null; }
+  infisicalAvailability = creds;
+  return creds;
+}
+
+function fetchInfisicalSecrets(containerName) {
+  if (infisicalSecretsCache.has(containerName)) {
+    return infisicalSecretsCache.get(containerName);
+  }
+  const creds = getInfisicalCreds();
+  if (!creds) {
+    infisicalSecretsCache.set(containerName, {});
+    return {};
+  }
+  const r = spawnSync(
+    "infisical",
+    [
+      "export",
+      `--token=${creds.INFISICAL_TOKEN}`,
+      `--projectId=${creds.INFISICAL_PROJECT_ID}`,
+      "--env=prod",
+      `--domain=${creds.INFISICAL_API_URL}`,
+      `--path=/${containerName}`,
+      "--format=dotenv",
+      "--silent",
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+  );
+  const secrets = r.status === 0 ? parseDotenv(r.stdout || "") : {};
+  infisicalSecretsCache.set(containerName, secrets);
+  return secrets;
+}
+
 // Shared variables (TS_AUTHKEY, TS_DOMAIN, HOST_NAME, DOCKER_GID) are
 // intentionally NOT written into per-container .env files. They live in
 // Infisical at /shared and are injected into the shell env at container
@@ -144,6 +247,11 @@ function getMountPath(mounts, index) {
 // compose.yaml from that shell env. This keeps Infisical as the single
 // source of truth for shared vars and avoids drift between disk and the
 // secret store.
+//
+// Per-container required variables that live in Infisical at /<container>
+// are satisfied but NOT written to the .env file, for the same reason: the
+// runtime export path is the single source of truth; the .env file should
+// not carry copies of secrets held in Infisical.
 function buildEnvForContainer(registry, userConfig, containerName) {
   const containerDef = registry.containers?.[containerName];
   if (!containerDef) return { env: {}, errors: [] };
@@ -165,10 +273,16 @@ function buildEnvForContainer(registry, userConfig, containerName) {
   // Container-specific variables
   const containerVarDefs = containerDef.variables || {};
   const containerValues = containerConfig.variables || {};
+  const infisicalValues = fetchInfisicalSecrets(containerName);
   for (const [name, def] of Object.entries(containerVarDefs)) {
     const value = containerValues[name];
     if (value !== undefined && value !== null && value !== "") {
       env[name] = String(value);
+    } else if (infisicalValues[name] !== undefined && infisicalValues[name] !== "") {
+      // Supplied by Infisical at runtime via `infisical export
+      // --path=/<container>` in scripts/all-containers.sh. Don't copy into
+      // .env — the runtime export is the source of truth.
+      continue;
     } else if (def && def.required) {
       errors.push(name);
     } else if (def && def.default) {
