@@ -1,20 +1,23 @@
 #!/bin/bash
 set -e
 
-# Migrate an existing installation to the module system.
+# Initialize the module system on a fresh install.
 # Called by setup.sh. Idempotent — safe to re-run.
 #
-# Detection: if installed-modules.yaml exists, we're already migrated.
-# If container directories exist at the platform root without
-# installed-modules.yaml, this is a legacy install that needs migration.
+# On first run: clones every module listed in module-catalog.yaml into
+# .modules/, then installs the containers marked enabled-by-default in
+# container-registry.yaml (those without `default_disabled: true`). All
+# other containers stay under .modules/ until the user installs them
+# via the web admin Browse page or `scripts/module.sh install`.
 #
-# For new installs (no containers present), this script clones the default
-# module sources so containers are available to install via the web admin.
+# Detection: if installed-modules.yaml exists, the module system is
+# already initialized and this script is a no-op.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINERS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 INSTALLED_MODULES="${CONTAINERS_DIR}/installed-modules.yaml"
 MODULE_CATALOG="${CONTAINERS_DIR}/module-catalog.yaml"
+REGISTRY_PATH="${CONTAINERS_DIR}/container-registry.yaml"
 MODULES_DIR="${CONTAINERS_DIR}/.modules"
 
 # Colors (inherit from setup.sh if available, else set them)
@@ -32,14 +35,13 @@ run_node() {
   (cd "${SCRIPT_DIR}" && node "$@")
 }
 
-# ── Already migrated? ──────────────────────────────────────────────────
+# ── Already initialized? ──────────────────────────────────────────────
 if [[ -f "${INSTALLED_MODULES}" ]]; then
   ok "Module system already initialized (installed-modules.yaml exists)"
   exit 0
 fi
 
-# ── Clone default module sources ──────────────────────────────────────
-# Parse module-catalog.yaml to get URLs. Uses node + yaml package.
+# ── Clone module sources ─────────────────────────────────────────────
 if [[ ! -f "${MODULE_CATALOG}" ]]; then
   printf "${RED}  Error: module-catalog.yaml not found at ${MODULE_CATALOG}${NC}\n"
   exit 1
@@ -63,7 +65,6 @@ if [[ -z "${CATALOG_ENTRIES}" ]]; then
   exit 0
 fi
 
-# Clone each module source
 while IFS=$'\t' read -r MODULE_NAME MODULE_URL; do
   if [[ -d "${MODULES_DIR}/${MODULE_NAME}" ]]; then
     ok "Module ${MODULE_NAME} already cloned"
@@ -77,136 +78,46 @@ while IFS=$'\t' read -r MODULE_NAME MODULE_URL; do
   fi
 done <<< "${CATALOG_ENTRIES}"
 
-# ── Detect legacy install ─────────────────────────────────────────────
-# Check if any container directories exist at the platform root
-# (directories with a compose.yaml that aren't platform dirs)
-PLATFORM_DIRS="scripts web-admin docs actual-budget-sync borgbackup .modules .git .vscode"
-EXISTING_CONTAINERS=()
+# ── Install default-enabled containers ───────────────────────────────
+# For each container in a cloned module, install it only when the
+# registry entry does NOT set default_disabled: true. Invariant:
+# install-by-default == enable-by-default. The rest of the catalog
+# stays under .modules/ until the user picks it via the web admin
+# Browse page or `scripts/module.sh install`.
+step "Installing default-enabled containers"
 
-for DIR in "${CONTAINERS_DIR}"/*/; do
-  DIR_NAME="$(basename "${DIR}")"
-
-  # Skip platform directories
-  SKIP=false
-  for PD in ${PLATFORM_DIRS}; do
-    if [[ "${DIR_NAME}" == "${PD}" ]]; then
-      SKIP=true
-      break
-    fi
-  done
-  [[ "${SKIP}" == "true" ]] && continue
-
-  # Must have a compose.yaml to be a container
-  if [[ -f "${DIR}/compose.yaml" ]]; then
-    EXISTING_CONTAINERS+=("${DIR_NAME}")
-  fi
-done
-
-if [[ ${#EXISTING_CONTAINERS[@]} -eq 0 ]]; then
-  # New install — install all containers from every cloned module.
-  # default_disabled in each container's module.yaml entry controls what
-  # actually starts; we install everything so the full catalog is on disk.
-  step "New install detected — installing containers from modules"
-
-  for MODULE_DIR in "${MODULES_DIR}"/*/; do
-    MODULE_NAME="$(basename "${MODULE_DIR}")"
-    MODULE_YAML="${MODULE_DIR}/module.yaml"
-    [[ -f "${MODULE_YAML}" ]] || continue
-
-    # Get container names from this module's module.yaml
-    CONTAINER_NAMES=$(run_node -e '
-import { readFileSync } from "fs";
-import YAML from "yaml";
-const meta = YAML.parse(readFileSync(process.argv[1], "utf8"));
-for (const name of Object.keys(meta.containers || {})) {
-  console.log(name);
-}
-' "${MODULE_YAML}" 2>/dev/null) || continue
-
-    while IFS= read -r CONTAINER_NAME; do
-      [[ -z "${CONTAINER_NAME}" ]] && continue
-      step "Installing ${CONTAINER_NAME} from ${MODULE_NAME}"
-      run_node "${SCRIPT_DIR}/module-helper.js" install "${MODULE_NAME}" "${CONTAINER_NAME}" 2>/dev/null || \
-        warn "Failed to install ${CONTAINER_NAME}"
-    done <<< "${CONTAINER_NAMES}"
-  done
-
-  # The committed container-registry.yaml already ships as the full catalog,
-  # and install paths no longer mutate it, so no regeneration step is needed
-  # here. Installed state is tracked in installed-modules.yaml.
-
-  ok "All module containers installed"
-  exit 0
-fi
-
-# ── Legacy install — match existing containers to modules ─────────────
-step "Legacy install detected — migrating ${#EXISTING_CONTAINERS[*]} containers"
-
-run_node -e '
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "fs";
+DEFAULTS=$(run_node -e '
+import { readFileSync, readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
-import { execSync } from "child_process";
 import YAML from "yaml";
 
-const modulesDir = process.argv[1];
-const installedPath = process.argv[2];
-const existingContainers = process.argv.slice(3);
-
-// Load all module.yaml files to build a container->module map
-const containerToModule = new Map();
-const modules = {};
+const [registryPath, modulesDir] = process.argv.slice(1);
+const registry = YAML.parse(readFileSync(registryPath, "utf8"));
+const regDefs = registry.containers || {};
 
 for (const name of readdirSync(modulesDir)) {
   const modPath = join(modulesDir, name);
   if (!statSync(modPath).isDirectory()) continue;
   const yamlPath = join(modPath, "module.yaml");
   if (!existsSync(yamlPath)) continue;
-
-  try {
-    const meta = YAML.parse(readFileSync(yamlPath, "utf8"));
-    const commit = execSync(`git -C "${modPath}" rev-parse HEAD`, { encoding: "utf8" }).trim();
-    modules[name] = {
-      url: meta.url || "",
-      commit,
-      added: new Date().toISOString(),
-      updated: new Date().toISOString(),
-      installed_containers: [],
-    };
-    for (const containerName of Object.keys(meta.containers || {})) {
-      containerToModule.set(containerName, name);
-    }
-  } catch { /* skip invalid modules */ }
-}
-
-// Match existing containers to modules
-let matched = 0, personal = 0;
-const personalContainers = [];
-
-for (const containerName of existingContainers) {
-  const moduleName = containerToModule.get(containerName);
-  if (moduleName && modules[moduleName]) {
-    // Container found in a module — record as installed from that module
-    modules[moduleName].installed_containers.push(containerName);
-    matched++;
-  } else {
-    // Container not found in any module — record as personal
-    personalContainers.push(containerName);
-    personal++;
+  const meta = YAML.parse(readFileSync(yamlPath, "utf8"));
+  for (const containerName of Object.keys(meta.containers || {})) {
+    const reg = regDefs[containerName] || {};
+    if (reg.default_disabled === true) continue;
+    console.log(name + "\t" + containerName);
   }
 }
+' "${REGISTRY_PATH}" "${MODULES_DIR}" 2>/dev/null) || true
 
-// Sort installed_containers lists
-for (const mod of Object.values(modules)) {
-  mod.installed_containers.sort();
-}
-personalContainers.sort();
+if [[ -z "${DEFAULTS}" ]]; then
+  warn "No default-enabled containers found in any module"
+else
+  while IFS=$'\t' read -r MODULE_NAME CONTAINER_NAME; do
+    [[ -z "${MODULE_NAME}" || -z "${CONTAINER_NAME}" ]] && continue
+    step "Installing ${CONTAINER_NAME} from ${MODULE_NAME}"
+    run_node "${SCRIPT_DIR}/module-helper.js" install "${MODULE_NAME}" "${CONTAINER_NAME}" 2>/dev/null || \
+      warn "Failed to install ${CONTAINER_NAME}"
+  done <<< "${DEFAULTS}"
+fi
 
-writeFileSync(installedPath, YAML.stringify({
-  modules,
-  personal_containers: personalContainers,
-}, { lineWidth: 0 }));
-
-console.log(`Matched ${matched} containers to modules, ${personal} marked as personal`);
-' "${MODULES_DIR}" "${INSTALLED_MODULES}" "${EXISTING_CONTAINERS[@]}" 2>/dev/null
-
-ok "Migration complete — ${#EXISTING_CONTAINERS[*]} containers recorded"
+ok "Fresh install complete — use the web admin Browse page (or scripts/module.sh install) to add more"
