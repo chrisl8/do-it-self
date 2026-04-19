@@ -34,6 +34,14 @@ Tailscale node identity lives outside container dirs at `<mount[0]>/tailscale-st
 
 Containers can come from **modules** (git repos cloned into `.modules/`) or be **personal** (created directly by the user). The `source` field in `container-registry.yaml` tracks provenance: `source: "<module-name>"` for module containers, `source: personal` for user-created ones. See `docs/MODULES.md` for the full design. CLI: `scripts/module.sh`.
 
+**Container lifecycle — three stages:**
+
+1. **Cloned.** `scripts/setup.sh` (via `scripts/migrate-to-modules.sh`) clones every module listed in `module-catalog.yaml` into `.modules/<module>/`. The full catalog is available but not surfaced at the platform root yet.
+2. **Installed.** The container's folder exists at `~/containers/<name>/` with its `compose.yaml`, and it is recorded in `installed-modules.yaml`. On a fresh install, only containers that are enabled-by-default in `container-registry.yaml` (those without `default_disabled: true`) are auto-installed. Everything else waits for the user to install it via the web admin Browse page (`POST /api/modules/containers/:name/install`) or `scripts/module.sh install <module> <container>`.
+3. **Enabled.** `user-config.yaml` has `containers.<name>.enabled: true`. Toggled from the web admin Configuration page (`PUT /api/config/container/:name`). Only enabled containers are started by `scripts/all-containers.sh`.
+
+Invariant on fresh install: **install-by-default == enable-by-default.** Defaults added to the registry later do not retroactively install on existing hosts; `scripts/update-platform.sh` intentionally leaves the installed set alone.
+
 ### Credentials
 
 - Credentials go in `~/credentials/container-name.env`, symlinked as `.env` in each service folder: `ln -s ~/credentials/service.env .env`
