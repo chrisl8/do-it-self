@@ -40,6 +40,16 @@ const useGitStatus = () => {
     return { ...body, status: res.status };
   }, []);
 
+  const updateEverything = useCallback(async ({ preBackup = false } = {}) => {
+    const res = await fetch("/api/platform/update-everything", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preBackup: !!preBackup }),
+    });
+    const body = await res.json().catch(() => ({}));
+    return { ...body, status: res.status };
+  }, []);
+
   useEffect(() => {
     fetchGitStatus();
   }, [fetchGitStatus]);
@@ -101,6 +111,7 @@ const useGitStatus = () => {
     refreshWithFetch,
     devSync,
     updatePlatform,
+    updateEverything,
   };
 };
 
