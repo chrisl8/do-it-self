@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const useGitStatus = () => {
   const [gitStatus, setGitStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const wsRef = useRef(null);
 
   const fetchGitStatus = useCallback(async (opts = {}) => {
     setLoading(true);
@@ -42,6 +43,43 @@ const useGitStatus = () => {
   useEffect(() => {
     fetchGitStatus();
   }, [fetchGitStatus]);
+
+  // Subscribe to the backend's WebSocket push so the UI reflects the
+  // background git-fetch poller's findings without a manual refresh.
+  // The backend emits the full tracked-status blob on every change, so we
+  // only act when data.gitStatus is present and non-null. Auto-reconnects
+  // on close with a 5-second backoff.
+  useEffect(() => {
+    let closed = false;
+    let reconnectTimer = null;
+    const connect = () => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}`);
+      wsRef.current = ws;
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "status" && data.gitStatus) {
+            setGitStatus(data.gitStatus);
+            setLoading(false);
+          }
+        } catch {
+          /* ignore malformed frames */
+        }
+      };
+      ws.onclose = () => {
+        if (closed) return;
+        reconnectTimer = setTimeout(connect, 5000);
+      };
+      ws.onerror = () => { ws.close(); };
+    };
+    connect();
+    return () => {
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, []);
 
   const dirtyRepos = useMemo(
     () => gitStatus?.repos?.filter((r) => !r.clean) || [],
