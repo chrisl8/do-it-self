@@ -398,9 +398,45 @@ async function main() {
   }
   ok("all enabled containers have required variables");
 
-  // Step 11: summary
+  // Step 11b: if anything under web-admin/ changed in this pull, schedule a
+  // rebuild + PM2 restart. Detached with a short delay so this script's
+  // response returns to the caller (CLI or the web admin's /api/platform/update
+  // endpoint) before PM2 tears the backend down. The browser user will see
+  // the success response, then a disconnect, then the new UI on reload.
+  maybeRebuildWebAdmin(OLD_HEAD, NEW_HEAD);
+
+  // Step 12: summary
   printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings, dirtyModules, validationFailed: false });
   process.exit(0);
+}
+
+function maybeRebuildWebAdmin(OLD_HEAD, NEW_HEAD) {
+  if (!OLD_HEAD || !NEW_HEAD || OLD_HEAD === NEW_HEAD) return;
+  let changed = false;
+  try {
+    const diff = git(`diff --name-only ${OLD_HEAD} ${NEW_HEAD}`, { maxBuffer: 4 * 1024 * 1024 });
+    changed = diff.split("\n").some((f) => f.startsWith("web-admin/"));
+  } catch (e) {
+    warn(`web-admin diff check failed: ${e.message}`);
+    return;
+  }
+  if (!changed) return;
+  section("Web admin rebuild");
+  info("web-admin/ changed — scheduling `start-web-admin.sh` in 5s (detached)");
+  info("the web admin will rebuild the frontend and restart PM2 shortly");
+  const script = join(__dirname, "start-web-admin.sh");
+  try {
+    // Double-forked via the bash subshell so the grandchild survives after
+    // spawnSync returns. Stdio is fully redirected so we don't keep the
+    // parent's file descriptors open.
+    spawnSync("bash", [
+      "-c",
+      `(sleep 5 && "${script}") >/dev/null 2>&1 </dev/null &`,
+    ], { stdio: "ignore", detached: true });
+    ok("rebuild scheduled");
+  } catch (e) {
+    warn(`could not schedule web-admin rebuild: ${e.message}`);
+  }
 }
 
 function printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings, dirtyModules, validationFailed, hookFailed }) {
