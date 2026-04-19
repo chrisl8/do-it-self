@@ -18,7 +18,7 @@ import { join } from "path";
 import os from "os";
 import YAML from "yaml";
 import { updateStatus } from "./statusEmitter.js";
-import { getUpstreamState, bestEffortFetch } from "./gitRepoStatus.js";
+import { getRepoStatus, bestEffortFetch } from "./gitRepoStatus.js";
 
 const CONTAINERS_DIR = join(os.homedir(), "containers");
 const MODULES_DIR = join(CONTAINERS_DIR, ".modules");
@@ -41,13 +41,10 @@ function readInstalledModuleNames() {
   }
 }
 
-async function buildRepoEntry(name, repoPath) {
-  const upstream = await getUpstreamState(repoPath);
-  return {
-    name,
-    ...upstream,
-    fetchedAt: new Date().toISOString(),
-  };
+async function buildRepoEntry(name, label, repoPath, isModule) {
+  const status = await getRepoStatus(name, label, repoPath, isModule);
+  status.fetchedAt = new Date().toISOString();
+  return status;
 }
 
 async function tick() {
@@ -63,9 +60,9 @@ async function tick() {
     ]);
 
     const repos = [];
-    repos.push(await buildRepoEntry("platform", CONTAINERS_DIR));
+    repos.push(await buildRepoEntry("platform", "Platform", CONTAINERS_DIR, false));
     for (const name of moduleNames) {
-      repos.push(await buildRepoEntry(name, join(MODULES_DIR, name)));
+      repos.push(await buildRepoEntry(name, name, join(MODULES_DIR, name), true));
     }
 
     updateStatus("gitStatus", {
