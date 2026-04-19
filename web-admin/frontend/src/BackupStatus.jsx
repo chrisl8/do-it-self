@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -163,6 +163,56 @@ const groupByHost = (sources) => {
   return Object.fromEntries(entries);
 };
 
+const HealthcheckUrlField = ({ label, value, onSave }) => {
+  const [local, setLocal] = useState(value ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setLocal(value ?? "");
+  }, [value]);
+
+  const commit = async () => {
+    const next = local.trim();
+    if (next === (value ?? "")) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(next);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Box sx={{ minWidth: 0, flex: 1 }}>
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
+      <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="https://hc-ping.com/..."
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.target.blur();
+          }}
+          disabled={saving}
+          error={!!error}
+          helperText={error || " "}
+          slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: "0.8rem" } } }}
+        />
+        {saving && <Spinner size={16} />}
+      </Box>
+    </Box>
+  );
+};
+
 const LogDialog = ({ open, onClose, title, log }) => (
   <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
     <DialogTitle>{title}</DialogTitle>
@@ -213,6 +263,9 @@ const BackupStatus = () => {
     saveKopiaThreshold,
     saveIgnoreHosts,
     saveHostThresholds,
+    healthcheckUrls,
+    healthcheckAvailable,
+    saveHealthcheckUrls,
   } = useBackupStatus();
   const [expandedHosts, setExpandedHosts] = useState({});
   const [kopiaLogOpen, setKopiaLogOpen] = useState(false);
@@ -399,6 +452,37 @@ const BackupStatus = () => {
                 </Box>
               )}
 
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: 2,
+                  mt: 1.5,
+                  pt: 1.5,
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                {healthcheckAvailable ? (
+                  <>
+                    <HealthcheckUrlField
+                      label="Healthcheck URL (backup)"
+                      value={healthcheckUrls.borg}
+                      onSave={(v) => saveHealthcheckUrls({ borg: v })}
+                    />
+                    <HealthcheckUrlField
+                      label="Healthcheck URL (restore test)"
+                      value={healthcheckUrls.borgRestore}
+                      onSave={(v) => saveHealthcheckUrls({ borgRestore: v })}
+                    />
+                  </>
+                ) : (
+                  <Alert severity="info" sx={{ flex: 1 }}>
+                    Infisical not reachable — healthcheck URLs cannot be managed here right now.
+                  </Alert>
+                )}
+              </Box>
+
               <Box sx={{ mt: 1.5, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
                 <Button size="small" onClick={handleViewBorgLog}>
                   View Log
@@ -552,6 +636,28 @@ const BackupStatus = () => {
                   />
                 </Box>
               )}
+
+              <Box
+                sx={{
+                  display: "flex",
+                  mt: 1.5,
+                  pt: 1.5,
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                {healthcheckAvailable ? (
+                  <HealthcheckUrlField
+                    label="Healthcheck URL"
+                    value={healthcheckUrls.kopia}
+                    onSave={(v) => saveHealthcheckUrls({ kopia: v })}
+                  />
+                ) : (
+                  <Alert severity="info" sx={{ flex: 1 }}>
+                    Infisical not reachable — healthcheck URL cannot be managed here right now.
+                  </Alert>
+                )}
+              </Box>
             </CardContent>
           </Card>
 

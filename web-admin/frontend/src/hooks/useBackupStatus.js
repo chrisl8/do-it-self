@@ -51,6 +51,41 @@ const useBackupStatus = () => {
 
   const [ignoreHosts, setIgnoreHosts] = useState(null);
   const [hostThresholds, setHostThresholds] = useState({});
+  const [healthcheckUrls, setHealthcheckUrls] = useState({
+    kopia: null,
+    borg: null,
+    borgRestore: null,
+  });
+  const [healthcheckAvailable, setHealthcheckAvailable] = useState(true);
+
+  const fetchHealthcheckUrls = useCallback(async () => {
+    try {
+      const res = await fetch("/api/config/backup-healthchecks");
+      if (!res.ok) return;
+      const data = await res.json();
+      setHealthcheckAvailable(data.available !== false);
+      if (data.available !== false) {
+        setHealthcheckUrls({
+          kopia: data.kopia ?? "",
+          borg: data.borg ?? "",
+          borgRestore: data.borgRestore ?? "",
+        });
+      }
+    } catch {
+      // non-critical
+    }
+  }, []);
+
+  const saveHealthcheckUrls = useCallback(async (partial) => {
+    const res = await fetch("/api/config/backup-healthchecks", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(partial),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Failed to save healthcheck URL");
+    setHealthcheckUrls((prev) => ({ ...prev, ...partial }));
+  }, []);
 
   const fetchIgnoreHosts = useCallback(async () => {
     try {
@@ -133,7 +168,8 @@ const useBackupStatus = () => {
     fetchStatus();
     fetchIgnoreHosts();
     fetchHostThresholds();
-  }, [fetchStatus, fetchIgnoreHosts, fetchHostThresholds]);
+    fetchHealthcheckUrls();
+  }, [fetchStatus, fetchIgnoreHosts, fetchHostThresholds, fetchHealthcheckUrls]);
 
   return {
     kopiaStatus,
@@ -152,6 +188,9 @@ const useBackupStatus = () => {
     saveKopiaThreshold,
     saveIgnoreHosts,
     saveHostThresholds,
+    healthcheckUrls,
+    healthcheckAvailable,
+    saveHealthcheckUrls,
   };
 };
 
