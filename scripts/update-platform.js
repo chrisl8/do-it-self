@@ -22,12 +22,14 @@ import { fileURLToPath } from "url";
 import { execSync, spawnSync } from "child_process";
 import { createInterface } from "readline";
 import YAML from "yaml";
+import { readCatalog, readInstalled, reconcileCatalog, cloneModule } from "./lib/module-catalog.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
 const MODULES_DIR = join(CONTAINERS_DIR, ".modules");
 const REGISTRY_PATH = join(CONTAINERS_DIR, "container-registry.yaml");
 const INSTALLED_MODULES_PATH = join(CONTAINERS_DIR, "installed-modules.yaml");
+const MODULE_CATALOG_PATH = join(CONTAINERS_DIR, "module-catalog.yaml");
 const USER_CONFIG_PATH = join(CONTAINERS_DIR, "user-config.yaml");
 const BORG_BACKUP_SH = join(__dirname, "borg-backup.sh");
 
@@ -274,6 +276,52 @@ async function main() {
     if (uc && uc.enabled !== undefined) return uc.enabled === true || uc.enabled === "true";
     return false; // if no user override, it was using the default — removed means it's gone
   });
+
+  // Step 7b: module catalog sync — reconcile .modules/ with the (newly pulled)
+  // module-catalog.yaml. Required entries auto-clone; optional ones, URL drift,
+  // removals, and user-added sources are reported but never auto-mutated. A
+  // clone failure for one entry is a warning, not a fatal error.
+  section("Module catalog sync");
+  const catalogSyncAdded = [];
+  const catalogSyncFailed = [];
+  try {
+    const catalog = readCatalog(MODULE_CATALOG_PATH);
+    const installedForCatalog = readInstalled(INSTALLED_MODULES_PATH);
+    const report = reconcileCatalog(catalog, MODULES_DIR, installedForCatalog);
+
+    for (const entry of report.toClone) {
+      info(`cloning ${entry.name} (required) from ${entry.url}`);
+      const { ok: cloneOk, error } = cloneModule(MODULES_DIR, entry.name, entry.url);
+      if (cloneOk) {
+        ok(`ADDED ${entry.name}`);
+        catalogSyncAdded.push(entry.name);
+      } else {
+        warn(`failed to clone ${entry.name}: ${error?.trim?.() || error}`);
+        catalogSyncFailed.push(entry.name);
+      }
+    }
+    for (const entry of report.optional) {
+      info(`OPTIONAL AVAILABLE ${entry.name} — run 'scripts/module.sh add-source ${entry.url}' to clone`);
+    }
+    for (const drift of report.urlDrift) {
+      warn(`URL CHANGED ${drift.name}: catalog says ${drift.catalogUrl}, local remote is ${drift.localUrl} (not rewriting)`);
+    }
+    for (const name of report.removed) {
+      warn(`REMOVED FROM CATALOG ${name} — still on disk at .modules/${name} (not deleting)`);
+    }
+    // User-added sources in installed-modules.yaml that aren't in the catalog
+    // are the expected custom-source case — no output.
+    if (
+      report.toClone.length === 0 &&
+      report.optional.length === 0 &&
+      report.urlDrift.length === 0 &&
+      report.removed.length === 0
+    ) {
+      ok("catalog in sync");
+    }
+  } catch (e) {
+    warn(`catalog sync skipped: ${e.message}`);
+  }
 
   // Step 8: run setup hooks for every installed container
   section("Setup hooks");
