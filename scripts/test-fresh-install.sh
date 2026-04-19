@@ -59,6 +59,17 @@ check "repo cloned to ~/containers" test -d "${CONTAINERS_DIR}/scripts"
 check "container-registry.yaml exists" test -f "${CONTAINERS_DIR}/container-registry.yaml"
 check "user-config.yaml created" test -f "${CONTAINERS_DIR}/user-config.yaml"
 
+# Fresh install invariant: only registry-default-enabled containers (infisical,
+# homepage) should be surfaced at top level after setup. Everything else must
+# stay under .modules/ until the user installs it via the Browse page.
+check "fresh install surfaces infisical" test -f "${CONTAINERS_DIR}/infisical/compose.yaml"
+check "fresh install surfaces homepage" test -f "${CONTAINERS_DIR}/homepage/compose.yaml"
+if [[ ! -d "${CONTAINERS_DIR}/nextcloud" && ! -d "${CONTAINERS_DIR}/searxng" ]]; then
+  pass "fresh install does NOT pre-install non-default containers"
+else
+  fail "fresh install surfaced non-default containers: $(ls -d "${CONTAINERS_DIR}"/{nextcloud,searxng} 2>/dev/null | tr '\n' ' ')"
+fi
+
 # Direct regression test for the "update-platform.sh blocked after setup" bug:
 # setup.sh must not mutate any tracked file. Any dirty tracked file here means
 # a downstream user's update-platform.sh will fail its precondition check.
@@ -164,6 +175,21 @@ fi
 section "Environment Generation"
 
 cd "${CONTAINERS_DIR}"
+
+# searxng and nextcloud are not default-enabled, so they don't exist on disk
+# yet. INSTALL them via the web admin API — this also exercises the Browse
+# page's install endpoint.
+for c in searxng nextcloud; do
+  INSTALL_RESP=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" -X POST \
+    "http://localhost/api/modules/containers/$c/install" \
+    -H 'Content-Type: application/json' \
+    -d '{"module": "do-it-self-containers"}' 2>/dev/null) || true
+  if [[ -n "$INSTALL_RESP" ]] && echo "$INSTALL_RESP" | grep -q '"success":true'; then
+    pass "installed $c via API"
+  else
+    fail "could not install $c via API: ${INSTALL_RESP:-no response}"
+  fi
+done
 
 # Generate .env for a simple container.
 # Note: searxng requires TS_AUTHKEY which is empty on a fresh install,
@@ -432,6 +458,23 @@ if [[ "$TS_READY" == true ]]; then
   section "Container Startup (with Tailscale)"
 
   TEST_CONTAINERS="homepage searxng freshrss the-lounge uptime kanboard paste nextcloud"
+
+  # Install the non-default containers that haven't been installed earlier.
+  # `homepage` is default-enabled (pre-installed by setup). `searxng` and
+  # `nextcloud` were installed in the Env Generation phase. The rest come
+  # from do-it-self-containers and must be installed before they can be
+  # enabled.
+  for c in freshrss the-lounge uptime kanboard paste; do
+    INSTALL_RESP=$(curl -sf --unix-socket "$WEB_ADMIN_SOCKET" -X POST \
+      "http://localhost/api/modules/containers/$c/install" \
+      -H 'Content-Type: application/json' \
+      -d '{"module": "do-it-self-containers"}' 2>/dev/null) || true
+    if [[ -n "$INSTALL_RESP" ]] && echo "$INSTALL_RESP" | grep -q '"success":true'; then
+      pass "installed $c via API"
+    else
+      fail "could not install $c via API: ${INSTALL_RESP:-no response}"
+    fi
+  done
 
   # Enable each container via the web admin API (over the Unix socket).
   # For nextcloud, pass the two user-facing variables (admin username and
