@@ -50,13 +50,15 @@ fi
 step "Setting up module system"
 mkdir -p "${MODULES_DIR}"
 
-# Get catalog entries as tab-separated: name<TAB>url
+# Get catalog entries as tab-separated: name<TAB>url<TAB>required
+# `required: true` entries auto-clone; others are logged as optional for
+# the user to opt into via `scripts/module.sh add-source`.
 CATALOG_ENTRIES=$(run_node -e '
 import { readFileSync } from "fs";
 import YAML from "yaml";
 const catalog = YAML.parse(readFileSync(process.argv[1], "utf8"));
 for (const [name, entry] of Object.entries(catalog.catalogs || {})) {
-  console.log(name + "\t" + entry.url);
+  console.log(name + "\t" + entry.url + "\t" + (entry.required === true ? "true" : "false"));
 }
 ' "${MODULE_CATALOG}" 2>/dev/null) || true
 
@@ -65,9 +67,13 @@ if [[ -z "${CATALOG_ENTRIES}" ]]; then
   exit 0
 fi
 
-while IFS=$'\t' read -r MODULE_NAME MODULE_URL; do
+while IFS=$'\t' read -r MODULE_NAME MODULE_URL MODULE_REQUIRED; do
   if [[ -d "${MODULES_DIR}/${MODULE_NAME}" ]]; then
     ok "Module ${MODULE_NAME} already cloned"
+    continue
+  fi
+  if [[ "${MODULE_REQUIRED}" != "true" ]]; then
+    ok "Optional module available: ${MODULE_NAME} — run 'scripts/module.sh add-source ${MODULE_URL}' to clone"
     continue
   fi
   step "Cloning module: ${MODULE_NAME}"
