@@ -7,6 +7,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
+const MAX_CHANGES_PER_REPO = 50;
 
 function childEnv() {
   return { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
@@ -65,6 +66,35 @@ export async function fetchRemote(repoPath, remote, branch) {
       timeout: 60000,
     },
   );
+}
+
+// Full repo status shape used by /api/git-status and the background poller.
+// Always returns `clean`, `changes`, and upstream state fields so the frontend
+// gets a consistent contract regardless of which path populated it.
+export async function getRepoStatus(name, label, repoPath, isModule) {
+  const result = { name, label, isModule, clean: true, changes: [] };
+  try {
+    const { stdout } = await execFileAsync("git", ["status", "--porcelain"], {
+      cwd: repoPath,
+      env: childEnv(),
+    });
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    result.clean = lines.length === 0;
+    const capped = lines.slice(0, MAX_CHANGES_PER_REPO);
+    result.changes = capped.map((line) => {
+      const match = line.match(/^(.+?)\s+(\S.*)$/);
+      return match
+        ? { status: match[1].trim(), file: match[2] }
+        : { status: "?", file: line.trim() };
+    });
+    if (lines.length > MAX_CHANGES_PER_REPO) {
+      result.truncated = lines.length - MAX_CHANGES_PER_REPO;
+    }
+  } catch (err) {
+    result.error = err.message;
+  }
+  Object.assign(result, await getUpstreamState(repoPath));
+  return result;
 }
 
 // Best-effort fetch: logs + returns on error instead of throwing. Used by

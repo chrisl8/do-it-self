@@ -92,7 +92,9 @@ const useGitStatus = () => {
   }, []);
 
   const dirtyRepos = useMemo(
-    () => gitStatus?.repos?.filter((r) => !r.clean) || [],
+    // Explicit `=== false` so a repo with no `clean` field (older or partial
+    // payload shape) doesn't accidentally get treated as dirty.
+    () => gitStatus?.repos?.filter((r) => r.clean === false) || [],
     [gitStatus],
   );
 

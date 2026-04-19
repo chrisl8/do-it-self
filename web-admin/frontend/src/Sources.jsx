@@ -112,6 +112,7 @@ function CatalogRow({ name, entry, added, onAdd, busy }) {
 
 function DirtyRepoEntry({ repo, onDevSync, busy }) {
   const [expanded, setExpanded] = useState(false);
+  const changes = repo.changes || [];
   return (
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -119,11 +120,11 @@ function DirtyRepoEntry({ repo, onDevSync, busy }) {
           {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
         </IconButton>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          {repo.label}
+          {repo.label || repo.name}
         </Typography>
         <Chip
           size="small"
-          label={`${repo.changes.length}${repo.truncated ? "+" : ""} file${repo.changes.length === 1 ? "" : "s"}`}
+          label={`${changes.length}${repo.truncated ? "+" : ""} file${changes.length === 1 ? "" : "s"}`}
           variant="outlined"
         />
         {repo.isModule && (
@@ -145,7 +146,7 @@ function DirtyRepoEntry({ repo, onDevSync, busy }) {
             color: "text.secondary",
           }}
         >
-          {repo.changes.map((c, i) => `${c.status.padEnd(3)}${c.file}`).join("\n")}
+          {changes.map((c) => `${(c.status || "?").padEnd(3)}${c.file}`).join("\n")}
           {repo.truncated ? `\n... and ${repo.truncated} more` : ""}
         </Box>
       </Collapse>
