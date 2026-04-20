@@ -344,10 +344,11 @@ app.use(express.json());
 app.use(express.static(join(dirName, "../public")));
 
 // The web-admin's own Metatron brand mark served as the dashboard icon for
-// its stack row. Registered before the static middleware so this specific
-// path wins over any stray web-admin.svg that might exist on disk.
+// its stack row. Read from the committed source in frontend/public (the same
+// file Vite serves as the favicon) so this works whether or not the frontend
+// has been built into backend/public.
 app.get("/dashboard-icons/svg/web-admin.svg", (req, res) => {
-  res.sendFile(join(dirName, "../public/Metatron.svg"));
+  res.sendFile(join(dirName, "../../frontend/public/Metatron.svg"));
 });
 
 app.use("/dashboard-icons/svg", express.static(join(ICONS_BASE_DIR, "svg")));

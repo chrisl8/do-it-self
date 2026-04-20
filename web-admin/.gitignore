@@ -3,7 +3,9 @@ node_modules/
 
 # Build output
 dist/
-public/
+backend/public/
+frontend/public/*
+!frontend/public/Metatron.svg
 
 # Environment
 .env
