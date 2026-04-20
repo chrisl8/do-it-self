@@ -36,6 +36,9 @@ const Navigation = () => {
       <Tabs
         value={currentTab === -1 ? 0 : currentTab}
         onChange={(e, val) => navigate(routes[val].path)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
       >
         {routes.map((r) => (
           <Tab key={r.path} label={r.label} />

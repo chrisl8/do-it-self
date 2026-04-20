@@ -382,7 +382,7 @@ function Sources() {
           Add Custom URL
         </Typography>
         <Divider sx={{ mb: 1.5 }} />
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 600 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, maxWidth: { xs: "100%", sm: 600 } }}>
           <TextField
             size="small"
             label="Git URL"
