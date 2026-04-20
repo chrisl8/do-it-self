@@ -822,7 +822,8 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
                   CLONE_ARGS+=(--depth 1)
                 fi
                 if git clone "${CLONE_ARGS[@]}" "${REPO_URL}" "${REPO_SUBDIR}"; then
-                  if [[ -n "${REPO_BRANCH}" ]]; then
+                  # list-git-repos.js outputs "-" for empty branch; skip checkout then.
+                  if [[ -n "${REPO_BRANCH}" && "${REPO_BRANCH}" != "-" ]]; then
                     cd "${REPO_SUBDIR}"
                     git checkout "${REPO_BRANCH}"
                     cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
