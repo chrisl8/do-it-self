@@ -369,10 +369,10 @@ const BackupStatus = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Borg backup has not been set up on this host. Run{" "}
-                <code>scripts/setup-borg-backup.sh</code> to configure local
-                and (optionally) remote backups. See{" "}
-                <code>docs/MAINTENANCE.md</code> for details.
+                Borg backup has not been set up on this host. See{" "}
+                <code>borgbackup/SETUP.md</code> for setup instructions, then
+                run <code>scripts/setup-borg-backup.sh</code> to configure
+                local and (optionally) remote backups.
               </Typography>
               <Box
                 sx={{

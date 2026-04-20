@@ -8,9 +8,9 @@ const MESSAGES = {
     title: "Borg backup is not configured",
     body: (
       <>
-        Your container volumes and databases are not being backed up. Run{" "}
-        <code>scripts/setup-borg-backup.sh</code> on the host to configure
-        local backups. See <code>docs/MAINTENANCE.md</code> for details.
+        Your container volumes and databases are not being backed up. See{" "}
+        <code>borgbackup/SETUP.md</code> for setup instructions, then run{" "}
+        <code>scripts/setup-borg-backup.sh</code> on the host.
       </>
     ),
   },
