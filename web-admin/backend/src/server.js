@@ -370,21 +370,147 @@ app.get("/api/borg-status", async (req, res) => {
   }
 });
 
-// Signal for the "borg not configured" banner. Presence of borg-backup.conf
-// means the user has run scripts/setup-borg-backup.sh; absence means backups
-// are off and the user should be nudged.
+// Drives the borg-backup banner on the dashboard. Returns a derived
+// state so the frontend can render one of three nudges:
+//   - "none"        : conf missing OR no successful backup in recent
+//                     memory — the strong "set up backups" nudge
+//   - "local_only"  : local is current but remote is failing/missing
+//   - "remote_only" : remote is current but local is failing
+//   - "ok"          : both sides healthy (or remote intentionally off)
+// A successful backup that's older than STALE_MS is treated the same as
+// "never ran" for that side — daily cron plus slack.
+const STALE_MS = 48 * 60 * 60 * 1000;
+
+function parseBorgConf(contents) {
+  const out = {};
+  for (const line of contents.split("\n")) {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)=(.*?)\s*$/);
+    if (!m) continue;
+    let value = m[2];
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    out[m[1]] = value;
+  }
+  return out;
+}
+
+function sideState(status, lastBackup, now) {
+  if (status !== "success") return { ok: false, last_status: status ?? "never_run" };
+  const ts = lastBackup ? Date.parse(lastBackup) : NaN;
+  if (!Number.isFinite(ts) || now - ts > STALE_MS) {
+    return { ok: false, last_status: "stale" };
+  }
+  return { ok: true, last_status: "success" };
+}
+
 app.get("/api/system/backup-status", async (req, res) => {
   const confPath = join(CONTAINERS_DIR, "scripts/borg-backup.conf");
-  let configured = false;
+  const statusPath = join(CONTAINERS_DIR, "homepage/images/borg-status.json");
+
+  let confPresent = false;
+  let conf = {};
   try {
-    await readFile(confPath, "utf8");
-    configured = true;
+    const raw = await readFile(confPath, "utf8");
+    confPresent = true;
+    conf = parseBorgConf(raw);
   } catch (err) {
     if (err.code !== "ENOENT") {
       console.error("backup-status: unexpected error reading borg conf:", err);
     }
   }
-  res.json({ configured });
+
+  let statusJson = null;
+  try {
+    statusJson = JSON.parse(await readFile(statusPath, "utf8"));
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error("backup-status: unexpected error reading borg status:", err);
+    }
+  }
+
+  let dismissed = false;
+  try {
+    const userConfig = await getUserConfig();
+    dismissed = userConfig?.web_admin?.borg_banner_dismissed === true;
+  } catch (err) {
+    console.error("backup-status: unexpected error reading user-config:", err);
+  }
+
+  const remoteEnabled = Boolean(conf.BORG_REMOTE_REPO && conf.BORG_REMOTE_REPO.length);
+  const now = Date.now();
+
+  const local = {
+    enabled: Boolean(conf.BORG_REPO && conf.BORG_REPO.length),
+    last_status: "never_run",
+    last_backup: statusJson?.last_backup ?? null,
+  };
+  const remote = {
+    enabled: remoteEnabled,
+    last_status: "never_run",
+    last_backup: statusJson?.last_backup ?? null,
+  };
+
+  if (statusJson) {
+    const localSide = sideState(statusJson.status, statusJson.last_backup, now);
+    local.last_status = localSide.last_status;
+
+    const remoteStatus = statusJson.remote?.status;
+    if (!remoteEnabled || remoteStatus === "skipped") {
+      remote.last_status = remoteEnabled ? "skipped" : "disabled";
+    } else {
+      const remoteSide = sideState(remoteStatus, statusJson.last_backup, now);
+      remote.last_status = remoteSide.last_status;
+    }
+  } else if (!remoteEnabled) {
+    remote.last_status = "disabled";
+  }
+
+  let state;
+  if (!confPresent || !statusJson) {
+    state = "none";
+  } else {
+    const localOk = local.last_status === "success";
+    const remoteOk = !remoteEnabled || remote.last_status === "success";
+    if (localOk && remoteOk) {
+      state = "ok";
+    } else if (localOk && !remoteOk) {
+      state = "local_only";
+    } else if (!localOk && remote.last_status === "success") {
+      state = "remote_only";
+    } else {
+      state = "none";
+    }
+  }
+
+  res.json({ state, dismissed, conf_present: confPresent, local, remote });
+});
+
+app.get("/api/config/borg-banner-dismiss", async (req, res) => {
+  try {
+    const userConfig = await getUserConfig();
+    res.json({ dismissed: userConfig?.web_admin?.borg_banner_dismissed === true });
+  } catch (err) {
+    console.error("Error reading borg banner dismiss flag:", err);
+    res.status(500).json({ error: "Failed to read banner preference" });
+  }
+});
+
+app.put("/api/config/borg-banner-dismiss", async (req, res) => {
+  try {
+    if (typeof req.body?.dismissed !== "boolean") {
+      return res.status(400).json({ error: "dismissed must be a boolean" });
+    }
+    const userConfig = await getUserConfig();
+    if (!userConfig.web_admin) userConfig.web_admin = {};
+    userConfig.web_admin.borg_banner_dismissed = req.body.dismissed;
+    await saveUserConfig(userConfig);
+    res.json({ success: true, dismissed: req.body.dismissed });
+  } catch (err) {
+    console.error("Error saving borg banner dismiss flag:", err);
+    res.status(500).json({ error: "Failed to save banner preference" });
+  }
 });
 
 app.get("/api/kopia-status", async (req, res) => {

@@ -3,21 +3,49 @@ import Alert from "@mui/material/Alert";
 import AlertTitle from "@mui/material/AlertTitle";
 import Box from "@mui/material/Box";
 
-const DISMISS_KEY = "borgBannerDismissedAt";
-const REMIND_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+const MESSAGES = {
+  none: {
+    title: "Borg backup is not configured",
+    body: (
+      <>
+        Your container volumes and databases are not being backed up. Run{" "}
+        <code>scripts/setup-borg-backup.sh</code> on the host to configure
+        local backups. See <code>docs/MAINTENANCE.md</code> for details.
+      </>
+    ),
+  },
+  local_only: {
+    title: "Remote borg backup is not running",
+    body: (
+      <>
+        Local backups are current, but remote offsite backups are failing or
+        not configured. See the Backups page for details.
+      </>
+    ),
+  },
+  remote_only: {
+    title: "Local borg backup is not running",
+    body: (
+      <>
+        Remote backups are current, but the local backup is failing. See the
+        Backups page for details.
+      </>
+    ),
+  },
+};
 
 const BorgNotConfiguredBanner = () => {
-  const [show, setShow] = useState(false);
+  const [state, setState] = useState(null);
+  const [sessionHidden, setSessionHidden] = useState(false);
 
   useEffect(() => {
-    const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);
-    if (dismissedAt && Date.now() - dismissedAt < REMIND_AFTER_MS) return;
-
     let cancelled = false;
     fetch("/api/system/backup-status")
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (!cancelled && j && j.configured === false) setShow(true);
+        if (cancelled || !j) return;
+        if (j.dismissed) return;
+        setState(j.state);
       })
       .catch(() => {});
     return () => {
@@ -25,21 +53,15 @@ const BorgNotConfiguredBanner = () => {
     };
   }, []);
 
-  if (!show) return null;
+  if (sessionHidden) return null;
+  const message = state && MESSAGES[state];
+  if (!message) return null;
 
   return (
     <Box sx={{ px: 2, pt: 1 }}>
-      <Alert
-        severity="warning"
-        onClose={() => {
-          localStorage.setItem(DISMISS_KEY, String(Date.now()));
-          setShow(false);
-        }}
-      >
-        <AlertTitle>Borg backup is not configured</AlertTitle>
-        Your container volumes and databases are not being backed up. Run{" "}
-        <code>scripts/setup-borg-backup.sh</code> on the host to configure
-        local backups. See <code>docs/MAINTENANCE.md</code> for details.
+      <Alert severity="warning" onClose={() => setSessionHidden(true)}>
+        <AlertTitle>{message.title}</AlertTitle>
+        {message.body}
       </Alert>
     </Box>
   );
