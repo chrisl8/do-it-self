@@ -138,6 +138,34 @@ restart() {
     start
 }
 
+# Unconditional rebuild: reinstall deps, rebuild the frontend, and restart PM2.
+# Used by scripts/update-platform.js after a successful pull has changed
+# anything under web-admin/. Bypasses start()'s "already online -> do nothing"
+# early return, which is correct for cron/health-check callers but wrong after
+# an update.
+rebuild() {
+    echo "Rebuilding web-admin..."
+    echo "Installing dependencies..."
+    cd "$WEB_ADMIN_DIR" && npm run install:all
+    echo "Building frontend..."
+    cd "$WEB_ADMIN_DIR" && npm run build
+
+    load_env
+
+    if pm2 list 2>/dev/null | grep -q "$PM2_NAME"; then
+        echo "Restarting existing web-admin process..."
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restarting PM2 process: $PM2_NAME"
+        pm2 restart "$PM2_NAME" --update-env
+    else
+        echo "Starting web-admin via PM2..."
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting new PM2 process from $ECOSYSTEM_FILE"
+        pm2 start "$ECOSYSTEM_FILE"
+        pm2 save
+    fi
+
+    echo "web-admin rebuilt and restarted"
+}
+
 case "$command" in
     start)
         start
@@ -148,8 +176,11 @@ case "$command" in
     restart)
         restart
         ;;
+    rebuild)
+        rebuild
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart}"
+        echo "Usage: $0 {start|stop|restart|rebuild}"
         exit 1
         ;;
 esac

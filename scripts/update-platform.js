@@ -21,6 +21,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { execSync, spawnSync } from "child_process";
 import { createInterface } from "readline";
+import os from "os";
 import YAML from "yaml";
 import { readCatalog, readInstalled, reconcileCatalog, cloneModule } from "./lib/module-catalog.js";
 
@@ -422,18 +423,19 @@ function maybeRebuildWebAdmin(OLD_HEAD, NEW_HEAD) {
   }
   if (!changed) return;
   section("Web admin rebuild");
-  info("web-admin/ changed — scheduling `start-web-admin.sh` in 5s (detached)");
+  info("web-admin/ changed — scheduling `start-web-admin.sh rebuild` in 5s (detached)");
   info("the web admin will rebuild the frontend and restart PM2 shortly");
   const script = join(__dirname, "start-web-admin.sh");
+  const logFile = join(os.homedir(), "logs/web-admin-rebuild.log");
   try {
     // Double-forked via the bash subshell so the grandchild survives after
-    // spawnSync returns. Stdio is fully redirected so we don't keep the
-    // parent's file descriptors open.
+    // spawnSync returns. Output goes to a log file so "did it actually run?"
+    // is answerable after the fact.
     spawnSync("bash", [
       "-c",
-      `(sleep 5 && "${script}") >/dev/null 2>&1 </dev/null &`,
+      `(sleep 5 && "${script}" rebuild) >> "${logFile}" 2>&1 </dev/null &`,
     ], { stdio: "ignore", detached: true });
-    ok("rebuild scheduled");
+    ok(`rebuild scheduled (log: ${logFile})`);
   } catch (e) {
     warn(`could not schedule web-admin rebuild: ${e.message}`);
   }
