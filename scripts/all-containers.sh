@@ -786,7 +786,27 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           printf "\n"
         fi
 
-        if [[ ${UPDATE_GIT_REPOS} = true ]];then
+        # Auto-clone any declared git_repos whose .git is missing. Fixes the
+        # "installed via web admin, started, icons missing" case: module.sh
+        # install only copies files, so a freshly installed container with
+        # declared git_repos (e.g. homepage's dashboard-icons) would otherwise
+        # start with an empty bind-mount target. Stateless — if every declared
+        # repo is already present, this is a no-op and no network fetch runs.
+        NEEDS_GIT_REPO_CLONE=false
+        if [[ -x "$(command -v node)" ]] && [[ -f "${GIT_REPOS_HELPER}" ]]; then
+          while IFS=$'\t' read -r _RC REPO_SUBDIR _RU _RB _RS; do
+            if [[ ! -d "${REPO_SUBDIR}/.git" ]]; then
+              NEEDS_GIT_REPO_CLONE=true
+              # If Docker previously auto-created an empty bind-mount target,
+              # rmdir it so `git clone` doesn't refuse (it rejects non-empty dirs).
+              if [[ -d "${REPO_SUBDIR}" ]] && [[ -z "$(ls -A "${REPO_SUBDIR}" 2>/dev/null)" ]]; then
+                rmdir "${REPO_SUBDIR}" 2>/dev/null || true
+              fi
+            fi
+          done < <(node "${GIT_REPOS_HELPER}" --container "${CONTAINER_DIR}" 2>/dev/null)
+        fi
+
+        if [[ ${UPDATE_GIT_REPOS} = true || ${NEEDS_GIT_REPO_CLONE} = true ]];then
           # Clone or update git repos defined in container-registry.yaml
           if [[ -x "$(command -v node)" ]] && [[ -f "${GIT_REPOS_HELPER}" ]]; then
             while IFS=$'\t' read -r _REPO_CONTAINER REPO_SUBDIR REPO_URL REPO_BRANCH REPO_SHALLOW; do
@@ -809,6 +829,10 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
                   fi
                 else
                   printf "${RED}  Failed to clone ${REPO_SUBDIR}${NC}\n"
+                  # Clean up any partial clone so the next start retries cleanly.
+                  if [[ -d "${REPO_SUBDIR}" ]] && [[ ! -d "${REPO_SUBDIR}/.git" ]]; then
+                    rm -rf "${REPO_SUBDIR}"
+                  fi
                 fi
               fi
             done < <(node "${GIT_REPOS_HELPER}" --container "${CONTAINER_DIR}" 2>/dev/null)
