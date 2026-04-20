@@ -25,6 +25,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import useBackupStatus from "./hooks/useBackupStatus";
+import BorgConfigSection from "./BorgConfigSection";
 
 const THRESHOLD_MARKS = [
   { value: 0, hours: 12, label: "12h" },
@@ -356,6 +357,8 @@ const BackupStatus = () => {
           </Button>
         )}
       </Box>
+
+      <BorgConfigSection />
 
       {/* Borg Backup Section */}
       {!borgStatus && (
