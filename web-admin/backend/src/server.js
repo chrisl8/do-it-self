@@ -343,6 +343,13 @@ async function readKopiaConf() {
 app.use(express.json());
 app.use(express.static(join(dirName, "../public")));
 
+// The web-admin's own Metatron brand mark served as the dashboard icon for
+// its stack row. Registered before the static middleware so this specific
+// path wins over any stray web-admin.svg that might exist on disk.
+app.get("/dashboard-icons/svg/web-admin.svg", (req, res) => {
+  res.sendFile(join(dirName, "../public/Metatron.svg"));
+});
+
 app.use("/dashboard-icons/svg", express.static(join(ICONS_BASE_DIR, "svg")));
 app.use("/dashboard-icons/png", express.static(join(ICONS_BASE_DIR, "png")));
 app.use("/dashboard-icons/webp", express.static(join(ICONS_BASE_DIR, "webp")));
