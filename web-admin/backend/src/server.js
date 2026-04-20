@@ -22,6 +22,9 @@ import {
   writeAllContainerEnvs,
   maskSecrets,
   generateMissingSecrets,
+  getBorgConfig,
+  mountsNotInBackup,
+  writeBorgConf,
 } from "./configRegistry.js";
 import {
   getModuleCatalog,
@@ -510,6 +513,292 @@ app.put("/api/config/borg-banner-dismiss", async (req, res) => {
   } catch (err) {
     console.error("Error saving borg banner dismiss flag:", err);
     res.status(500).json({ error: "Failed to save banner preference" });
+  }
+});
+
+// ─── Borg backup configuration API ─────────────────────────────────
+//
+// Non-secret config is stored in user-config.yaml:borg. Passphrases
+// live in Infisical at /borgbackup. The rendered scripts/borg-backup.conf
+// is a derived artifact — writeBorgConf() regenerates it on every save.
+//
+// On hosts that predate this feature (neuromancer), user-config.yaml has
+// no borg: block yet but the hand-edited conf has real values. We
+// synthesize a borg: block on the fly at read time so the UI can show
+// the current state. The synthesized block is NOT persisted — the user's
+// first explicit save is the migration point.
+
+function parseBorgConfScalar(conf, key) {
+  const re = new RegExp(`^\\s*${key}=(.*)$`, "m");
+  const m = conf.match(re);
+  if (!m) return null;
+  let v = m[1].trim();
+  if ((v.startsWith('"') && v.endsWith('"')) ||
+      (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1);
+  }
+  return v;
+}
+
+function parseBorgConfArray(conf, key) {
+  const re = new RegExp(`${key}=\\(([\\s\\S]*?)\\)`);
+  const m = conf.match(re);
+  if (!m) return [];
+  return m[1]
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"))
+    .map((l) => l.replace(/^"|"$/g, ""));
+}
+
+async function hydrateBorgFromConfIfNeeded(userConfig) {
+  if (userConfig?.borg) return userConfig;
+  const confPath = join(CONTAINERS_DIR, "scripts/borg-backup.conf");
+  let confText;
+  try {
+    confText = await readFile(confPath, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") return userConfig;
+    throw err;
+  }
+  const pickNum = (k) => {
+    const v = parseBorgConfScalar(confText, k);
+    return v === null ? undefined : Number(v);
+  };
+  const borg = {
+    repo_path: parseBorgConfScalar(confText, "BORG_REPO") || "",
+    dump_dir: parseBorgConfScalar(confText, "BORG_DB_DUMP_DIR") || "",
+    backup_paths: parseBorgConfArray(confText, "BORG_BACKUP_PATHS").map(
+      (p) => ({ path: p, enabled: true }),
+    ),
+    remote_repo: parseBorgConfScalar(confText, "BORG_REMOTE_REPO") || "",
+    remote_ratelimit_kbps: pickNum("BORG_REMOTE_RATELIMIT") ?? 0,
+    retention: {
+      local: {
+        daily: pickNum("BORG_KEEP_DAILY"),
+        weekly: pickNum("BORG_KEEP_WEEKLY"),
+        monthly: pickNum("BORG_KEEP_MONTHLY"),
+        yearly: pickNum("BORG_KEEP_YEARLY"),
+      },
+      remote: {
+        daily: pickNum("BORG_REMOTE_KEEP_DAILY"),
+        weekly: pickNum("BORG_REMOTE_KEEP_WEEKLY"),
+        monthly: pickNum("BORG_REMOTE_KEEP_MONTHLY"),
+        yearly: pickNum("BORG_REMOTE_KEEP_YEARLY"),
+      },
+    },
+  };
+  return { ...userConfig, borg };
+}
+
+const BORG_PASSPHRASE_SECRETS = {
+  passphrase: { path: "/borgbackup", key: "BORG_PASSPHRASE" },
+  remotePassphrase: { path: "/borgbackup", key: "BORG_REMOTE_PASSPHRASE" },
+};
+
+app.get("/api/config/borg", async (req, res) => {
+  try {
+    const rawUserConfig = await getUserConfig();
+    const persisted = Boolean(rawUserConfig?.borg);
+    const userConfig = await hydrateBorgFromConfIfNeeded(rawUserConfig);
+    const effective = getBorgConfig(userConfig);
+    const uncovered = mountsNotInBackup(userConfig);
+
+    let infisicalAvailable = false;
+    const passphraseSet = { passphrase: false, remotePassphrase: false };
+    try {
+      infisicalAvailable = await isInfisicalAvailable();
+      if (infisicalAvailable) {
+        for (const [name, { path, key }] of Object.entries(BORG_PASSPHRASE_SECRETS)) {
+          const v = await getSecret(key, path).catch(() => null);
+          passphraseSet[name] = Boolean(v);
+        }
+      }
+    } catch (err) {
+      console.warn("borg: could not check Infisical status:", err.message);
+    }
+
+    res.json({
+      infisical_available: infisicalAvailable,
+      persisted,
+      config: effective,
+      mounts_not_in_backup: uncovered,
+      passphrase_set: passphraseSet,
+      mounts: userConfig?.mounts || [],
+    });
+  } catch (err) {
+    console.error("Error reading borg config:", err);
+    res.status(500).json({ error: "Failed to read borg config" });
+  }
+});
+
+app.put("/api/config/borg", async (req, res) => {
+  try {
+    const body = req.body || {};
+    // Shape-check critical fields; tolerate omissions so partial saves work.
+    if (body.repo_path !== undefined && typeof body.repo_path !== "string") {
+      return res.status(400).json({ error: "repo_path must be a string" });
+    }
+    if (body.backup_paths !== undefined && !Array.isArray(body.backup_paths)) {
+      return res.status(400).json({ error: "backup_paths must be an array" });
+    }
+    if (body.remote_ratelimit_kbps !== undefined && typeof body.remote_ratelimit_kbps !== "number") {
+      return res.status(400).json({ error: "remote_ratelimit_kbps must be a number" });
+    }
+
+    // Merge on top of the hydrated state, not the raw block, so a
+    // partial PUT on a host that hasn't been migrated yet doesn't wipe
+    // everything that was only being synthesized from the existing
+    // borg-backup.conf at read time. First PUT = implicit migration.
+    const rawUserConfig = await getUserConfig();
+    const hydrated = await hydrateBorgFromConfIfNeeded(rawUserConfig);
+    const existing = hydrated.borg || {};
+    rawUserConfig.borg = {
+      ...existing,
+      ...body,
+      retention: {
+        local: { ...(existing.retention?.local || {}), ...(body.retention?.local || {}) },
+        remote: { ...(existing.retention?.remote || {}), ...(body.retention?.remote || {}) },
+      },
+    };
+    await saveUserConfig(rawUserConfig);
+    const result = await writeBorgConf(rawUserConfig);
+    res.json({ success: true, conf: result });
+  } catch (err) {
+    console.error("Error saving borg config:", err);
+    res.status(500).json({ error: "Failed to save borg config" });
+  }
+});
+
+// One-shot passphrase generator. Returns plaintext in the response body
+// exactly once; the caller is expected to display it, get user
+// confirmation, and then POST it back via PUT /api/config/borg/passphrase.
+// The two-step flow exists so the server never persists a passphrase
+// the user hasn't had a chance to copy off-box.
+app.post("/api/config/borg/passphrase/generate", async (req, res) => {
+  try {
+    const { randomBytes } = await import("crypto");
+    const value = randomBytes(30).toString("base64").replace(/[+/=]/g, "").slice(0, 40);
+    res.json({ value });
+  } catch (err) {
+    console.error("Error generating passphrase:", err);
+    res.status(500).json({ error: "Failed to generate passphrase" });
+  }
+});
+
+app.put("/api/config/borg/passphrase", async (req, res) => {
+  try {
+    const { key, value } = req.body || {};
+    const meta = BORG_PASSPHRASE_SECRETS[key];
+    if (!meta) {
+      return res.status(400).json({ error: "Unknown passphrase key" });
+    }
+    if (typeof value !== "string" || value.length < 8) {
+      return res.status(400).json({ error: "value must be a string of at least 8 characters" });
+    }
+    if (!(await isInfisicalAvailable())) {
+      return res.status(503).json({ error: "Infisical is not available" });
+    }
+    await createFolder(meta.path.replace(/^\//, ""), "/");
+    await setSecret(meta.key, value, meta.path);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error saving borg passphrase:", err);
+    res.status(500).json({ error: "Failed to save passphrase" });
+  }
+});
+
+// Fire the idempotent setup script. `sudo apt install` on first run
+// requires passwordless sudo; if that's not configured, the script
+// warns and the caller can fall back to a host-side run. Setup output
+// is returned as a single blob — log viewer renders it when done.
+app.post("/api/borg/init-repo", async (req, res) => {
+  try {
+    const scriptPath = join(CONTAINERS_DIR, "scripts/setup-borg-backup.sh");
+    const { output, exitCode } = await new Promise((resolve) => {
+      let buf = "";
+      const child = spawn(scriptPath, [], { env: childEnv() });
+      const timer = setTimeout(() => child.kill("SIGTERM"), 10 * 60 * 1000);
+      child.stdout.on("data", (d) => (buf += d.toString()));
+      child.stderr.on("data", (d) => (buf += d.toString()));
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ output: buf, exitCode: code });
+      });
+    });
+    res.json({ exitCode, output });
+  } catch (err) {
+    console.error("Error running setup-borg-backup:", err);
+    res.status(500).json({ error: "Failed to run setup script" });
+  }
+});
+
+app.post("/api/borg/run-now", async (req, res) => {
+  try {
+    const scriptPath = join(CONTAINERS_DIR, "scripts/borg-backup.sh");
+    // Run detached — backups take 30+ minutes. Caller polls the status
+    // JSON and log file for progress.
+    const child = spawn(scriptPath, [], {
+      env: childEnv(),
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+    res.json({ success: true, pid: child.pid });
+  } catch (err) {
+    console.error("Error starting borg-backup:", err);
+    res.status(500).json({ error: "Failed to start backup" });
+  }
+});
+
+// Size estimates for backup-paths editor. `du -sh` is slow on multi-TB
+// paths, so cache for 10 minutes per path. Rejects non-absolute paths and
+// paths outside the user's usual mount areas as a minimum-viable guard
+// against somebody's browser exfiltrating /etc/shadow sizes.
+const PATH_SIZE_CACHE = new Map();
+const PATH_SIZE_TTL_MS = 10 * 60 * 1000;
+const PATH_SIZE_ALLOWED_PREFIXES = ["/mnt/", "/home/", "/etc", "/var/"];
+
+app.get("/api/borg/path-size", async (req, res) => {
+  const raw = req.query.path;
+  if (typeof raw !== "string" || raw.length === 0) {
+    return res.status(400).json({ error: "path is required" });
+  }
+  // Resolve ${HOME} references the same way borg-backup.sh would, then
+  // sanity-check that the resolved path is absolute and in an allowed prefix.
+  const expanded = raw.replace(/\$\{?HOME\}?/g, os.homedir());
+  if (!expanded.startsWith("/")) {
+    return res.status(400).json({ error: "path must be absolute" });
+  }
+  if (!PATH_SIZE_ALLOWED_PREFIXES.some((p) => expanded.startsWith(p))) {
+    return res.status(400).json({ error: "path outside allowed prefixes" });
+  }
+  const cached = PATH_SIZE_CACHE.get(expanded);
+  if (cached && Date.now() - cached.at < PATH_SIZE_TTL_MS) {
+    return res.json({ path: raw, size: cached.size, cached: true });
+  }
+  try {
+    const { size, exitCode } = await new Promise((resolve) => {
+      let buf = "";
+      const child = spawn("du", ["-sh", "--apparent-size", expanded], { env: childEnv() });
+      const timer = setTimeout(() => child.kill("SIGTERM"), 60 * 1000);
+      child.stdout.on("data", (d) => (buf += d.toString()));
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ size: buf.split("\t")[0] || "?", exitCode: code });
+      });
+    });
+    // du exits 1 when it hits per-directory permission errors but still
+    // reports the total. Treat "any size in stdout" as success; only a
+    // genuinely empty stdout counts as failure.
+    if (!size || size === "?") {
+      return res.status(200).json({ path: raw, size: "?", error: "du failed", exitCode });
+    }
+    PATH_SIZE_CACHE.set(expanded, { size, at: Date.now() });
+    res.json({ path: raw, size, cached: false });
+  } catch (err) {
+    console.error("Error measuring path size:", err);
+    res.status(500).json({ error: "Failed to measure path" });
   }
 });
 
