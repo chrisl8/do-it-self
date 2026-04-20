@@ -103,12 +103,12 @@ Aim for two-of-three survival: host, primary vault, backup location. Any two sho
 In the **Local passphrase** row, click **Generate strong passphrase**. A dialog opens showing the plaintext passphrase. Features:
 
 - **Copy button** — puts it on your clipboard.
-- **Red warning** — tells you this is the only time you'll see it from the UI.
+- **Red warning** — the load-bearing text. While the host is alive you can Reveal the passphrase again later; once the host is gone, you can't.
 - **Regenerate** — pick a new one; resets the 5-second wait.
 - **Cancel** — bails entirely; nothing is written.
 - The primary button stays disabled for five seconds. Read the warning. Then copy it, paste it into your password manager, paste it into your backup location, verify both saved, and only then click **I've saved it — write to Infisical**.
 
-After you confirm, Infisical at `/borgbackup` stores it. The UI row switches to showing `●●●●●●●●` with a *stored in Infisical* chip. You cannot re-reveal it here.
+After you confirm, Infisical at `/borgbackup` stores it. The UI row switches to showing `●●●●●●●●` with a *stored in Infisical* chip and a **Reveal** button. The Reveal button retrieves the passphrase from Infisical on demand so you can re-copy it later, but that only works while this host and Infisical are alive — which is exactly why off-box save matters.
 
 ### If you already have a passphrase you like
 
@@ -116,12 +116,16 @@ Click **Enter my own** instead, paste, Save. Same storage path, same rules about
 
 ### Lost passphrases
 
-There is intentionally no "reset" button. Losing the passphrase means existing archives can't be read again. Your options at that point are:
+There are two distinct scenarios people lump together here. They behave very differently.
 
-- Restore whatever you have to the new host via the remote backup (different passphrase — see Step 6) and start a new local repo.
+**Host alive, you just don't remember the passphrase.** Not a disaster. Infisical on the host still has it. Open the Backups page and click **Reveal** next to the passphrase row — the plaintext comes back. Copy it to a password manager and an offline location so you don't hit this again. Save off-box *right now* while you have the chance.
+
+**Host lost (disk died / machine stolen / fire / flood) and the passphrase wasn't saved off-box.** Different story. Infisical went with the host. The encrypted local repo went with it too. The remote repo at backup-pi is encrypted with a *different* passphrase — if that one is saved off-box, the remote archives are still recoverable; if not, both repos are permanently unreadable. Your options at that point are:
+
+- Restore whatever is still reachable from the remote (only possible if you have the remote passphrase saved off-box) and start a new local repo.
 - Accept the loss and start over.
 
-There is no third option.
+This second scenario is why the generate dialog warns so loudly about saving off-box. The web admin can give you the passphrase back while the host is up; it cannot conjure it after the host is gone.
 
 ---
 

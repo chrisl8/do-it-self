@@ -173,8 +173,10 @@ const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, on
         )}
         <DialogContentText sx={{ fontSize: "0.85rem" }}>
           When you click <b>I've saved it — write to Infisical</b>, this passphrase
-          is stored in Infisical at <code>/borgbackup</code> and becomes invisible in the
-          web admin. You will not be able to re-reveal it.
+          is stored in Infisical at <code>/borgbackup</code>. The web admin masks it
+          in normal display, but you can reveal it again later from this page while
+          Infisical is running. Save it off-box anyway — if this host is lost before
+          you copy the passphrase elsewhere, the archives it encrypts cannot be read.
         </DialogContentText>
       </DialogContent>
       <DialogActions>
@@ -196,8 +198,95 @@ const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, on
   );
 };
 
-const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onSave }) => {
+const RevealPassphraseDialog = ({ open, onClose, passphraseKey, onReveal }) => {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!open) {
+      setValue("");
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    onReveal()
+      .then((v) => {
+        if (!cancelled) setValue(v);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, onReveal]);
+
+  const copy = () => {
+    navigator.clipboard?.writeText(value).catch(() => {});
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        {passphraseKey === "remotePassphrase" ? "Remote" : "Local"} borg passphrase
+      </DialogTitle>
+      <DialogContent>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <AlertTitle sx={{ fontWeight: "bold" }}>
+            SAVE THIS OFFLINE BEFORE CLOSING THIS WINDOW
+          </AlertTitle>
+          <Box sx={{ fontWeight: 600 }}>
+            If this host dies and this passphrase isn't saved somewhere outside
+            the host (password manager, printed copy, another machine), every
+            archive in both the local and remote repositories is permanently
+            unreadable. A year of backups becomes a year of encrypted junk. No
+            vendor support call recovers this.
+          </Box>
+        </Alert>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            fontFamily: "monospace",
+            fontSize: "1rem",
+            p: 1.5,
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 1,
+            backgroundColor: "grey.100",
+            mb: 2,
+            wordBreak: "break-all",
+          }}
+        >
+          <Box sx={{ flex: 1 }}>{value || (error ? "" : <Spinner size={16} />)}</Box>
+          <IconButton size="small" onClick={copy} disabled={!value} aria-label="copy">
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        {error && (
+          <Alert severity="error" sx={{ mb: 1 }}>
+            {error}
+          </Alert>
+        )}
+        <DialogContentText sx={{ fontSize: "0.85rem" }}>
+          This value was pulled from Infisical at <code>/borgbackup</code>. You can
+          reveal it again from this page as long as the host and Infisical are
+          running — but that convenience vanishes the moment the host is lost.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} variant="contained">
+          Done — I've saved it off-box
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onReveal, onSave }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [revealOpen, setRevealOpen] = useState(false);
   const [manualMode, setManualMode] = useState(false);
   const [manualValue, setManualValue] = useState("");
   const [manualError, setManualError] = useState(null);
@@ -231,6 +320,9 @@ const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onSave }) =>
             ●●●●●●●●●●●●●●●●
           </Typography>
           <Chip label="stored in Infisical" size="small" color="success" />
+          <Button size="small" onClick={() => setRevealOpen(true)}>
+            Reveal
+          </Button>
           <Button
             size="small"
             onClick={() => {
@@ -280,8 +372,10 @@ const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onSave }) =>
       )}
       {isSet && (
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-          If you've lost this passphrase, existing archives cannot be recovered. You would
-          need to init a new repository — see <code>borgbackup/SETUP.md</code>.
+          While this host and Infisical are running, click <b>Reveal</b> to retrieve the
+          passphrase and save it off-box. If the host is lost <b>and</b> you don't have the
+          passphrase saved somewhere else, archives encrypted with it become permanently
+          unreadable.
         </Typography>
       )}
       <GeneratePassphraseDialog
@@ -290,6 +384,12 @@ const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onSave }) =>
         passphraseKey={passphraseKey}
         onGenerate={onGenerate}
         onConfirm={onSave}
+      />
+      <RevealPassphraseDialog
+        open={revealOpen}
+        onClose={() => setRevealOpen(false)}
+        passphraseKey={passphraseKey}
+        onReveal={() => onReveal(passphraseKey)}
       />
     </Box>
   );
@@ -378,6 +478,7 @@ const BorgConfigSection = () => {
     refresh,
     save,
     generatePassphrase,
+    revealPassphrase,
     savePassphrase,
     initRepo,
     runBackupNow,
@@ -510,64 +611,100 @@ const BorgConfigSection = () => {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          {/* Repository location */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary">
-              Repository location (BORG_REPO)
-            </Typography>
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center", mt: 0.5 }}>
-              <Select
-                size="small"
-                value={data.mounts.find((m) => draft.repo_path.startsWith(m.path))?.path || ""}
-                onChange={(e) => {
-                  const mount = e.target.value;
-                  const next = `${mount.replace(/\/+$/, "")}/borg-repo`;
-                  setDraft({
-                    ...draft,
-                    repo_path: next,
-                    dump_dir: `${mount.replace(/\/+$/, "")}/borg-db-dumps`,
-                  });
-                }}
-                sx={{ minWidth: 240 }}
-              >
-                {data.mounts.map((m) => (
-                  <MenuItem key={m.path} value={m.path}>
-                    {m.path} ({m.label || "unlabeled"})
-                  </MenuItem>
-                ))}
-              </Select>
-              <TextField
-                size="small"
-                value={draft.repo_path}
-                onChange={(e) => setDraft({ ...draft, repo_path: e.target.value })}
-                fullWidth
-                slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
-              />
-            </Box>
-            <Typography variant="caption" color="text.secondary">
-              The encrypted on-disk repository. Choose a mount with headroom — archives
-              grow deduplicated but still accumulate.
-            </Typography>
-          </Box>
-
-          {/* Dump directory */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" color="text.secondary">
-              Database dump directory (BORG_DB_DUMP_DIR)
-            </Typography>
-            <TextField
-              size="small"
-              fullWidth
-              sx={{ mt: 0.5 }}
-              value={draft.dump_dir}
-              onChange={(e) => setDraft({ ...draft, dump_dir: e.target.value })}
-              slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              Where Postgres / MariaDB / SQLite dumps land before the backup reads them.
-              Usually a sibling of the repo on the same mount.
-            </Typography>
-          </Box>
+          {/* Storage assignment — mirrors the Configuration page's storage
+              picker: one drive dropdown, derived sub-paths shown as read-only
+              labels. Repo and dump dir are always siblings on the same drive. */}
+          {(() => {
+            const currentMount = data.mounts.find((m) =>
+              draft.repo_path.startsWith(m.path),
+            );
+            const selectedMountPath = currentMount?.path || "";
+            const mountLabelFor = (m) =>
+              m.label ? `${m.label} (${m.path})` : m.path;
+            return (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Storage assignment
+                </Typography>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "auto 1fr" },
+                    columnGap: 2,
+                    rowGap: 1,
+                    alignItems: "center",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="body2" sx={{ minWidth: "5.5em" }}>
+                      Drive
+                    </Typography>
+                    <Select
+                      size="small"
+                      value={selectedMountPath}
+                      onChange={(e) => {
+                        const mount = e.target.value.replace(/\/+$/, "");
+                        setDraft({
+                          ...draft,
+                          repo_path: `${mount}/borg-repo`,
+                          dump_dir: `${mount}/borg-db-dumps`,
+                        });
+                      }}
+                      displayEmpty
+                      sx={{ minWidth: 200 }}
+                    >
+                      {!currentMount && draft.repo_path && (
+                        <MenuItem value="" disabled>
+                          {`Custom path (${draft.repo_path})`}
+                        </MenuItem>
+                      )}
+                      {data.mounts.map((m) => (
+                        <MenuItem key={m.path} value={m.path}>
+                          {mountLabelFor(m)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </Box>
+                  <Box />
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontFamily: "monospace", fontSize: "0.85rem" }}
+                  >
+                    BORG_REPO
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: "monospace", fontSize: "0.85rem" }}
+                  >
+                    {draft.repo_path || "—"}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontFamily: "monospace", fontSize: "0.85rem" }}
+                  >
+                    BORG_DB_DUMP_DIR
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: "monospace", fontSize: "0.85rem" }}
+                  >
+                    {draft.dump_dir || "—"}
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 1 }}
+                >
+                  The encrypted repository and its database dump directory live on the
+                  same drive, in sibling folders. To use a different drive, add it on
+                  the Configuration page under Storage Mounts, then return here.
+                </Typography>
+              </Box>
+            );
+          })()}
 
           {/* Backup paths */}
           <Box sx={{ mb: 2 }}>
@@ -614,6 +751,7 @@ const BorgConfigSection = () => {
             passphraseKey="passphrase"
             isSet={data.passphrase_set.passphrase}
             onGenerate={generatePassphrase}
+            onReveal={revealPassphrase}
             onSave={(v) => savePassphrase("passphrase", v)}
           />
 
@@ -664,6 +802,7 @@ const BorgConfigSection = () => {
                   passphraseKey="remotePassphrase"
                   isSet={data.passphrase_set.remotePassphrase}
                   onGenerate={generatePassphrase}
+                  onReveal={revealPassphrase}
                   onSave={(v) => savePassphrase("remotePassphrase", v)}
                 />
                 <Box sx={{ mb: 1 }}>
@@ -705,9 +844,13 @@ const BorgConfigSection = () => {
             <Button
               variant="contained"
               onClick={doSave}
-              disabled={!dirty || saving}
+              disabled={saving || (!dirty && data.persisted)}
             >
-              {saving ? <Spinner size={16} /> : "Save configuration"}
+              {saving
+                ? <Spinner size={16} />
+                : !data.persisted
+                ? "Save configuration (migrate)"
+                : "Save configuration"}
             </Button>
             <Tooltip
               title={
