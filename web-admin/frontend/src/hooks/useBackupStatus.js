@@ -57,6 +57,29 @@ const useBackupStatus = () => {
     borgRestore: null,
   });
   const [healthcheckAvailable, setHealthcheckAvailable] = useState(true);
+  const [borgBannerDismissed, setBorgBannerDismissed] = useState(false);
+
+  const fetchBorgBannerDismissed = useCallback(async () => {
+    try {
+      const res = await fetch("/api/config/borg-banner-dismiss");
+      if (!res.ok) return;
+      const data = await res.json();
+      setBorgBannerDismissed(data.dismissed === true);
+    } catch {
+      // non-critical
+    }
+  }, []);
+
+  const saveBorgBannerDismissed = useCallback(async (dismissed) => {
+    const res = await fetch("/api/config/borg-banner-dismiss", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dismissed }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Failed to save banner preference");
+    setBorgBannerDismissed(dismissed);
+  }, []);
 
   const fetchHealthcheckUrls = useCallback(async () => {
     try {
@@ -169,7 +192,8 @@ const useBackupStatus = () => {
     fetchIgnoreHosts();
     fetchHostThresholds();
     fetchHealthcheckUrls();
-  }, [fetchStatus, fetchIgnoreHosts, fetchHostThresholds, fetchHealthcheckUrls]);
+    fetchBorgBannerDismissed();
+  }, [fetchStatus, fetchIgnoreHosts, fetchHostThresholds, fetchHealthcheckUrls, fetchBorgBannerDismissed]);
 
   return {
     kopiaStatus,
@@ -191,6 +215,8 @@ const useBackupStatus = () => {
     healthcheckUrls,
     healthcheckAvailable,
     saveHealthcheckUrls,
+    borgBannerDismissed,
+    saveBorgBannerDismissed,
   };
 };
 

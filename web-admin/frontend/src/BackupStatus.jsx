@@ -12,6 +12,8 @@ import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
 import Slider from "@mui/material/Slider";
 import Spinner from "@mui/material/CircularProgress";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
@@ -280,6 +282,8 @@ const BackupStatus = () => {
     healthcheckUrls,
     healthcheckAvailable,
     saveHealthcheckUrls,
+    borgBannerDismissed,
+    saveBorgBannerDismissed,
   } = useBackupStatus();
   const [expandedHosts, setExpandedHosts] = useState({});
   const [kopiaLogOpen, setKopiaLogOpen] = useState(false);
@@ -497,10 +501,34 @@ const BackupStatus = () => {
                 )}
               </Box>
 
-              <Box sx={{ mt: 1.5, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
+              <Box
+                sx={{
+                  mt: 1.5,
+                  pt: 1,
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  flexWrap: "wrap",
+                }}
+              >
                 <Button size="small" onClick={handleViewBorgLog}>
                   View Log
                 </Button>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={!borgBannerDismissed}
+                      onChange={(e) => {
+                        saveBorgBannerDismissed(!e.target.checked).catch(() => {});
+                      }}
+                      size="small"
+                    />
+                  }
+                  label="Show dashboard banner when borg backups are incomplete"
+                  sx={{ ml: "auto" }}
+                />
               </Box>
             </CardContent>
           </Card>
