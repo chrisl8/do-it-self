@@ -957,7 +957,20 @@ app.get("/api/git-status", async (req, res) => {
       if (doFetch) status.fetchedAt = new Date().toISOString();
       repos.push(status);
     }
-    res.json({ repos });
+
+    // Preserve the background poller's lastTickAt when this was a status-only
+    // read. On a manual recheck (?fetch=1) we just did the work ourselves, so
+    // bump lastTickAt to now and push the fresh payload through statusEmitter
+    // so other connected clients also see the update over the WebSocket.
+    const trackedGitStatus = getStatus().gitStatus;
+    const lastTickAt = doFetch
+      ? new Date().toISOString()
+      : trackedGitStatus?.lastTickAt || null;
+    const payload = { repos, lastTickAt };
+    if (doFetch) {
+      updateStatus("gitStatus", payload);
+    }
+    res.json(payload);
   } catch (err) {
     console.error("Error checking git status:", err);
     res.status(500).json({ error: "Failed to check git status" });
