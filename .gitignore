@@ -48,6 +48,8 @@ scripts/borg-backup.conf
 scripts/healthcheck.conf
 scripts/excluded_devices.conf
 scripts/post-startup-hook.sh
+scripts/kopia-backup-check.conf
+scripts/kopia-host-thresholds.json
 
 # Module system runtime
 installed-modules.yaml
