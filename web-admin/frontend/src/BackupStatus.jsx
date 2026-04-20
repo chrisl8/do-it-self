@@ -358,6 +358,48 @@ const BackupStatus = () => {
       </Box>
 
       {/* Borg Backup Section */}
+      {!borgStatus && (
+        <>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+            <Typography variant="h6" component="h2">
+              Borg Backup
+            </Typography>
+            <Chip label="Not configured" color="default" size="small" />
+          </Box>
+          <Card sx={{ mb: 3 }}>
+            <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Borg backup has not been set up on this host. Run{" "}
+                <code>scripts/setup-borg-backup.sh</code> to configure local
+                and (optionally) remote backups. See{" "}
+                <code>docs/MAINTENANCE.md</code> for details.
+              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  pt: 1,
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={!borgBannerDismissed}
+                      onChange={(e) => {
+                        saveBorgBannerDismissed(!e.target.checked).catch(() => {});
+                      }}
+                      size="small"
+                    />
+                  }
+                  label="Show dashboard banner when borg backups are incomplete"
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </>
+      )}
       {borgStatus && (
         <>
           <Box
@@ -372,7 +414,7 @@ const BackupStatus = () => {
               Borg Backup
             </Typography>
             <Chip
-              label={getBorgStatusLabel(borgStatus.status)}
+              label={`Overall: ${getBorgStatusLabel(borgStatus.status)}`}
               color={getStatusColor(borgStatus.status)}
               size="small"
             />
@@ -395,23 +437,25 @@ const BackupStatus = () => {
               >
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Last Backup
+                    Last Run
                   </Typography>
                   <Typography variant="body2">
                     {formatTimestamp(borgStatus.last_backup)}
                   </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Duration
-                  </Typography>
+                  <Tooltip title="Wall-clock time for the whole run: DB dumps, local archive + prune + compact, and the remote push." arrow>
+                    <Typography variant="caption" color="text.secondary" sx={{ borderBottom: "1px dotted", cursor: "help" }}>
+                      Total Duration
+                    </Typography>
+                  </Tooltip>
                   <Typography variant="body2">
                     {borgStatus.duration}
                   </Typography>
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Repo Size
+                    Local Repo Size
                   </Typography>
                   <Typography variant="body2">
                     {borgStatus.repo_size}
@@ -419,7 +463,7 @@ const BackupStatus = () => {
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Archives
+                    Local Archives
                   </Typography>
                   <Typography variant="body2">
                     {borgStatus.archive_count}
@@ -437,19 +481,46 @@ const BackupStatus = () => {
                 )}
               </Box>
 
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  mt: 1.5,
+                  pt: 1.5,
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: "4.5em" }}>
+                  Local:
+                </Typography>
+                <Chip
+                  label={
+                    borgStatus.status === "failed"
+                      ? "failed"
+                      : borgStatus.status === "success" || borgStatus.status === "partial"
+                      ? "success"
+                      : borgStatus.status
+                  }
+                  color={getStatusColor(
+                    borgStatus.status === "partial" ? "success" : borgStatus.status,
+                  )}
+                  size="small"
+                />
+              </Box>
+
               {borgStatus.remote && borgStatus.remote.status !== "skipped" && (
                 <Box
                   sx={{
                     display: "flex",
                     alignItems: "center",
                     gap: 1,
-                    mt: 1.5,
-                    pt: 1.5,
-                    borderTop: "1px solid",
-                    borderColor: "divider",
+                    mt: 1,
+                    pt: 1,
                   }}
                 >
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: "4.5em" }}>
                     Remote:
                   </Typography>
                   <Chip
