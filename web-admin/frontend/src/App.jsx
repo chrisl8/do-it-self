@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import {
   BrowserRouter,
   Route,
@@ -10,6 +10,11 @@ import {
 import Box from "@mui/material/Box";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Brightness4Icon from "@mui/icons-material/Brightness4";
+import Brightness7Icon from "@mui/icons-material/Brightness7";
+import { ColorModeContext } from "./main";
 import DockerStatus from "./DockerStatus";
 import BackupStatus from "./BackupStatus";
 import ContainerConfig from "./ContainerConfig";
@@ -29,21 +34,42 @@ const routes = [
 const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { mode, toggleColorMode } = useContext(ColorModeContext);
   const currentTab = routes.findIndex((r) => r.path === location.pathname);
 
   return (
-    <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+    <Box
+      sx={{
+        borderBottom: 1,
+        borderColor: "divider",
+        display: "flex",
+        alignItems: "center",
+      }}
+    >
       <Tabs
         value={currentTab === -1 ? 0 : currentTab}
         onChange={(e, val) => navigate(routes[val].path)}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
+        sx={{ flexGrow: 1, minWidth: 0 }}
       >
         {routes.map((r) => (
           <Tab key={r.path} label={r.label} />
         ))}
       </Tabs>
+      <Tooltip
+        title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        <IconButton
+          onClick={toggleColorMode}
+          color="inherit"
+          sx={{ mx: 1 }}
+          aria-label="toggle color mode"
+        >
+          {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
+        </IconButton>
+      </Tooltip>
     </Box>
   );
 };
