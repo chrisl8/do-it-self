@@ -5,8 +5,16 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Bootstrap runtime configs from committed templates on first run.
+# These files are gitignored because the web admin writes to them.
+for f in kopia-backup-check.conf kopia-host-thresholds.json; do
+    if [ ! -f "${SCRIPT_DIR}/${f}" ] && [ -f "${SCRIPT_DIR}/${f}.example" ]; then
+        cp "${SCRIPT_DIR}/${f}.example" "${SCRIPT_DIR}/${f}"
+    fi
+done
+
 # Load configuration
-# shellcheck source=kopia-backup-check.conf
+# shellcheck source=kopia-backup-check.conf.example
 . "${SCRIPT_DIR}/kopia-backup-check.conf"
 
 # Load per-host threshold overrides (JSON file, read once)
