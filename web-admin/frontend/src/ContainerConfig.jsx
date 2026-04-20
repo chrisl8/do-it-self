@@ -214,7 +214,7 @@ function MountsSection({
             label="Label"
             value={mount.label || ""}
             onChange={(e) => handleChange(i, "label", e.target.value)}
-            sx={{ width: 160 }}
+            sx={{ width: { xs: 100, sm: 160 } }}
             placeholder={i === 0 ? "e.g. Fast SSD" : "e.g. Big HDD"}
           />
           <TextField
@@ -267,7 +267,7 @@ function SharedVarsSection({ registry, userConfig, onSave, saving }) {
           Save
         </Button>
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
         {Object.entries(sharedDefs).map(([name, def]) => {
           if (def.type === "secret") {
             return (
@@ -317,7 +317,7 @@ function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
         Storage assignments
       </Typography>
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
         {Object.entries(volumes).map(([volName, volDef]) => (
           <Box key={volName} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <FormControl size="small" sx={{ minWidth: 100 }}>
@@ -390,7 +390,7 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
   return (
     <Accordion slotProps={{ transition: { unmountOnExit: true } }}>
       <AccordionSummary expandIcon={hasDetails ? <ExpandMoreIcon /> : null}>
-        <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1, flexWrap: "wrap" }}>
           {def.protected ? (
             <Tooltip title="Platform-critical container; cannot be disabled or uninstalled.">
               <Chip label="Protected" size="small" color="warning" sx={{ minWidth: 62 }} />
@@ -405,7 +405,7 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
               onClick={(e) => e.stopPropagation()}
             />
           )}
-          <Typography sx={{ fontWeight: 500, minWidth: 180 }}>{name}</Typography>
+          <Typography sx={{ fontWeight: 500, minWidth: { xs: 0, sm: 180 } }}>{name}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
             {def.description}
           </Typography>
@@ -447,7 +447,7 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
                 Variables
               </Typography>
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
                 {Object.entries(varDefs).map(([varName, varDef]) => {
                   const account = findAccountForVar(def, varName);
                   const field = varDef.type === "secret" ? (

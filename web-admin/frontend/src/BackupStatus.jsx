@@ -20,6 +20,8 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import CloseIcon from "@mui/icons-material/Close";
 import TextField from "@mui/material/TextField";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import useBackupStatus from "./hooks/useBackupStatus";
 
 const THRESHOLD_MARKS = [
@@ -61,32 +63,40 @@ const formatDuration = (hours) => {
   return `${Math.round(hours / 720)}mo`;
 };
 
-const ThresholdSlider = ({ value, onChange, onCommit, disabled, label }) => (
-  <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 200, flex: 1 }}>
-    {label && (
-      <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-        {label}
+const ThresholdSlider = ({ value, onChange, onCommit, disabled, label }) => {
+  const theme = useTheme();
+  const isNarrow = useMediaQuery(theme.breakpoints.down("sm"));
+  const marks = THRESHOLD_MARKS.map((m) => ({
+    value: m.value,
+    label: isNarrow ? undefined : m.label,
+  }));
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 }, minWidth: { xs: 0, sm: 200 }, flex: 1 }}>
+      {label && (
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+          {label}
+        </Typography>
+      )}
+      <Slider
+        value={hoursToIndex(value)}
+        min={0}
+        max={THRESHOLD_MARKS.length - 1}
+        step={null}
+        marks={marks}
+        valueLabelDisplay="auto"
+        valueLabelFormat={(idx) => formatDuration(THRESHOLD_MARKS[idx]?.hours)}
+        onChange={(e, idx) => onChange(indexToHours(idx))}
+        onChangeCommitted={(e, idx) => onCommit && onCommit(indexToHours(idx))}
+        disabled={disabled}
+        size="small"
+        sx={{ flex: 1 }}
+      />
+      <Typography variant="body2" sx={{ minWidth: "3.5em", textAlign: "right", whiteSpace: "nowrap" }}>
+        {formatDuration(value)}
       </Typography>
-    )}
-    <Slider
-      value={hoursToIndex(value)}
-      min={0}
-      max={THRESHOLD_MARKS.length - 1}
-      step={null}
-      marks={THRESHOLD_MARKS.map((m) => ({ value: m.value, label: m.label }))}
-      valueLabelDisplay="auto"
-      valueLabelFormat={(idx) => formatDuration(THRESHOLD_MARKS[idx]?.hours)}
-      onChange={(e, idx) => onChange(indexToHours(idx))}
-      onChangeCommitted={(e, idx) => onCommit && onCommit(indexToHours(idx))}
-      disabled={disabled}
-      size="small"
-      sx={{ flex: 1 }}
-    />
-    <Typography variant="body2" sx={{ minWidth: "3.5em", textAlign: "right", whiteSpace: "nowrap" }}>
-      {formatDuration(value)}
-    </Typography>
-  </Box>
-);
+    </Box>
+  );
+};
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -213,8 +223,11 @@ const HealthcheckUrlField = ({ label, value, onSave }) => {
   );
 };
 
-const LogDialog = ({ open, onClose, title, log }) => (
-  <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+const LogDialog = ({ open, onClose, title, log }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+  return (
+  <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={fullScreen}>
     <DialogTitle>{title}</DialogTitle>
     <DialogContent>
       {log ? (
@@ -243,7 +256,8 @@ const LogDialog = ({ open, onClose, title, log }) => (
       <Button onClick={onClose}>Close</Button>
     </DialogActions>
   </Dialog>
-);
+  );
+};
 
 const BackupStatus = () => {
   const {

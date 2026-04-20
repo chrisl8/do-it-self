@@ -1240,7 +1240,7 @@ const DockerStatus = ({
                                 <Box
                                   sx={{
                                     display: "grid",
-                                    gridTemplateColumns: "auto 1fr",
+                                    gridTemplateColumns: { xs: "1fr", sm: "auto 1fr" },
                                     gap: { xs: 0.5, sm: 1 },
                                     alignItems: "start",
                                   }}
