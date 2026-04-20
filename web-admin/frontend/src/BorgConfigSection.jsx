@@ -424,7 +424,8 @@ const InitOutputDialog = ({ open, onClose, output, loading, exitCode }) => (
             wordBreak: "break-word",
             maxHeight: "60vh",
             overflow: "auto",
-            backgroundColor: "grey.900",
+            backgroundColor: (theme) =>
+              theme.palette.mode === "dark" ? "grey.800" : "grey.900",
             color: "grey.100",
             p: 2,
             borderRadius: 1,
