@@ -391,7 +391,11 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
     <Accordion slotProps={{ transition: { unmountOnExit: true } }}>
       <AccordionSummary expandIcon={hasDetails ? <ExpandMoreIcon /> : null}>
         <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
-          {def.system_service ? (
+          {def.protected ? (
+            <Tooltip title="Platform-critical container; cannot be disabled or uninstalled.">
+              <Chip label="Protected" size="small" color="warning" sx={{ minWidth: 62 }} />
+            </Tooltip>
+          ) : def.system_service ? (
             <Chip label="System" size="small" color="info" sx={{ minWidth: 62 }} />
           ) : (
             <Switch
@@ -409,7 +413,7 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
             <Chip key={f} label={f} size="small" variant="outlined" />
           ))}
           <ReadinessBadge status={validation} />
-          {source && source !== "personal" && source !== "platform" && (
+          {source && source !== "personal" && source !== "platform" && !def.protected && (
             <Tooltip title="Uninstall container">
               <span>
                 <IconButton
