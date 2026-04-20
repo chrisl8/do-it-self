@@ -576,7 +576,7 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
     // — the Browse page handles available-but-not-installed.
     for (const [name, def] of Object.entries(registry.containers)) {
       if (!registry.sources[name]) continue;
-      const group = def.homepage_group || "Uncategorized";
+      const group = def.protected ? "Platform" : def.homepage_group || "Uncategorized";
       if (!grouped[group]) grouped[group] = [];
       grouped[group].push({ name, def });
     }
@@ -621,9 +621,11 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
     );
   }
 
-  const sortedGroups = Object.keys(containersByGroup).sort((a, b) =>
-    a.localeCompare(b)
-  );
+  const sortedGroups = Object.keys(containersByGroup).sort((a, b) => {
+    if (a === "Platform") return -1;
+    if (b === "Platform") return 1;
+    return a.localeCompare(b);
+  });
 
   return (
     <Box sx={{ p: 2, maxWidth: 1200, margin: "0 auto" }}>
