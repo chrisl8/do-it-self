@@ -171,6 +171,14 @@ function getContainerIconFilename(containerName) {
 }
 
 function getStackIcon(stackName, containerIcons = []) {
+  // The web-admin is the only platform service that runs outside Docker and
+  // is self-referential on the dashboard. Its brand mark is served by the
+  // backend itself at /dashboard-icons/svg/web-admin.svg regardless of what
+  // is (or isn't) in ~/containers/homepage/dashboard-icons/.
+  if (stackName === "web-admin") {
+    return "web-admin.svg";
+  }
+
   if (!anyIconsAvailable()) {
     return null;
   }
