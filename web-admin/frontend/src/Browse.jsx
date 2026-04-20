@@ -155,8 +155,8 @@ function Browse() {
       <Alert severity="info" sx={{ mb: 2 }}>
         Containers available from your added module sources. Click Install to
         copy a container into the platform. It will appear in My Containers as
-        disabled — enable it there and run <code>all-containers.sh --start</code>
-        {" "}to bring it up.
+        disabled — enable it there, then go to the <strong>Dashboard</strong> and
+        click <strong>Start All Enabled</strong> to bring it up.
       </Alert>
 
       {totalAvailable === 0 ? (

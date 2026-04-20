@@ -631,8 +631,9 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
         <strong>How this works:</strong> First, define your storage mounts (one per
         disk or directory). Then set Tailscale credentials in Global Settings.
         Finally, enable containers and assign their volumes to your mounts.
-        Each Save updates the container's .env file automatically. Then
-        run <code>scripts/all-containers.sh --start</code> to bring everything up.
+        Each Save updates the container's .env file automatically. Then head
+        to the <strong>Dashboard</strong> and click <strong>Start All Enabled</strong>
+        {" "}to bring everything up.
       </Alert>
 
       <MountsSection
