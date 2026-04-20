@@ -324,7 +324,21 @@ async function processStartAllQueue() {
 const CONTAINERS_DIR = join(os.homedir(), "containers");
 const ICONS_BASE_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
 const KOPIA_CONF_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf");
+const KOPIA_CONF_EXAMPLE_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf.example");
 const KOPIA_HOST_THRESHOLDS_FILE = join(CONTAINERS_DIR, "scripts/kopia-host-thresholds.json");
+
+// Read the Kopia conf, falling back to the committed .example template when
+// the gitignored runtime file does not yet exist (cron hasn't bootstrapped).
+async function readKopiaConf() {
+  try {
+    return await readFile(KOPIA_CONF_FILE, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      return await readFile(KOPIA_CONF_EXAMPLE_FILE, "utf8");
+    }
+    throw err;
+  }
+}
 
 app.use(express.json());
 app.use(express.static(join(dirName, "../public")));
@@ -393,7 +407,7 @@ app.get("/api/kopia-log", async (req, res) => {
 
 app.get("/api/kopia-threshold", async (req, res) => {
   try {
-    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const data = await readKopiaConf();
     const match = data.match(/^KOPIA_STALE_HOURS=(\d+)/m);
     if (!match) {
       res.status(500).json({ error: "Could not find KOPIA_STALE_HOURS in config" });
@@ -413,7 +427,7 @@ app.put("/api/kopia-threshold", async (req, res) => {
     return;
   }
   try {
-    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const data = await readKopiaConf();
     const updated = data.replace(
       /^KOPIA_STALE_HOURS=\d+/m,
       `KOPIA_STALE_HOURS=${threshold}`,
@@ -433,7 +447,7 @@ app.put("/api/kopia-threshold", async (req, res) => {
 
 app.get("/api/kopia-ignore-hosts", async (req, res) => {
   try {
-    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const data = await readKopiaConf();
     const match = data.match(/^KOPIA_IGNORE_HOSTS=\(([^)]*)\)/m);
     if (!match) {
       res.json({ hosts: [] });
@@ -460,7 +474,7 @@ app.put("/api/kopia-ignore-hosts", async (req, res) => {
     return;
   }
   try {
-    const data = await readFile(KOPIA_CONF_FILE, "utf8");
+    const data = await readKopiaConf();
     const bashArray = hosts.length > 0
       ? `KOPIA_IGNORE_HOSTS=(${hosts.map((h) => `"${h.trim()}"`).join(" ")})`
       : `KOPIA_IGNORE_HOSTS=()`;
