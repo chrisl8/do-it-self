@@ -821,9 +821,19 @@ app.put("/api/config/mounts", async (req, res) => {
   }
 });
 
+async function isContainerProtected(name) {
+  const registry = await getRegistry();
+  return registry.containers?.[name]?.protected === true;
+}
+
 app.put("/api/config/container/:name", async (req, res) => {
   try {
     const { name } = req.params;
+    if (req.body.enabled === false && (await isContainerProtected(name))) {
+      return res.status(403).json({
+        error: `${name} is a protected platform container and cannot be disabled.`,
+      });
+    }
     const userConfig = await getUserConfig();
     if (!userConfig.containers) userConfig.containers = {};
     const existing = userConfig.containers[name] || {};
@@ -1084,6 +1094,11 @@ app.post("/api/modules/containers/:name/install", async (req, res) => {
 
 app.delete("/api/modules/containers/:name", async (req, res) => {
   if (!validateName(res, req.params.name, "container name")) return;
+  if (await isContainerProtected(req.params.name)) {
+    return res.status(403).json({
+      error: `${req.params.name} is a protected platform container and cannot be uninstalled.`,
+    });
+  }
   await handleModuleMutation(res, ["uninstall", req.params.name]);
 });
 

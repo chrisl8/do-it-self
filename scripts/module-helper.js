@@ -316,6 +316,13 @@ async function uninstallContainer(args) {
     process.exit(1);
   }
 
+  const registry = await readRegistry();
+  if (registry.containers?.[containerName]?.protected === true) {
+    console.error(`Error: "${containerName}" is marked protected: true in the registry.`);
+    console.error("Edit the registry to remove the flag before uninstalling.");
+    process.exit(1);
+  }
+
   const moduleName = source;
 
   // Remove cron jobs before deleting the container directory
