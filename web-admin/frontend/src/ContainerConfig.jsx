@@ -88,11 +88,19 @@ function SecretField({ label, value, onChange, description }) {
   );
 }
 
-function MountsSection({ mounts, onSave, saving }) {
+function MountsSection({
+  mounts,
+  onSave,
+  saving,
+  monitorMountContainers,
+  onRestartMonitorContainers,
+}) {
   const [localMounts, setLocalMounts] = useState(
     mounts?.length > 0 ? mounts : [{ path: "", label: "" }],
   );
   const [dirty, setDirty] = useState(false);
+  const [restartPromptVisible, setRestartPromptVisible] = useState(false);
+  const [restartInFlight, setRestartInFlight] = useState(false);
 
   const handleChange = (index, field, value) => {
     setLocalMounts((prev) => {
@@ -114,11 +122,24 @@ function MountsSection({ mounts, onSave, saving }) {
     setDirty(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const valid = localMounts.filter((m) => m.path.trim());
     if (valid.length === 0) return;
-    onSave(valid);
+    await onSave(valid);
     setDirty(false);
+    if (monitorMountContainers && monitorMountContainers.length > 0) {
+      setRestartPromptVisible(true);
+    }
+  };
+
+  const handleRestart = async () => {
+    setRestartInFlight(true);
+    try {
+      await onRestartMonitorContainers();
+      setRestartPromptVisible(false);
+    } finally {
+      setRestartInFlight(false);
+    }
   };
 
   return (
@@ -140,10 +161,51 @@ function MountsSection({ mounts, onSave, saving }) {
           </Button>
         </Box>
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Define where container data is stored. Each volume in each container
         can be assigned to any mount. The first mount is the default.
       </Typography>
+      {monitorMountContainers && monitorMountContainers.length > 0 && (
+        <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+          <strong>Heads up:</strong> Labels become in-container mount paths
+          (e.g. <code>/mnt/&lt;label&gt;</code>) for{" "}
+          {monitorMountContainers.join(" and ")}. After changing any label or
+          path, those containers must be restarted to pick up the new mounts.
+          Until then, their dashboards keep showing the old names and disk
+          widgets may report stale data. Renaming also splits beszel's
+          historical metrics for that mount.
+        </Alert>
+      )}
+      {restartPromptVisible && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button
+                color="inherit"
+                size="small"
+                disabled={restartInFlight}
+                startIcon={restartInFlight ? <CircularProgress size={16} /> : null}
+                onClick={handleRestart}
+              >
+                {restartInFlight ? "Restarting..." : "Restart them now"}
+              </Button>
+              <Button
+                color="inherit"
+                size="small"
+                disabled={restartInFlight}
+                onClick={() => setRestartPromptVisible(false)}
+              >
+                Dismiss
+              </Button>
+            </Box>
+          }
+        >
+          Mounts saved. Restart {monitorMountContainers.join(" and ")} to apply
+          the changes.
+        </Alert>
+      )}
       {localMounts.map((mount, i) => (
         <Box key={i} sx={{ display: "flex", gap: 1, mb: 1, alignItems: "center" }}>
           <Chip label={i} size="small" variant="outlined" sx={{ minWidth: 32 }} />
@@ -428,7 +490,7 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
   );
 }
 
-function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
+function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, restartDockerStack }) {
   const {
     registry,
     userConfig,
@@ -483,6 +545,24 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
     setModuleDialog({ open: false, title: "", running: false, result: null });
 
   const mounts = userConfig?.mounts || [{ path: "", label: "Default" }];
+
+  // Containers that bind-mount every storage mount into their own container
+  // filesystem for monitoring (homepage disk widget, beszel agent). A label
+  // change affects these containers' in-container mount paths, so they need
+  // to restart to pick up the new compose.override.yaml.
+  const monitorMountContainers = useMemo(() => {
+    if (!registry?.containers || !registry?.sources) return [];
+    return Object.entries(registry.containers)
+      .filter(([name, def]) => def.monitor_all_mounts && registry.sources[name])
+      .map(([name]) => name)
+      .sort();
+  }, [registry]);
+
+  const handleRestartMonitorContainers = async () => {
+    for (const name of monitorMountContainers) {
+      restartDockerStack(name);
+    }
+  };
 
   const containersByGroup = useMemo(() => {
     if (!registry?.containers || !registry?.sources) return {};
@@ -555,7 +635,13 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight }) {
         run <code>scripts/all-containers.sh --start</code> to bring everything up.
       </Alert>
 
-      <MountsSection mounts={mounts} onSave={handleSaveMounts} saving={saving} />
+      <MountsSection
+        mounts={mounts}
+        onSave={handleSaveMounts}
+        saving={saving}
+        monitorMountContainers={monitorMountContainers}
+        onRestartMonitorContainers={handleRestartMonitorContainers}
+      />
 
       <SharedVarsSection
         registry={registry}

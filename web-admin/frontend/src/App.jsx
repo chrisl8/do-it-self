@@ -114,6 +114,7 @@ const App = () => {
             <ContainerConfig
               tailscalePreflightStatus={tailscalePreflightStatus}
               runTailscalePreflight={runTailscalePreflight}
+              restartDockerStack={restartDockerStack}
             />
           }
         />
