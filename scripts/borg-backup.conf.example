@@ -1,10 +1,15 @@
 # BorgBackup configuration
-# Sourced by borg-backup.sh and related scripts
+# Sourced by borg-backup.sh and related scripts.
 #
-# Copy this file to borg-backup.conf and edit for your system:
+# The typical path is the web admin: visit the Backups page and fill in
+# the Borg Backup Configuration section. The web admin writes values into
+# user-config.yaml:borg and auto-generates scripts/borg-backup.conf from
+# that — this example is only consulted if the conf file is missing.
+#
+# Shell-only alternative (no web admin):
 #   cp borg-backup.conf.example borg-backup.conf
-#
-# Or run setup-borg-backup.sh, which copies it automatically.
+#   nano borg-backup.conf   # fill in real paths
+#   scripts/setup-borg-backup.sh
 
 # ── Local repository ────────────────────────────────────────────
 

@@ -32,8 +32,10 @@ fi
 
 if [[ "${BORG_REPO}" == *"YOUR-MOUNT"* ]] || [ -z "${BORG_REPO}" ]; then
     printf "${YELLOW}[WARN]${NC} borg-backup.conf still has placeholder values\n"
-    printf "       Edit %s and set BORG_REPO, BORG_DB_DUMP_DIR, and BORG_BACKUP_PATHS\n" "${CONF_FILE}"
-    printf "       for your system, then re-run this script.\n"
+    printf "       Fill in the Borg Backup Configuration section on the web admin\n"
+    printf "       Backups page (sets repo path, backup paths, and passphrase),\n"
+    printf "       then re-run this script. Or edit %s\n" "${CONF_FILE}"
+    printf "       directly if you're running shell-only — see borgbackup/SETUP.md.\n"
     exit 1
 fi
 
@@ -251,16 +253,36 @@ echo "=========================================="
 echo ""
 echo "Configuration: ${CONF_FILE}"
 echo ""
-echo "Next steps:"
-echo "  1. Edit ${CONF_FILE} to configure paths for your system"
-echo "  2. In Infisical at path /borgbackup, set the following secrets:"
-echo "     - BORG_PASSPHRASE: a strong passphrase"
-echo "     - BORG_HEALTHCHECK_URL: healthchecks.io URL (optional)"
-echo "     - BORG_REMOTE_PASSPHRASE: a separate passphrase for the offsite repo (optional)"
-echo "  3. Re-run this script to initialize the borg repo"
-echo "     (if BORG_PASSPHRASE was not set yet)"
-echo "  4. For offsite backup, set BORG_REMOTE_REPO in borg-backup.conf and re-run"
-echo "  5. Run the first backup manually:"
-echo "     ${SCRIPT_DIR}/borg-backup.sh"
-echo "  6. Verify: borg list ${BORG_REPO}"
+
+# Only show next steps the user actually still has to do. When setup is
+# driven from the web admin, most of these are already done.
+pending_steps=()
+if [ "${SECRETS_AVAILABLE}" != "true" ]; then
+    pending_steps+=("Start Infisical on this host — borg passphrases can't be stored without it")
+fi
+if [ -z "${BORG_PASSPHRASE}" ]; then
+    pending_steps+=("Set BORG_PASSPHRASE in Infisical at /borgbackup (web admin Backups page does this), then re-run this script")
+fi
+if [ -n "${BORG_REMOTE_REPO}" ] && [ -z "${BORG_REMOTE_PASSPHRASE}" ]; then
+    pending_steps+=("Set BORG_REMOTE_PASSPHRASE in Infisical at /borgbackup (web admin), then re-run this script")
+fi
+if [ ! -d "${BORG_REPO}" ]; then
+    pending_steps+=("Local borg repo was not initialized — see warnings above")
+fi
+
+if [ ${#pending_steps[@]} -eq 0 ]; then
+    echo "Next steps:"
+    echo "  Run the first backup:"
+    echo "     ${SCRIPT_DIR}/borg-backup.sh"
+    echo "  (or click 'Run backup now' on the Backups page in the web admin)"
+    echo ""
+    echo "  Verify: borg list ${BORG_REPO}"
+else
+    echo "Outstanding before backups will run:"
+    for step in "${pending_steps[@]}"; do
+        echo "  - ${step}"
+    done
+fi
+echo ""
+echo "See borgbackup/SETUP.md for the full walkthrough."
 echo ""
