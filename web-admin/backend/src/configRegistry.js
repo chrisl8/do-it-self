@@ -1,4 +1,4 @@
-import { readFile, writeFile, appendFile, access, mkdir } from "fs/promises";
+import { readFile, writeFile, appendFile, access, mkdir, rename } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -436,4 +436,188 @@ export function maskSecrets(registry, userConfig) {
 export function resolveSharedValues(registry, userConfig) {
   // Kept for backward compat -- returns shared values
   return userConfig?.shared || {};
+}
+
+// ─── Borg backup configuration ─────────────────────────────────────
+//
+// scripts/borg-backup.conf is a generated artifact, parallel to the per-
+// container .env files. The source of truth is user-config.yaml:borg,
+// with secrets (BORG_PASSPHRASE, BORG_REMOTE_PASSPHRASE) separately in
+// Infisical at /borgbackup. Users edit the borg block through the web
+// admin's Backups page; writeBorgConf() re-emits the .conf on save.
+//
+// BORG_CONTAINER_MOUNT_DIRS is always derived from userConfig.mounts —
+// it's a lookup index for SQLite database discovery in borg-db-dump.sh,
+// so it has no business being user-tunable (a stale entry there silently
+// breaks DB dumps).
+
+const BORG_CONF_PATH = join(CONTAINERS_DIR, "scripts", "borg-backup.conf");
+
+const BORG_DEFAULTS = {
+  compression: "lz4",
+  remote_compression: "zstd,3",
+  remote_ratelimit_kbps: 0,
+  retention: {
+    local: { daily: 7, weekly: 4, monthly: 6, yearly: 2 },
+    remote: { daily: 3, weekly: 4, monthly: 12, yearly: 5 },
+  },
+  restore_test_sample_path: "etc/hostname",
+  rsh: "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
+};
+
+function autoSeededBackupPaths(mounts, dumpDir) {
+  const paths = [];
+  for (const m of mounts) {
+    const p = resolveHomePath(m.path);
+    paths.push({ path: `${p}/container-mounts/`, enabled: true });
+  }
+  if (dumpDir) {
+    paths.push({ path: `${dumpDir.replace(/\/?$/, "/")}`, enabled: true });
+  }
+  paths.push({ path: `${homedir()}/`, enabled: true });
+  paths.push({ path: "/etc/", enabled: true });
+  return paths;
+}
+
+// Computes the default dump directory from a repo path — same mount,
+// sibling directory. So /mnt/22TB/borg-repo -> /mnt/22TB/borg-db-dumps.
+function defaultDumpDirFor(repoPath) {
+  if (!repoPath) return "";
+  const parent = repoPath.replace(/\/+$/, "").replace(/\/[^/]+$/, "");
+  return `${parent}/borg-db-dumps`;
+}
+
+export function getBorgConfig(userConfig) {
+  const borg = userConfig?.borg || {};
+  const mounts = userConfig?.mounts || [];
+  const repoPath = borg.repo_path || "";
+  const dumpDir = borg.dump_dir || (repoPath ? defaultDumpDirFor(repoPath) : "");
+  const backupPaths = Array.isArray(borg.backup_paths) && borg.backup_paths.length > 0
+    ? borg.backup_paths
+    : autoSeededBackupPaths(mounts, dumpDir);
+  return {
+    repo_path: repoPath,
+    dump_dir: dumpDir,
+    backup_paths: backupPaths,
+    remote_repo: borg.remote_repo || "",
+    remote_ratelimit_kbps: borg.remote_ratelimit_kbps ?? BORG_DEFAULTS.remote_ratelimit_kbps,
+    compression: borg.compression || BORG_DEFAULTS.compression,
+    remote_compression: borg.remote_compression || BORG_DEFAULTS.remote_compression,
+    retention: {
+      local: { ...BORG_DEFAULTS.retention.local, ...(borg.retention?.local || {}) },
+      remote: { ...BORG_DEFAULTS.retention.remote, ...(borg.retention?.remote || {}) },
+    },
+    restore_test_sample_path: borg.restore_test_sample_path || BORG_DEFAULTS.restore_test_sample_path,
+    rsh: borg.rsh || BORG_DEFAULTS.rsh,
+  };
+}
+
+// Returns mount paths that have no enabled backup_path starting with them.
+// Used by the UI to flag "this mount is not in the backup" so a user can't
+// accidentally leave a whole drive out.
+export function mountsNotInBackup(userConfig) {
+  const cfg = getBorgConfig(userConfig);
+  const enabled = (cfg.backup_paths || [])
+    .filter((p) => p.enabled)
+    .map((p) => resolveHomePath(p.path));
+  const uncovered = [];
+  for (const m of userConfig?.mounts || []) {
+    const mp = resolveHomePath(m.path).replace(/\/+$/, "");
+    const hit = enabled.some((ep) => ep.startsWith(mp + "/") || ep === mp || ep === mp + "/");
+    if (!hit) uncovered.push(m.path);
+  }
+  return uncovered;
+}
+
+function formatBorgBashLine(key, value) {
+  // Wrap in double quotes unless it's a bare number. Escape embedded
+  // double quotes. Values that reference shell variables like ${HOME}
+  // must not be escaped — our callers never emit untrusted user data
+  // into those specific slots.
+  if (typeof value === "number") return `${key}=${value}`;
+  const escaped = String(value).replace(/"/g, '\\"');
+  return `${key}="${escaped}"`;
+}
+
+function formatBorgArray(key, values) {
+  if (!values || values.length === 0) return `${key}=()`;
+  const quoted = values.map((v) => `    "${String(v).replace(/"/g, '\\"')}"`);
+  return `${key}=(\n${quoted.join("\n")}\n)`;
+}
+
+export function renderBorgConf(userConfig) {
+  const cfg = getBorgConfig(userConfig);
+  const mounts = userConfig?.mounts || [];
+  const enabledPaths = (cfg.backup_paths || [])
+    .filter((p) => p.enabled && p.path)
+    .map((p) => p.path);
+  const containerMountDirs = mounts.map((m) =>
+    `${resolveHomePath(m.path).replace(/\/+$/, "")}/container-mounts`,
+  );
+
+  const lines = [
+    "# AUTO-GENERATED by web-admin from user-config.yaml:borg",
+    "# Do not edit manually — changes will be overwritten on next save.",
+    `# Generated: ${new Date().toISOString()}`,
+    "",
+    "# ── Local repository ────────────────────────────────────────────",
+    formatBorgBashLine("BORG_REPO", cfg.repo_path),
+    formatBorgBashLine("BORG_COMPRESSION", cfg.compression),
+    formatBorgBashLine("BORG_REMOTE_COMPRESSION", cfg.remote_compression),
+    "",
+    "# ── Database dumps ──────────────────────────────────────────────",
+    formatBorgBashLine("BORG_DB_DUMP_DIR", cfg.dump_dir),
+    "",
+    "# ── Exclusion patterns ──────────────────────────────────────────",
+    'BORG_EXCLUDE_FILE="${HOME}/containers/borgbackup/exclude-patterns.txt"',
+    "",
+    "# ── Status & logging ───────────────────────────────────────────",
+    'BORG_STATUS_DIR="${HOME}/containers/homepage/images"',
+    'BORG_STATUS_FILE="${BORG_STATUS_DIR}/borg-status.json"',
+    "",
+    "# Web admin URL — populated at run time by borg-backup.sh once TS_DOMAIN is known.",
+    'BORG_WEB_ADMIN_URL=""',
+    "",
+    'BORG_LOCK_FILE="/tmp/borg-backup.lock"',
+    'BORG_LOG_FILE="${HOME}/logs/borg-backup.log"',
+    "",
+    "# ── Retention policy ───────────────────────────────────────────",
+    formatBorgBashLine("BORG_KEEP_DAILY", cfg.retention.local.daily),
+    formatBorgBashLine("BORG_KEEP_WEEKLY", cfg.retention.local.weekly),
+    formatBorgBashLine("BORG_KEEP_MONTHLY", cfg.retention.local.monthly),
+    formatBorgBashLine("BORG_KEEP_YEARLY", cfg.retention.local.yearly),
+    "",
+    "# ── Paths to back up ──────────────────────────────────────────",
+    formatBorgArray("BORG_BACKUP_PATHS", enabledPaths),
+    "",
+    "# ── Container mount directories (derived from user-config mounts) ─",
+    formatBorgArray("BORG_CONTAINER_MOUNT_DIRS", containerMountDirs),
+    "",
+    "# ── Restore test ───────────────────────────────────────────────",
+    formatBorgBashLine("BORG_RESTORE_TEST_SAMPLE_PATH", cfg.restore_test_sample_path),
+    "",
+    "# ── Remote (offsite) backup ────────────────────────────────────",
+    "# Leave BORG_REMOTE_REPO empty to disable remote backup.",
+    formatBorgBashLine("BORG_REMOTE_REPO", cfg.remote_repo),
+    "",
+    formatBorgBashLine("BORG_REMOTE_KEEP_DAILY", cfg.retention.remote.daily),
+    formatBorgBashLine("BORG_REMOTE_KEEP_WEEKLY", cfg.retention.remote.weekly),
+    formatBorgBashLine("BORG_REMOTE_KEEP_MONTHLY", cfg.retention.remote.monthly),
+    formatBorgBashLine("BORG_REMOTE_KEEP_YEARLY", cfg.retention.remote.yearly),
+    "",
+    formatBorgBashLine("BORG_REMOTE_RATELIMIT", cfg.remote_ratelimit_kbps),
+    "",
+    formatBorgBashLine("BORG_RSH", cfg.rsh),
+    "",
+  ];
+  return lines.join("\n");
+}
+
+export async function writeBorgConf(userConfig) {
+  if (!userConfig) userConfig = await getUserConfig();
+  const content = renderBorgConf(userConfig);
+  const tmpPath = `${BORG_CONF_PATH}.tmp`;
+  await writeFile(tmpPath, content, "utf8");
+  await rename(tmpPath, BORG_CONF_PATH);
+  return { path: BORG_CONF_PATH, bytes: content.length };
 }
