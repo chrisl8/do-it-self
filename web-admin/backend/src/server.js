@@ -675,6 +675,27 @@ app.put("/api/config/borg", async (req, res) => {
 // confirmation, and then POST it back via PUT /api/config/borg/passphrase.
 // The two-step flow exists so the server never persists a passphrase
 // the user hasn't had a chance to copy off-box.
+// Retrieve an existing passphrase from Infisical so the user can save
+// it off-box after the fact. The generate dialog tried to nudge them to
+// do that up front, but real humans don't always. While the host is up,
+// Infisical has it; refusing to re-reveal would be paternalistic theatre
+// that actively hurts recovery.
+app.get("/api/config/borg/passphrase/reveal", async (req, res) => {
+  try {
+    const meta = BORG_PASSPHRASE_SECRETS[req.query.key];
+    if (!meta) return res.status(400).json({ error: "Unknown passphrase key" });
+    if (!(await isInfisicalAvailable())) {
+      return res.status(503).json({ error: "Infisical is not available" });
+    }
+    const value = await getSecret(meta.key, meta.path);
+    if (!value) return res.status(404).json({ error: "Passphrase not set" });
+    res.json({ value });
+  } catch (err) {
+    console.error("Error revealing borg passphrase:", err);
+    res.status(500).json({ error: "Failed to reveal passphrase" });
+  }
+});
+
 app.post("/api/config/borg/passphrase/generate", async (req, res) => {
   try {
     const { randomBytes } = await import("crypto");

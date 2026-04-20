@@ -47,6 +47,13 @@ const useBorgConfig = () => {
     return body.value;
   }, []);
 
+  const revealPassphrase = useCallback(async (key) => {
+    const res = await fetch(`/api/config/borg/passphrase/reveal?key=${encodeURIComponent(key)}`);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Failed to reveal passphrase");
+    return body.value;
+  }, []);
+
   const savePassphrase = useCallback(async (key, value) => {
     const res = await fetch("/api/config/borg/passphrase", {
       method: "PUT",
@@ -80,6 +87,7 @@ const useBorgConfig = () => {
     refresh: fetchConfig,
     save,
     generatePassphrase,
+    revealPassphrase,
     savePassphrase,
     initRepo,
     runBackupNow,
