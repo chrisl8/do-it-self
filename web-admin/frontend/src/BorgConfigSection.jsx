@@ -27,6 +27,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import useBorgConfig, { usePathSize } from "./hooks/useBorgConfig";
+import LogOutput from "./LogOutput";
 
 const BACKUP_PI_PLACEHOLDER = "ssh://borg@backup-pi/mnt/backup/borg";
 
@@ -419,24 +420,7 @@ const InitOutputDialog = ({ open, onClose, output, loading, exitCode }) => (
           <Typography>Running <code>scripts/setup-borg-backup.sh</code>…</Typography>
         </Box>
       ) : (
-        <Box
-          component="pre"
-          sx={{
-            fontFamily: "monospace",
-            fontSize: "0.8rem",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            maxHeight: "60vh",
-            overflow: "auto",
-            backgroundColor: (theme) =>
-              theme.palette.mode === "dark" ? "grey.800" : "grey.900",
-            color: "grey.100",
-            p: 2,
-            borderRadius: 1,
-          }}
-        >
-          {output || "(no output)"}
-        </Box>
+        <LogOutput value={output} placeholder="(no output)" />
       )}
     </DialogContent>
     <DialogActions>
