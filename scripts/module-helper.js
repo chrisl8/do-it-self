@@ -388,6 +388,7 @@ async function updateModules(args) {
   }
 
   let anyUpdated = false;
+  const registry = await readRegistry();
 
   for (const name of moduleNames) {
     const moduleEntry = installed.modules[name];
@@ -467,11 +468,21 @@ async function updateModules(args) {
         filter: (src) => !src.includes(".git"),
       });
 
+      // Union the static preserve list with this container's git_repos
+      // keys from container-registry.yaml. Keeps registry-declared clones
+      // (homepage's dashboard-icons, tsidp, valheim, minecraft) in place
+      // through module updates, instead of relying on the auto-clone in
+      // all-containers.sh --start to recover them after the fact.
+      const gitRepoDirs = Object.keys(
+        registry?.containers?.[containerName]?.git_repos ?? {},
+      );
+      const preserveList = [...PRESERVE_ON_UPDATE, ...gitRepoDirs];
+
       // Copy preserved files from live targetDir into staging. cp (not
       // rename) keeps the original tree intact so we can abort by simply
       // rm'ing stagingDir if anything goes wrong. force:true handles the
       // merge-with-module-default case (e.g. icons/).
-      for (const item of PRESERVE_ON_UPDATE) {
+      for (const item of preserveList) {
         const src = join(targetDir, item);
         if (!(await fileExists(src))) continue;
         const dst = join(stagingDir, item);
