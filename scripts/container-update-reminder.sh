@@ -4,23 +4,19 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Go up one level to the containers directory
 CONTAINERS_DIR="$(dirname "$SCRIPT_DIR")"
-# Path to the diun compose file
-COMPOSE_FILE="$CONTAINERS_DIR/diun/compose.yaml"
-
-# Check if the compose file exists
-if [ ! -f "$COMPOSE_FILE" ]; then
-    echo "Compose file not found at $COMPOSE_FILE, exiting..."
+# Resolve the diun script volume path from its generated .env file.
+# The diun compose.yaml uses ${VOL_DIUN_SCRIPT}/container-mounts/diun/script:/script,
+# and VOL_DIUN_SCRIPT is set by scripts/generate-env.js based on container-registry.yaml.
+DIUN_ENV_FILE="$CONTAINERS_DIR/diun/.env"
+if [ ! -f "$DIUN_ENV_FILE" ]; then
+    echo "Diun .env file not found at $DIUN_ENV_FILE, exiting..."
     exit 1
 fi
 
-# Extract the script volume path from the compose file
-# Look for the line that maps the script volume and extract the host path
-SCRIPT_VOLUME_PATH=$(grep -E "^\s*-\s*/.*:/script" "$COMPOSE_FILE" | sed 's/^\s*-\s*\([^:]*\):\/script.*/\1/')
+# shellcheck disable=SC1090
+set -a; source "$DIUN_ENV_FILE"; set +a
 
-if [ -z "$SCRIPT_VOLUME_PATH" ]; then
-    echo "Could not find script volume mapping in $COMPOSE_FILE, exiting..."
-    exit 1
-fi
+SCRIPT_VOLUME_PATH="${VOL_DIUN_SCRIPT:-$HOME/container-data}/container-mounts/diun/script"
 
 # Construct the full file path
 PENDING_UPDATES_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
