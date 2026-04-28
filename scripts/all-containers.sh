@@ -768,6 +768,43 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
       docker --log-level ERROR compose down
     fi
     if [[ ${START_ACTION} = true ]];then
+      # Auto-clone any declared git_repos whose .git is missing. Runs on every
+      # --start regardless of whether the container is currently running, so
+      # the on-disk state always matches container-registry.yaml. Stateless:
+      # a no-op when every declared repo is already present. Bind-mount targets
+      # are live, so a clone here takes effect for the running container too
+      # (e.g. homepage's dashboard-icons feeds web-admin's icon lookup).
+      if [[ -x "$(command -v node)" ]] && [[ -f "${GIT_REPOS_HELPER}" ]]; then
+        while IFS=$'\t' read -r _RC REPO_SUBDIR REPO_URL REPO_BRANCH REPO_SHALLOW; do
+          if [[ ! -d "${REPO_SUBDIR}/.git" ]]; then
+            printf "${YELLOW}  Cloning ${REPO_URL} into ${REPO_SUBDIR}${NC}\n"
+            # Docker may have auto-created an empty bind-mount target; git
+            # clone refuses non-empty dirs, so rmdir empty ones first.
+            if [[ -d "${REPO_SUBDIR}" ]] && [[ -z "$(ls -A "${REPO_SUBDIR}" 2>/dev/null)" ]]; then
+              rmdir "${REPO_SUBDIR}" 2>/dev/null || true
+            fi
+            CLONE_ARGS=()
+            if [[ "${REPO_SHALLOW}" = "true" ]]; then
+              CLONE_ARGS+=(--depth 1)
+            fi
+            if git clone "${CLONE_ARGS[@]}" "${REPO_URL}" "${REPO_SUBDIR}"; then
+              # list-git-repos.js outputs "-" for empty branch; skip checkout then.
+              if [[ -n "${REPO_BRANCH}" && "${REPO_BRANCH}" != "-" ]]; then
+                cd "${REPO_SUBDIR}"
+                git checkout "${REPO_BRANCH}"
+                cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
+              fi
+            else
+              printf "${RED}  Failed to clone ${REPO_SUBDIR}${NC}\n"
+              # Clean up any partial clone so the next start retries cleanly.
+              if [[ -d "${REPO_SUBDIR}" ]] && [[ ! -d "${REPO_SUBDIR}/.git" ]]; then
+                rm -rf "${REPO_SUBDIR}"
+              fi
+            fi
+          fi
+        done < <(node "${GIT_REPOS_HELPER}" --container "${CONTAINER_DIR}" 2>/dev/null)
+      fi
+
       if [[ $(docker --log-level ERROR compose ps | wc -l) -eq 1 ]];then
         printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
 
@@ -782,55 +819,17 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           printf "\n"
         fi
 
-        # Auto-clone any declared git_repos whose .git is missing. Fixes the
-        # "installed via web admin, started, icons missing" case: module.sh
-        # install only copies files, so a freshly installed container with
-        # declared git_repos (e.g. homepage's dashboard-icons) would otherwise
-        # start with an empty bind-mount target. Stateless — if every declared
-        # repo is already present, this is a no-op and no network fetch runs.
-        NEEDS_GIT_REPO_CLONE=false
-        if [[ -x "$(command -v node)" ]] && [[ -f "${GIT_REPOS_HELPER}" ]]; then
-          while IFS=$'\t' read -r _RC REPO_SUBDIR _RU _RB _RS; do
-            if [[ ! -d "${REPO_SUBDIR}/.git" ]]; then
-              NEEDS_GIT_REPO_CLONE=true
-              # If Docker previously auto-created an empty bind-mount target,
-              # rmdir it so `git clone` doesn't refuse (it rejects non-empty dirs).
-              if [[ -d "${REPO_SUBDIR}" ]] && [[ -z "$(ls -A "${REPO_SUBDIR}" 2>/dev/null)" ]]; then
-                rmdir "${REPO_SUBDIR}" 2>/dev/null || true
-              fi
-            fi
-          done < <(node "${GIT_REPOS_HELPER}" --container "${CONTAINER_DIR}" 2>/dev/null)
-        fi
-
-        if [[ ${UPDATE_GIT_REPOS} = true || ${NEEDS_GIT_REPO_CLONE} = true ]];then
-          # Clone or update git repos defined in container-registry.yaml
+        if [[ ${UPDATE_GIT_REPOS} = true ]];then
+          # Pull updates for existing git repos defined in container-registry.yaml.
+          # Missing repos are cloned by the pre-gate auto-clone block above, so
+          # this branch only handles refreshing existing checkouts.
           if [[ -x "$(command -v node)" ]] && [[ -f "${GIT_REPOS_HELPER}" ]]; then
-            while IFS=$'\t' read -r _REPO_CONTAINER REPO_SUBDIR REPO_URL REPO_BRANCH REPO_SHALLOW; do
+            while IFS=$'\t' read -r _REPO_CONTAINER REPO_SUBDIR _REPO_URL _REPO_BRANCH _REPO_SHALLOW; do
               if [[ -d "${REPO_SUBDIR}/.git" ]]; then
                 printf "${YELLOW}  Updating git repository in ${REPO_SUBDIR}${NC}\n"
                 cd "${REPO_SUBDIR}"
                 git pull || printf "${RED}  Failed to update ${REPO_SUBDIR}${NC}\n"
                 cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
-              else
-                printf "${YELLOW}  Cloning ${REPO_URL} into ${REPO_SUBDIR}${NC}\n"
-                CLONE_ARGS=()
-                if [[ "${REPO_SHALLOW}" = "true" ]]; then
-                  CLONE_ARGS+=(--depth 1)
-                fi
-                if git clone "${CLONE_ARGS[@]}" "${REPO_URL}" "${REPO_SUBDIR}"; then
-                  # list-git-repos.js outputs "-" for empty branch; skip checkout then.
-                  if [[ -n "${REPO_BRANCH}" && "${REPO_BRANCH}" != "-" ]]; then
-                    cd "${REPO_SUBDIR}"
-                    git checkout "${REPO_BRANCH}"
-                    cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
-                  fi
-                else
-                  printf "${RED}  Failed to clone ${REPO_SUBDIR}${NC}\n"
-                  # Clean up any partial clone so the next start retries cleanly.
-                  if [[ -d "${REPO_SUBDIR}" ]] && [[ ! -d "${REPO_SUBDIR}/.git" ]]; then
-                    rm -rf "${REPO_SUBDIR}"
-                  fi
-                fi
               fi
             done < <(node "${GIT_REPOS_HELPER}" --container "${CONTAINER_DIR}" 2>/dev/null)
           fi
