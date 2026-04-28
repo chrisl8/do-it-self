@@ -26,6 +26,7 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import useBackupStatus from "./hooks/useBackupStatus";
 import BorgConfigSection from "./BorgConfigSection";
+import LogOutput from "./LogOutput";
 
 const THRESHOLD_MARKS = [
   { value: 0, hours: 12, label: "12h" },
@@ -251,24 +252,7 @@ const LogDialog = ({ open, onClose, title, log }) => {
     <DialogTitle>{title}</DialogTitle>
     <DialogContent>
       {log ? (
-        <Box
-          component="pre"
-          sx={{
-            fontFamily: "monospace",
-            fontSize: "0.8rem",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            maxHeight: "60vh",
-            overflow: "auto",
-            backgroundColor: (theme) =>
-              theme.palette.mode === "dark" ? "grey.800" : "grey.900",
-            color: "grey.100",
-            p: 2,
-            borderRadius: 1,
-          }}
-        >
-          {log.join("\n")}
-        </Box>
+        <LogOutput value={log.join("\n")} />
       ) : (
         <Spinner />
       )}

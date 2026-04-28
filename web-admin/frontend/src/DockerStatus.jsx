@@ -29,6 +29,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
 import Snackbar from "@mui/material/Snackbar";
+import LogOutput from "./LogOutput";
 
 const getRunningContainersStatus = (containers) => {
   if (!containers || Object.keys(containers).length === 0) return null;
@@ -1311,24 +1312,11 @@ const DockerStatus = ({
       >
         <DialogTitle>Restart Output: {outputDialog.stackName}</DialogTitle>
         <DialogContent>
-          <Box
-            component="pre"
-            sx={{
-              backgroundColor: (theme) =>
-                theme.palette.mode === "dark" ? "grey.800" : "grey.900",
-              color: "grey.100",
-              p: 2,
-              borderRadius: 1,
-              overflow: "auto",
-              maxHeight: 400,
-              fontFamily: "monospace",
-              fontSize: "0.875rem",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}
-          >
-            {outputDialog.output}
-          </Box>
+          <LogOutput
+            value={outputDialog.output}
+            fontSize="0.875rem"
+            maxHeight={400}
+          />
         </DialogContent>
         <DialogActions>
           <Button

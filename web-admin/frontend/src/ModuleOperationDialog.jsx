@@ -8,6 +8,7 @@ import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
+import LogOutput from "./LogOutput";
 
 function ModuleOperationDialog({ open, title, running, result, onClose }) {
   return (
@@ -43,27 +44,17 @@ function ModuleOperationDialog({ open, title, running, result, onClose }) {
             <Typography variant="caption" color="text.secondary">
               Command output:
             </Typography>
-            <Box
-              component="pre"
+            <LogOutput
+              value={result.output}
+              placeholder="(no output)"
+              maxHeight={400}
               sx={{
                 mt: 0.5,
                 p: 1.5,
-                bgcolor: (theme) =>
-                  theme.palette.mode === "dark" ? "grey.800" : "grey.900",
-                color: "grey.100",
-                fontSize: "0.8rem",
-                fontFamily: "monospace",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                maxHeight: 400,
-                overflow: "auto",
                 border: "1px solid",
                 borderColor: "divider",
-                borderRadius: 1,
               }}
-            >
-              {result.output || "(no output)"}
-            </Box>
+            />
           </>
         )}
       </DialogContent>
