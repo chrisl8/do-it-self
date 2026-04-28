@@ -1002,6 +1002,21 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           # shellcheck disable=SC2086
           eval "$(infisical export ${INFISICAL_ARGS} --path="/${CONTAINER_DIR}" --format=dotenv-export 2>/dev/null)"
         fi
+        # Pre-flight: catch the failure mode where compose.yaml bind-mounts a
+        # host file that's missing or has been turned into an empty directory
+        # by a previous Docker auto-create. Skips this container's start (does
+        # not abort the batch) on failure.
+        BIND_MOUNT_HELPER="${SCRIPT_DIR}/scripts/check-bind-mounts.js"
+        if [[ -x "$(command -v node)" ]] && [[ -f "${BIND_MOUNT_HELPER}" ]]; then
+          node "${BIND_MOUNT_HELPER}" "${CONTAINER_DIR}"
+          BIND_MOUNT_EXIT=$?
+          if [[ ${BIND_MOUNT_EXIT} -ne 0 ]]; then
+            set -e
+            printf "${RED} - ${CONTAINER_DIR} pre-flight bind-mount check failed (exit ${BIND_MOUNT_EXIT}); skipping start${NC}\n"
+            FAILED_CONTAINERS+=("${CONTAINER_DIR}")
+            continue
+          fi
+        fi
         docker compose up -d --wait
         COMPOSE_EXIT_CODE=$?
         set -e
