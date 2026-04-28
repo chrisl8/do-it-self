@@ -66,6 +66,21 @@ const formatDuration = (hours) => {
   return `${Math.round(hours / 720)}mo`;
 };
 
+const ThresholdReadout = ({ thresholdHours, ageHoursList, sx }) => {
+  if (!ageHoursList?.length) return null;
+  const fresh = ageHoursList.filter((a) => a < thresholdHours);
+  const stale = ageHoursList.filter((a) => a >= thresholdHours);
+  const oldestFresh = fresh.length ? Math.max(...fresh) : null;
+  const youngestStale = stale.length ? Math.min(...stale) : null;
+  return (
+    <Typography variant="caption" color="text.secondary" sx={sx}>
+      {fresh.length} of {ageHoursList.length} fresh
+      {oldestFresh !== null && ` · oldest fresh: ${formatDuration(oldestFresh)}`}
+      {youngestStale !== null && ` · youngest stale: ${formatDuration(youngestStale)}`}
+    </Typography>
+  );
+};
+
 const ThresholdSlider = ({ value, onChange, onCommit, disabled, label }) => {
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down("sm"));
@@ -169,8 +184,10 @@ const groupByHost = (sources) => {
   entries.sort(([aHost, aSources], [bHost, bSources]) => {
     const aStale = aSources.some((s) => s.status === "stale");
     const bStale = bSources.some((s) => s.status === "stale");
-    if (aStale && !bStale) return -1;
-    if (!aStale && bStale) return 1;
+    if (aStale !== bStale) return aStale ? -1 : 1;
+    const aMax = Math.max(...aSources.map((s) => s.ageHours ?? 0));
+    const bMax = Math.max(...bSources.map((s) => s.ageHours ?? 0));
+    if (aMax !== bMax) return bMax - aMax;
     return aHost.localeCompare(bHost);
   });
   return Object.fromEntries(entries);
@@ -687,6 +704,13 @@ const BackupStatus = () => {
                     }}
                     disabled={thresholdSaving}
                   />
+                  <ThresholdReadout
+                    thresholdHours={globalThresholdLocal ?? kopiaStatus.threshold_hours}
+                    ageHoursList={(kopiaStatus.sources ?? [])
+                      .filter((s) => s.status !== "ignored")
+                      .map((s) => s.ageHours ?? 0)}
+                    sx={{ display: "block", mt: 0.5 }}
+                  />
                 </Box>
               </Box>
 
@@ -792,6 +816,8 @@ const BackupStatus = () => {
               localHostThresholds[host] ??
               hostThresholds[host] ??
               kopiaStatus.threshold_hours;
+            const maxAgeHours = Math.max(...sources.map((s) => s.ageHours ?? 0));
+            const hostAgeHoursList = sources.map((s) => s.ageHours ?? 0);
 
             return (
               <Card key={host} sx={{ mb: 1 }}>
@@ -827,6 +853,10 @@ const BackupStatus = () => {
                       color={getStatusColor(hostStatus)}
                       size="small"
                     />
+                    <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                      {sources.length === 1 ? "" : "oldest: "}
+                      {formatDuration(maxAgeHours)} ago
+                    </Typography>
                   </Box>
                   <Box
                     sx={{ ml: { xs: 1, sm: 5 }, mr: 1, mt: 0.5, display: "flex", alignItems: "center", gap: 0.5 }}
@@ -875,6 +905,11 @@ const BackupStatus = () => {
                       </Tooltip>
                     )}
                   </Box>
+                  <ThresholdReadout
+                    thresholdHours={effectiveThreshold}
+                    ageHoursList={hostAgeHoursList}
+                    sx={{ display: "block", ml: { xs: 1, sm: 5 }, mt: 0.25 }}
+                  />
                   <Collapse in={isExpanded}>
                     <Box sx={{ mt: 1, ml: { xs: 1, sm: 5 } }}>
                       {sources.map((source) => (
