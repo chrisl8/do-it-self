@@ -156,19 +156,15 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
 
 DIUN_UPDATE_FILE=""
-# Path to the diun compose file
-COMPOSE_FILE="$SCRIPT_DIR/diun/compose.yaml"
-# Check if the compose file exists
-if [ -f "$COMPOSE_FILE" ]; then
-
-  # Extract the script volume path from the compose file
-  # Look for the line that maps the script volume and extract the host path
-  SCRIPT_VOLUME_PATH=$(grep -E "^\s*-\s*/.*:/script" "$COMPOSE_FILE" | sed 's/^\s*-\s*\([^:]*\):\/script.*/\1/')
-
-  if [ -n "$SCRIPT_VOLUME_PATH" ]; then
-    # Construct the full file path
-    DIUN_UPDATE_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
-  fi
+# Resolve the diun script volume path from its generated .env file.
+# The diun compose.yaml uses ${VOL_DIUN_SCRIPT}/container-mounts/diun/script:/script,
+# and VOL_DIUN_SCRIPT is set by scripts/generate-env.js based on container-registry.yaml.
+DIUN_ENV_FILE="$SCRIPT_DIR/diun/.env"
+if [ -f "$DIUN_ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  set -a; source "$DIUN_ENV_FILE"; set +a
+  SCRIPT_VOLUME_PATH="${VOL_DIUN_SCRIPT:-$HOME/container-data}/container-mounts/diun/script"
+  DIUN_UPDATE_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
 fi
 
 resolve_to_absolute() {

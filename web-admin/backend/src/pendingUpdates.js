@@ -6,30 +6,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function getPendingUpdatesFilePath() {
-  const composeFilePath = path.join(
+  // Resolve the diun script volume path from its generated .env file.
+  // The diun compose.yaml uses ${VOL_DIUN_SCRIPT}/container-mounts/diun/script:/script,
+  // and VOL_DIUN_SCRIPT is set by scripts/generate-env.js based on container-registry.yaml.
+  const envFilePath = path.join(
     process.env.HOME,
     "containers",
     "diun",
-    "compose.yaml",
+    ".env",
   );
 
-  if (!fs.existsSync(composeFilePath)) {
-    console.error("DIUN compose file not found:", composeFilePath);
+  if (!fs.existsSync(envFilePath)) {
+    console.error("DIUN .env file not found:", envFilePath);
     return null;
   }
 
-  const content = fs.readFileSync(composeFilePath, "utf8");
-  const lines = content.split("\n");
-
-  for (const line of lines) {
-    const match = line.match(/^\s*-\s*(\/[^:]+):\/script.*/);
+  let volDiunScript;
+  for (const line of fs.readFileSync(envFilePath, "utf8").split("\n")) {
+    const match = line.match(/^\s*VOL_DIUN_SCRIPT\s*=\s*(.*?)\s*$/);
     if (match) {
-      return path.join(match[1], "pendingContainerUpdates.txt");
+      volDiunScript = match[1].replace(/^["']|["']$/g, "");
+      break;
     }
   }
 
-  console.error("Could not find script volume mapping in DIUN compose file");
-  return null;
+  const base = volDiunScript || path.join(process.env.HOME, "container-data");
+  return path.join(base, "container-mounts/diun/script/pendingContainerUpdates.txt");
 }
 
 function getPendingUpdates() {
