@@ -48,7 +48,9 @@ function ModuleOperationDialog({ open, title, running, result, onClose }) {
               sx={{
                 mt: 0.5,
                 p: 1.5,
-                bgcolor: "grey.100",
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark" ? "grey.800" : "grey.900",
+                color: "grey.100",
                 fontSize: "0.8rem",
                 fontFamily: "monospace",
                 whiteSpace: "pre-wrap",
