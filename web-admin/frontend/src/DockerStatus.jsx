@@ -1314,7 +1314,9 @@ const DockerStatus = ({
           <Box
             component="pre"
             sx={{
-              backgroundColor: "grey.100",
+              backgroundColor: (theme) =>
+                theme.palette.mode === "dark" ? "grey.800" : "grey.900",
+              color: "grey.100",
               p: 2,
               borderRadius: 1,
               overflow: "auto",
@@ -1402,14 +1404,22 @@ const DockerStatus = ({
                     "& ul, & ol": { pl: 3 },
                     "& li": { my: 0.5 },
                     "& code": {
-                      backgroundColor: "grey.100",
+                      backgroundColor: (theme) =>
+                        theme.palette.mode === "dark"
+                          ? "grey.800"
+                          : "grey.900",
+                      color: "grey.100",
                       px: 0.5,
                       borderRadius: 0.5,
                       fontFamily: "monospace",
                       fontSize: "0.875em",
                     },
                     "& pre": {
-                      backgroundColor: "grey.100",
+                      backgroundColor: (theme) =>
+                        theme.palette.mode === "dark"
+                          ? "grey.800"
+                          : "grey.900",
+                      color: "grey.100",
                       p: 2,
                       borderRadius: 1,
                       overflow: "auto",

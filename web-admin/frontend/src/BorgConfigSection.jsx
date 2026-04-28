@@ -156,7 +156,9 @@ const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, on
             border: "1px solid",
             borderColor: "divider",
             borderRadius: 1,
-            backgroundColor: "grey.100",
+            backgroundColor: (theme) =>
+              theme.palette.mode === "dark" ? "grey.800" : "grey.900",
+            color: "grey.100",
             mb: 2,
             wordBreak: "break-all",
           }}
@@ -254,7 +256,9 @@ const RevealPassphraseDialog = ({ open, onClose, passphraseKey, onReveal }) => {
             border: "1px solid",
             borderColor: "divider",
             borderRadius: 1,
-            backgroundColor: "grey.100",
+            backgroundColor: (theme) =>
+              theme.palette.mode === "dark" ? "grey.800" : "grey.900",
+            color: "grey.100",
             mb: 2,
             wordBreak: "break-all",
           }}
@@ -461,7 +465,15 @@ const SshPublicKeyRow = () => {
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
         For a fresh Pi, run <code>setup-backup-pi.sh</code> on it. For an existing
         Pi, on this host run{" "}
-        <Box component="code" sx={{ backgroundColor: "grey.100", px: 0.5 }}>
+        <Box
+          component="code"
+          sx={{
+            backgroundColor: (theme) =>
+              theme.palette.mode === "dark" ? "grey.800" : "grey.900",
+            color: "grey.100",
+            px: 0.5,
+          }}
+        >
           cat ~/.ssh/id_ed25519.pub
         </Box>{" "}
         and add the output to the Pi's <code>borg</code> user's{" "}
