@@ -250,6 +250,21 @@ containers:
         type: secret
         required: false
         description: OIDC client secret for SSO integration
+      OTP_ENCRYPTION_PRIMARY_KEY:
+        type: secret
+        required: true
+        description: Active Record Encryption primary key for 2FA OTP secrets
+        auto_generate: true
+      OTP_ENCRYPTION_DETERMINISTIC_KEY:
+        type: secret
+        required: true
+        description: Active Record Encryption deterministic key for 2FA OTP secrets
+        auto_generate: true
+      OTP_ENCRYPTION_KEY_DERIVATION_SALT:
+        type: secret
+        required: true
+        description: Active Record Encryption key derivation salt for 2FA OTP secrets
+        auto_generate: true
     volumes:
       redis_data:
         var: VOL_DAWARICH_REDIS_DATA
