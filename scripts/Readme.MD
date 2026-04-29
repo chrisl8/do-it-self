@@ -62,4 +62,20 @@ Usage:
 
 The script is idempotent — re-running it handles drive replacement and config updates safely. After the first run the conf is persisted to `/etc/backup-pi.conf` so subsequent runs only need the script.
 
+### Updating an existing Pi
+
+To pick up new features after the script has been updated, just `scp` the latest `setup-backup-pi.sh` to the Pi and re-run it — no flags or special mode needed:
+
+```bash
+scp setup-backup-pi.sh piadmin@backup-pi:~/
+ssh piadmin@backup-pi "sudo bash setup-backup-pi.sh"
+```
+
+What re-running does:
+- **Skips** packages, users, drive format, borg/kopia repo init, and Tailscale auth that are already done.
+- **Overwrites** the generated helper scripts (`/home/$ADMIN_USER/check-health.sh`, `borg-prune.sh`), `/etc/msmtprc`, the kopia systemd unit, `/etc/cron.d/backup-pi`, and `/usr/local/bin/borg-serve-only.sh`. This is how new behavior actually lands — so don't hand-edit those files; add a sibling script if you need a custom check.
+- **Never touches** `/etc/backup-pi.conf` (your secrets stay).
+
+When new conf vars are added, they always have sensible defaults (`${VAR:-...}`) so an old conf keeps working. To see what's available to opt into, diff `/etc/backup-pi.conf` against the current `setup-backup-pi.conf.example`.
+
 See `docs/SETUP-BACKUP-PI.md` for the full provisioning spec — what to flash to the SD card, how to ship the Pi, how to connect clients, and drive-replacement procedures.
