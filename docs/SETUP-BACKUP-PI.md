@@ -748,6 +748,41 @@ Since unattended-upgrades handles security patches, manual intervention should b
 ssh piadmin@backup-pi "sudo apt update && sudo apt upgrade -y"
 ```
 
+### Updating the Provisioning Script
+
+The provisioning script is itself the upgrade mechanism — it's idempotent, so to pick up new features just copy the latest version over and re-run it:
+
+```bash
+scp setup-backup-pi.sh piadmin@backup-pi:~/
+ssh piadmin@backup-pi "sudo bash setup-backup-pi.sh"
+```
+
+(After the first install, `/etc/backup-pi.conf` already holds the secrets, so no conf path argument is needed on re-run.)
+
+What re-running does:
+
+- **Detects existing state and skips** — packages, service users, drive label/mount, borg/kopia repo init, Tailscale connection. These are one-time setup steps; the script checks for them before acting.
+- **Unconditionally rewrites generated files** — `/home/$ADMIN_USER/check-health.sh`, `/home/$ADMIN_USER/borg-prune.sh`, `/etc/msmtprc`, `/etc/systemd/system/kopia-server.service`, `/etc/cron.d/backup-pi`, `/usr/local/bin/borg-serve-only.sh`. This is how new features actually land, so **don't hand-edit these files** — your changes will be lost on the next re-run. If you need a custom check or cron job, add it as a separate sibling script.
+- **Never touches `/etc/backup-pi.conf`** — your stored secrets are safe across upgrades.
+
+#### Adding new conf variables
+
+The convention is to declare new config vars with shell-default fallbacks at the top of the script, e.g.:
+
+```bash
+NEW_FEATURE_FLAG="${NEW_FEATURE_FLAG:-default-value}"
+```
+
+This means an existing `/etc/backup-pi.conf` that doesn't mention the new var keeps working unchanged. The new var is opt-in: to override the default, append a line to `/etc/backup-pi.conf` and re-run.
+
+To discover what's new since you last set things up, diff your conf against the example in the repo:
+
+```bash
+ssh piadmin@backup-pi "sudo cat /etc/backup-pi.conf" | diff - setup-backup-pi.conf.example
+```
+
+For features that *require* a secret with no sensible default (e.g., a new third-party API key), add the variable to the `CONFIGURE_ME` preflight check loop in the script. The script will fail fast with a clear error pointing at the missing var, telling the user exactly what to add to their conf.
+
 ### Drive Replacement
 
 If the USB drive fails:
