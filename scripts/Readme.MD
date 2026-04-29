@@ -48,3 +48,18 @@ Note the use of the `|` character to separate entries.
 
 The first entry excludes things from all checks, including emailing you.  
 Devices in the second entry only will still send you an email if they are down, but they won't result in an "error" state flagging the system as "down" in healtchecks.io
+
+## setup-backup-pi.sh
+
+**This script provisions a Raspberry Pi as an offsite backup target for Borg + Kopia.**
+
+It's the server-side counterpart to `borg-backup.sh` (which pushes backups *to* this Pi). Designed to run on a fresh Raspberry Pi OS Lite install with a USB drive plugged in. It sets up Tailscale, an append-only Borg repo, a Kopia server, email alerts via SMTP, and weekly prune/check cron jobs.
+
+Usage:
+
+1. Copy `setup-backup-pi.conf.example` to `backup-pi.conf`, fill in the `CONFIGURE_ME` values, and `scp` it to the Pi along with the script.
+2. On the Pi: `sudo bash setup-backup-pi.sh /path/to/backup-pi.conf`
+
+The script is idempotent — re-running it handles drive replacement and config updates safely. After the first run the conf is persisted to `/etc/backup-pi.conf` so subsequent runs only need the script.
+
+See `docs/SETUP-BACKUP-PI.md` for the full provisioning spec — what to flash to the SD card, how to ship the Pi, how to connect clients, and drive-replacement procedures.

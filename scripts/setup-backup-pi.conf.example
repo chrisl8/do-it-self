@@ -1,0 +1,46 @@
+# Backup Pi configuration
+# Copy this file, fill in the values, then run:
+#   sudo bash setup-backup-pi.sh /path/to/backup-pi.conf
+
+# Admin user on the Pi (the user that owns scripts and backup keys).
+# Default matches the Raspberry Pi Imager username from docs/SETUP-BACKUP-PI.md.
+ADMIN_USER="piadmin"
+
+# Tailscale
+TAILSCALE_AUTH_KEY="CONFIGURE_ME"
+TAILSCALE_HOSTNAME="backup-pi"
+
+# Borg
+BORG_REPO_PATH="/mnt/backup/borg"
+BORG_REPO_PASSPHRASE="CONFIGURE_ME"
+
+# Kopia
+KOPIA_REPO_PATH="/mnt/backup/kopia"
+KOPIA_REPO_PASSWORD="CONFIGURE_ME"
+KOPIA_SERVER_CONTROL_PASSWORD="CONFIGURE_ME"
+KOPIA_SERVER_PORT=51515
+
+# Kopia server user (the username your Kopia client logs in as)
+KOPIA_USER_NAME="user@yourclient"
+KOPIA_USER_PASSWORD="CONFIGURE_ME"
+
+# USB Drive
+DRIVE_DEVICE="/dev/sda"
+DRIVE_LABEL="backupdrive"
+MOUNT_POINT="/mnt/backup"
+
+# SMTP server for email alerts (Fastmail used as the default example;
+# any provider works — set the host/port/credentials for yours).
+SMTP_HOST="smtp.fastmail.com"
+SMTP_PORT="587"
+ALERT_EMAIL="CONFIGURE_ME"
+SMTP_USER="CONFIGURE_ME"
+SMTP_PASSWORD="CONFIGURE_ME"
+
+# SSH public key for the borg backup client.
+# Generate on the client: ssh-keygen -t ed25519 -f ~/.ssh/borg_backup -N ""
+# Then paste the contents of ~/.ssh/borg_backup.pub here
+BORG_CLIENT_SSH_PUBKEY="CONFIGURE_ME"
+
+# External health monitoring (leave empty to skip)
+HEALTHCHECK_URL=""
