@@ -842,7 +842,6 @@ The model mirrors the existing `borg-serve-only.sh` restricted-shell pattern use
      host: backup-pi               # Tailscale hostname or IP
      ssh_user: webadmin
      ssh_key_path: ~/.ssh/backup-pi-webadmin
-     poll_interval_seconds: 60
    ```
 5. Restart web-admin. A "Backup Pi" tab appears in the dashboard.
 

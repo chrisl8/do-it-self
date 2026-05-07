@@ -74,8 +74,6 @@ async function readConfig() {
     host: bp.host,
     ssh_user: bp.ssh_user,
     ssh_key_path: bp.ssh_key_path,
-    poll_interval_ms:
-      (bp.poll_interval_seconds || 60) * 1000,
   };
 }
 
@@ -268,9 +266,8 @@ async function start() {
   // Tick immediately so the UI has data within seconds of cold start.
   // Don't await — slow network shouldn't delay other backend init.
   tick();
-  // Schedule subsequent ticks at the configured interval, but check the
-  // config each tick so changes (including disable) take effect quickly.
-  // Use a fixed 60s scheduler and let tick() short-circuit if disabled.
+  // Fixed 60s scheduler; tick() re-reads config every time, so enabling or
+  // disabling backuppi in user-config.yaml takes effect within one cycle.
   tickTimer = setInterval(tick, POLL_INTERVAL_MS_DEFAULT);
   console.log(`[backuppi] poller started (${POLL_INTERVAL_MS_DEFAULT / 1000}s)`);
 }
