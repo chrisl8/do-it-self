@@ -860,6 +860,26 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           set +e
           docker --log-level ERROR compose build
           set -e
+
+          # Clear this container from any pending-update tracking files now,
+          # before `docker compose up --wait` runs. The pull/build above is the
+          # actual "update" work; a later --wait timeout (common on multi-
+          # container stacks where one healthcheck is slow) does not mean the
+          # update failed, so it should not leave the entry stuck in the file.
+          if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
+            sed -i "/^${CONTAINER_DIR}\$/d" "${CONTAINER_LIST_FILE}"
+            if [[ ! -s "$CONTAINER_LIST_FILE" ]]; then
+                echo "$CONTAINER_LIST_FILE file is empty, deleting..."
+                rm -rf "$CONTAINER_LIST_FILE"
+            fi
+          fi
+          if [[ -n "${DIUN_UPDATE_FILE}"  && -e "${DIUN_UPDATE_FILE}" ]]; then
+            sed -i "/^${CONTAINER_DIR}\$/d" "${DIUN_UPDATE_FILE}"
+            if [[ ! -s "$DIUN_UPDATE_FILE" ]]; then
+                echo "$DIUN_UPDATE_FILE file is empty, deleting..."
+                rm -rf "$DIUN_UPDATE_FILE"
+            fi
+          fi
         fi
 
         INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
@@ -1056,26 +1076,6 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           printf "${YELLOW} ...Continuing to next task in ${SLEEP_TIME} seconds...${NC}\n"
           sleep "${SLEEP_TIME}"
           printf "\n"
-        fi
-
-        # If the container came from a list of containers to process, we need to remove it from the file so we don't try to process it again.
-        if [[ ${GET_UPDATES} = true && -n "${CONTAINER_LIST_FILE}" ]]; then
-          sed -i "/^${CONTAINER_DIR}\$/d" "${CONTAINER_LIST_FILE}"
-          # If the container list file is empty, delete it
-          if [[ ! -s "$CONTAINER_LIST_FILE" ]]; then
-              echo "$CONTAINER_LIST_FILE file is empty, deleting..."
-              rm -rf "$CONTAINER_LIST_FILE"
-          fi
-        fi
-
-        # Further, IF there is a DIUN Upgrade list file (which may be the same file) do the same!
-        if [[ ${GET_UPDATES} = true && -n "${DIUN_UPDATE_FILE}"  && -e "${DIUN_UPDATE_FILE}" ]]; then
-          sed -i "/^${CONTAINER_DIR}\$/d" "${DIUN_UPDATE_FILE}"
-          # If the container list file is empty, delete it
-          if [[ ! -s "$DIUN_UPDATE_FILE" ]]; then
-              echo "$DIUN_UPDATE_FILE file is empty, deleting..."
-              rm -rf "$DIUN_UPDATE_FILE"
-          fi
         fi
       fi
     fi
