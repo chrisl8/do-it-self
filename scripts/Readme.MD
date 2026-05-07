@@ -98,7 +98,6 @@ To enable:
      host: backup-pi               # Tailscale hostname or IP
      ssh_user: webadmin
      ssh_key_path: ~/.ssh/backup-pi-webadmin
-     poll_interval_seconds: 60
    ```
 5. Restart web-admin (`pm2 restart web-admin` or via the script). A new "Backup Pi" tab appears with disk/borg/kopia/tailscale status and one-click actions (restart kopia, apt upgrade, borg check/prune, reboot).
 
