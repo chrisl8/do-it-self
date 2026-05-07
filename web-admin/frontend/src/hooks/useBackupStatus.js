@@ -50,6 +50,7 @@ const useBackupStatus = () => {
   }, []);
 
   const [ignoreHosts, setIgnoreHosts] = useState(null);
+  const [ignoredSources, setIgnoredSources] = useState([]);
   const [hostThresholds, setHostThresholds] = useState({});
   const [healthcheckUrls, setHealthcheckUrls] = useState({
     kopia: null,
@@ -157,6 +158,62 @@ const useBackupStatus = () => {
     return data;
   }, []);
 
+  const fetchIgnoredSources = useCallback(async () => {
+    try {
+      const res = await fetch("/api/kopia-ignored-sources");
+      if (res.ok) {
+        const data = await res.json();
+        setIgnoredSources(Array.isArray(data.sources) ? data.sources : []);
+      }
+    } catch {
+      // non-critical
+    }
+  }, []);
+
+  const saveIgnoredSources = useCallback(async (sources) => {
+    const res = await fetch("/api/kopia-ignored-sources", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sources }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to save ignored sources");
+    setIgnoredSources(data.sources ?? sources);
+    // Optimistically update kopiaStatus.sources statuses so the UI flips
+    // immediately without re-running the backup check.
+    setKopiaStatus((prev) => {
+      if (!prev || !Array.isArray(prev.sources)) return prev;
+      const matches = (s) =>
+        sources.some(
+          (e) =>
+            e.host === s.host &&
+            e.userName === s.userName &&
+            e.path === s.path,
+        );
+      let staleDelta = 0;
+      const nextSources = prev.sources.map((s) => {
+        const shouldBeIgnored = matches(s);
+        if (shouldBeIgnored && s.status === "stale") {
+          staleDelta -= 1;
+          return { ...s, status: "ignored" };
+        }
+        if (!shouldBeIgnored && s.status === "ignored" && (s.ageHours ?? 0) > (s.effectiveThreshold ?? 0)) {
+          staleDelta += 1;
+          return { ...s, status: "stale" };
+        }
+        return s;
+      });
+      const nextStaleCount = Math.max(0, (prev.stale_sources ?? 0) + staleDelta);
+      return {
+        ...prev,
+        sources: nextSources,
+        stale_sources: nextStaleCount,
+        status: nextStaleCount > 0 ? "stale" : prev.status === "error" ? "error" : "success",
+      };
+    });
+    return data;
+  }, []);
+
   const saveKopiaThreshold = useCallback(async (hours) => {
     const res = await fetch("/api/kopia-threshold", {
       method: "PUT",
@@ -190,10 +247,11 @@ const useBackupStatus = () => {
   useEffect(() => {
     fetchStatus();
     fetchIgnoreHosts();
+    fetchIgnoredSources();
     fetchHostThresholds();
     fetchHealthcheckUrls();
     fetchBorgBannerDismissed();
-  }, [fetchStatus, fetchIgnoreHosts, fetchHostThresholds, fetchHealthcheckUrls, fetchBorgBannerDismissed]);
+  }, [fetchStatus, fetchIgnoreHosts, fetchIgnoredSources, fetchHostThresholds, fetchHealthcheckUrls, fetchBorgBannerDismissed]);
 
   return {
     kopiaStatus,
@@ -207,10 +265,12 @@ const useBackupStatus = () => {
     fetchKopiaLog,
     fetchBorgLog,
     ignoreHosts,
+    ignoredSources,
     hostThresholds,
     runKopiaCheck,
     saveKopiaThreshold,
     saveIgnoreHosts,
+    saveIgnoredSources,
     saveHostThresholds,
     healthcheckUrls,
     healthcheckAvailable,
