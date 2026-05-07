@@ -20,6 +20,8 @@ import Alert from "@mui/material/Alert";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import CloseIcon from "@mui/icons-material/Close";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import TextField from "@mui/material/TextField";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -277,10 +279,12 @@ const BackupStatus = () => {
     fetchKopiaLog,
     fetchBorgLog,
     ignoreHosts,
+    ignoredSources,
     hostThresholds,
     runKopiaCheck,
     saveKopiaThreshold,
     saveIgnoreHosts,
+    saveIgnoredSources,
     saveHostThresholds,
     healthcheckUrls,
     healthcheckAvailable,
@@ -296,6 +300,44 @@ const BackupStatus = () => {
   const [localHostThresholds, setLocalHostThresholds] = useState({});
   const [newIgnoreHost, setNewIgnoreHost] = useState("");
   const [ignoreSaving, setIgnoreSaving] = useState(false);
+  const [savingSourceKey, setSavingSourceKey] = useState(null);
+
+  const sourceKey = (s) => `${s.host}|${s.userName}|${s.path}`;
+
+  const toggleSourceIgnored = async (source) => {
+    const key = sourceKey(source);
+    setSavingSourceKey(key);
+    try {
+      const isCurrentlyIgnored = (ignoredSources ?? []).some(
+        (e) =>
+          e.host === source.host &&
+          e.userName === source.userName &&
+          e.path === source.path,
+      );
+      const next = isCurrentlyIgnored
+        ? (ignoredSources ?? []).filter(
+            (e) =>
+              !(
+                e.host === source.host &&
+                e.userName === source.userName &&
+                e.path === source.path
+              ),
+          )
+        : [
+            ...(ignoredSources ?? []),
+            {
+              host: source.host,
+              userName: source.userName,
+              path: source.path,
+            },
+          ];
+      await saveIgnoredSources(next);
+    } catch {
+      // hook surfaces error; keep prior state
+    } finally {
+      setSavingSourceKey(null);
+    }
+  };
 
   const toggleHost = (host) => {
     setExpandedHosts((prev) => ({ ...prev, [host]: !prev[host] }));
@@ -896,49 +938,83 @@ const BackupStatus = () => {
                   />
                   <Collapse in={isExpanded}>
                     <Box sx={{ mt: 1, ml: { xs: 1, sm: 5 } }}>
-                      {sources.map((source) => (
-                        <Box
-                          key={`${source.userName}:${source.path}`}
-                          sx={{
-                            display: "flex",
-                            flexDirection: { xs: "column", sm: "row" },
-                            alignItems: { xs: "flex-start", sm: "center" },
-                            gap: 1,
-                            py: 0.5,
-                            borderBottom: "1px solid",
-                            borderColor: "divider",
-                            "&:last-child": { borderBottom: "none" },
-                          }}
-                        >
-                          <Chip
-                            label={source.status}
-                            color={getStatusColor(source.status)}
-                            size="small"
-                            sx={{ minWidth: 70 }}
-                          />
-                          <Typography
-                            variant="body2"
+                      {sources.map((source) => {
+                        const key = sourceKey(source);
+                        const isIgnored = (ignoredSources ?? []).some(
+                          (e) =>
+                            e.host === source.host &&
+                            e.userName === source.userName &&
+                            e.path === source.path,
+                        );
+                        const showToggle = isIgnored || source.status === "stale";
+                        return (
+                          <Box
+                            key={`${source.userName}:${source.path}`}
                             sx={{
-                              fontFamily: "monospace",
-                              flexGrow: 1,
-                              wordBreak: "break-all",
-                              minWidth: 0,
+                              display: "flex",
+                              flexDirection: { xs: "column", sm: "row" },
+                              alignItems: { xs: "flex-start", sm: "center" },
+                              gap: 1,
+                              py: 0.5,
+                              borderBottom: "1px solid",
+                              borderColor: "divider",
+                              "&:last-child": { borderBottom: "none" },
                             }}
                           >
-                            {source.userName}:{source.path}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {formatDuration(source.ageHours)} ago
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ display: { xs: "block", sm: "none" } }}
-                          >
-                            {formatTimestamp(source.lastSnapshot)}
-                          </Typography>
-                        </Box>
-                      ))}
+                            <Chip
+                              label={source.status}
+                              color={getStatusColor(source.status)}
+                              size="small"
+                              sx={{ minWidth: 70 }}
+                            />
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontFamily: "monospace",
+                                flexGrow: 1,
+                                wordBreak: "break-all",
+                                minWidth: 0,
+                              }}
+                            >
+                              {source.userName}:{source.path}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {formatDuration(source.ageHours)} ago
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: { xs: "block", sm: "none" } }}
+                            >
+                              {formatTimestamp(source.lastSnapshot)}
+                            </Typography>
+                            {showToggle && (
+                              <Tooltip
+                                title={
+                                  isIgnored
+                                    ? "Restore — start alerting on this source again"
+                                    : "Ignore — stop alerting on this source (use when the path was moved or deleted on the source machine)"
+                                }
+                                arrow
+                              >
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => toggleSourceIgnored(source)}
+                                    disabled={savingSourceKey === key}
+                                  >
+                                    {isIgnored ? (
+                                      <VisibilityIcon fontSize="small" />
+                                    ) : (
+                                      <VisibilityOffIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
+                          </Box>
+                        );
+                      })}
                     </Box>
                   </Collapse>
                 </CardContent>

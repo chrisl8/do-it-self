@@ -329,6 +329,7 @@ const ICONS_BASE_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
 const KOPIA_CONF_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf");
 const KOPIA_CONF_EXAMPLE_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf.example");
 const KOPIA_HOST_THRESHOLDS_FILE = join(CONTAINERS_DIR, "scripts/kopia-host-thresholds.json");
+const KOPIA_IGNORED_SOURCES_FILE = join(CONTAINERS_DIR, "scripts/kopia-ignored-sources.json");
 
 // Read the Kopia conf, falling back to the committed .example template when
 // the gitignored runtime file does not yet exist (cron hasn't bootstrapped).
@@ -972,6 +973,68 @@ app.put("/api/kopia-host-thresholds", async (req, res) => {
   } catch (err) {
     console.error("Error updating kopia host thresholds:", err);
     res.status(500).json({ error: "Failed to update host thresholds" });
+  }
+});
+
+app.get("/api/kopia-ignored-sources", async (req, res) => {
+  try {
+    const data = await readFile(KOPIA_IGNORED_SOURCES_FILE, "utf8");
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) {
+      res.json({ sources: [] });
+      return;
+    }
+    res.json({ sources: parsed });
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      res.json({ sources: [] });
+      return;
+    }
+    console.error("Error reading kopia ignored sources:", err);
+    res.status(500).json({ error: "Failed to read ignored sources" });
+  }
+});
+
+app.put("/api/kopia-ignored-sources", async (req, res) => {
+  const { sources } = req.body;
+  if (!Array.isArray(sources)) {
+    res.status(400).json({ error: "sources must be an array" });
+    return;
+  }
+  for (const entry of sources) {
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      typeof entry.host !== "string" ||
+      typeof entry.userName !== "string" ||
+      typeof entry.path !== "string" ||
+      !entry.host.trim() ||
+      !entry.userName.trim() ||
+      !entry.path.trim()
+    ) {
+      res.status(400).json({
+        error: "Each entry must be {host, userName, path} with non-empty strings",
+      });
+      return;
+    }
+  }
+  // Normalize: keep only the three known fields, in a stable order
+  const normalized = sources.map((s) => ({
+    host: s.host,
+    userName: s.userName,
+    path: s.path,
+  }));
+  try {
+    await writeFile(
+      KOPIA_IGNORED_SOURCES_FILE,
+      JSON.stringify(normalized, null, 2) + "\n",
+      "utf8",
+    );
+    console.log(`Kopia ignored sources updated: ${normalized.length} entries`);
+    res.json({ success: true, sources: normalized });
+  } catch (err) {
+    console.error("Error updating kopia ignored sources:", err);
+    res.status(500).json({ error: "Failed to update ignored sources" });
   }
 });
 

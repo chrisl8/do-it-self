@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Bootstrap runtime configs from committed templates on first run.
 # These files are gitignored because the web admin writes to them.
-for f in kopia-backup-check.conf kopia-host-thresholds.json; do
+for f in kopia-backup-check.conf kopia-host-thresholds.json kopia-ignored-sources.json; do
     if [ ! -f "${SCRIPT_DIR}/${f}" ] && [ -f "${SCRIPT_DIR}/${f}.example" ]; then
         cp "${SCRIPT_DIR}/${f}.example" "${SCRIPT_DIR}/${f}"
     fi
@@ -23,6 +23,17 @@ if [ -f "${KOPIA_HOST_THRESHOLDS_FILE}" ]; then
     HOST_THRESHOLDS_JSON=$(cat "${KOPIA_HOST_THRESHOLDS_FILE}")
 else
     HOST_THRESHOLDS_JSON="{}"
+fi
+
+# Load per-source ignore list (JSON file, read once)
+# Each entry: {host, userName, path} — matched stale sources are flagged
+# "ignored" rather than "stale" so abandoned snapshot paths (data moved/deleted
+# on the source machine) don't trigger alerts forever.
+KOPIA_IGNORED_SOURCES_FILE="${SCRIPT_DIR}/kopia-ignored-sources.json"
+if [ -f "${KOPIA_IGNORED_SOURCES_FILE}" ]; then
+    IGNORED_SOURCES_JSON=$(cat "${KOPIA_IGNORED_SOURCES_FILE}")
+else
+    IGNORED_SOURCES_JSON="[]"
 fi
 
 # Get the effective threshold for a host (per-host override or global default)
@@ -132,6 +143,19 @@ is_ignored_host() {
     return 1
 }
 
+# Check if a specific source (host+userName+path triplet) is in the ignore list
+is_ignored_source() {
+    local check_host="$1"
+    local check_user="$2"
+    local check_path="$3"
+    echo "${IGNORED_SOURCES_JSON}" | jq -e \
+        --arg h "${check_host}" \
+        --arg u "${check_user}" \
+        --arg p "${check_path}" \
+        'any(.[]; .host == $h and .userName == $u and .path == $p)' \
+        > /dev/null 2>&1
+}
+
 SOURCES_JSON="[]"
 STALE_SOURCES=""
 STALE_COUNT=0
@@ -188,9 +212,12 @@ if [ "${CHECK_STATUS}" = "success" ]; then
             EFFECTIVE_THRESHOLD_SECS=$((EFFECTIVE_THRESHOLD_HOURS * 3600))
 
             if [ "${AGE_SECS}" -gt "${EFFECTIVE_THRESHOLD_SECS}" ]; then
-                if is_ignored_host "${host}"; then
+                if is_ignored_source "${host}" "${userName}" "${path}"; then
                     STATUS="ignored"
-                    echo "  SKIP: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago (ignored)"
+                    echo "  SKIP: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago (source ignored)"
+                elif is_ignored_host "${host}"; then
+                    STATUS="ignored"
+                    echo "  SKIP: ${host}@${userName}:${path} — last backup ${AGE_HOURS}h ago (host ignored)"
                 else
                     STATUS="stale"
                     STALE_COUNT=$((STALE_COUNT + 1))
