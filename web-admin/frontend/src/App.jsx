@@ -17,6 +17,7 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import { ColorModeContext } from "./main";
 import DockerStatus from "./DockerStatus";
 import BackupStatus from "./BackupStatus";
+import BackupPi from "./BackupPi";
 import ContainerConfig from "./ContainerConfig";
 import Browse from "./Browse";
 import Sources from "./Sources";
@@ -29,6 +30,7 @@ const routes = [
   { path: "/browse", label: "Browse" },
   { path: "/sources", label: "Sources" },
   { path: "/backup-status", label: "Backups" },
+  { path: "/backup-pi", label: "Backup Pi" },
 ];
 
 const Navigation = () => {
@@ -150,6 +152,7 @@ const App = () => {
         <Route path="/browse" element={<Browse />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/backup-status" element={<BackupStatus />} />
+        <Route path="/backup-pi" element={<BackupPi />} />
       </Routes>
     </BrowserRouter>
   );

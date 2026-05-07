@@ -10,6 +10,7 @@ const trackedStatus = {
   startAllStatus: null,
   tailscalePreflightStatus: null,
   gitStatus: null,
+  backuppi: null,
 };
 
 const debouncedEmit = _.debounce(() => {

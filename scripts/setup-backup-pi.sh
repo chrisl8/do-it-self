@@ -84,6 +84,24 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# Warn when a stray backup-pi.conf in someone's home dir disagrees with
+# /etc/backup-pi.conf. Common footgun: user edits the home-dir copy left
+# behind by the first install and re-runs with no arg, expecting the edits
+# to apply — but a no-arg run reads /etc, not the home-dir copy.
+if [[ "$CONFIG_FILE" == "/etc/backup-pi.conf" ]]; then
+    candidate_homes=()
+    [[ -n "${SUDO_USER:-}" ]] && candidate_homes+=("$(getent passwd "$SUDO_USER" | cut -d: -f6)")
+    [[ -n "${HOME:-}" && "$HOME" != "/root" ]] && candidate_homes+=("$HOME")
+    for h in "${candidate_homes[@]}"; do
+        stray="$h/backup-pi.conf"
+        if [[ -f "$stray" ]] && ! diff -q "$stray" /etc/backup-pi.conf >/dev/null 2>&1; then
+            log_warn "Stray conf detected: $stray differs from /etc/backup-pi.conf"
+            log_warn "This run is reading /etc/backup-pi.conf — your edits to $stray are NOT applied."
+            log_warn "To apply them: sudo bash $0 \"$stray\"   (then: rm \"$stray\")"
+        fi
+    done
+fi
+
 # Check for unconfigured values
 UNCONFIGURED=0
 for var in TAILSCALE_AUTH_KEY BORG_REPO_PASSPHRASE KOPIA_REPO_PASSWORD \
@@ -276,24 +294,34 @@ log_info "Firewall configured (Tailscale-only access)"
 # ============================================================
 log_step "Borg repository setup"
 
+# Track whether we just initialized the repo this run, so the key export
+# (and its scary warning) only happens on first install or drive replacement —
+# not on every routine re-run when the user has already saved the key.
+BORG_KEY_EXPORTED_THIS_RUN=false
+
 if [[ -d "$BORG_REPO_PATH/data" ]]; then
     log_info "Borg repo already exists at $BORG_REPO_PATH"
 else
     sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
         borg init --encryption=repokey-blake2 "$BORG_REPO_PATH"
     log_info "Borg repo initialized"
-fi
 
-# Export key (always overwrite — safe to re-export)
-# Export to borg's home first (borg user can't write to admin user's home), then copy
-sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
-    borg key export "$BORG_REPO_PATH" /home/borg/borg-key-backup.txt
-cp /home/borg/borg-key-backup.txt /home/"${ADMIN_USER}"/borg-key-backup.txt
-rm /home/borg/borg-key-backup.txt
-chown "${ADMIN_USER}":"${ADMIN_USER}" /home/"${ADMIN_USER}"/borg-key-backup.txt
-chmod 600 /home/"${ADMIN_USER}"/borg-key-backup.txt
-log_warn "Borg key exported to /home/${ADMIN_USER}/borg-key-backup.txt"
-log_warn ">>> SAVE THIS KEY SECURELY AND DELETE FROM PI <<<"
+    # Export the encryption key to a file the user can copy off the Pi.
+    # Done once, at repo creation. The key never changes for an existing repo,
+    # so a re-export on every run would just recreate a file the user already
+    # saved (or deliberately deleted). To re-export manually any time:
+    #   sudo -u borg BORG_PASSPHRASE='<passphrase>' \
+    #       borg key export /mnt/backup/borg /tmp/borg-key.txt
+    sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
+        borg key export "$BORG_REPO_PATH" /home/borg/borg-key-backup.txt
+    cp /home/borg/borg-key-backup.txt /home/"${ADMIN_USER}"/borg-key-backup.txt
+    rm /home/borg/borg-key-backup.txt
+    chown "${ADMIN_USER}":"${ADMIN_USER}" /home/"${ADMIN_USER}"/borg-key-backup.txt
+    chmod 600 /home/"${ADMIN_USER}"/borg-key-backup.txt
+    log_warn "Borg key exported to /home/${ADMIN_USER}/borg-key-backup.txt"
+    log_warn ">>> SAVE THIS KEY SECURELY AND DELETE FROM PI <<<"
+    BORG_KEY_EXPORTED_THIS_RUN=true
+fi
 
 # ============================================================
 # STEP 10: Borg restricted shell wrapper
@@ -339,14 +367,20 @@ fi
 # ============================================================
 log_step "Kopia server setup"
 
-# Generate TLS cert if it doesn't exist yet (persists across restarts)
+# Generate TLS cert if it doesn't exist yet (persists across restarts).
+# Track whether we generated a new cert this run, so the summary can show
+# the >>> RECORD THE FINGERPRINT <<< warning only when it actually matters.
+# A re-run reuses the existing cert; clients are already configured with
+# its fingerprint and don't need to do anything.
 KOPIA_CERT_FILE="/home/kopiauser/.config/kopia/server.cert"
 KOPIA_KEY_FILE="/home/kopiauser/.config/kopia/server.key"
+KOPIA_CERT_GENERATED_THIS_RUN=false
 if [[ ! -f "$KOPIA_CERT_FILE" ]]; then
     sudo -u kopiauser openssl req -x509 -newkey rsa:4096 \
         -keyout "$KOPIA_KEY_FILE" -out "$KOPIA_CERT_FILE" \
         -days 3650 -nodes -subj "/CN=kopia-server" 2>/dev/null
     log_info "Generated TLS certificate"
+    KOPIA_CERT_GENERATED_THIS_RUN=true
 else
     log_info "TLS certificate already exists, reusing"
 fi
@@ -616,6 +650,237 @@ DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -plow unattended-upgrades
 log_info "Unattended upgrades configured"
 
 # ============================================================
+# STEP 19b: Web admin RPC (optional)
+# ============================================================
+# When the web admin host monitors and operates this Pi over Tailscale,
+# we provision a separate `webadmin` user whose SSH key is forced to
+# invoke /usr/local/bin/pi-rpc.sh. The dispatcher whitelists allowed
+# commands and refuses everything else (mirrors the borg-serve-only.sh
+# restricted-shell pattern used for the borg user).
+#
+# Skipped entirely if WEBADMIN_SSH_PUBKEY is left as CONFIGURE_ME — for
+# users who don't run the web admin and want a leaner Pi.
+log_step "Web admin RPC setup"
+
+if [[ "${WEBADMIN_SSH_PUBKEY:-CONFIGURE_ME}" == "CONFIGURE_ME" ]]; then
+    log_warn "WEBADMIN_SSH_PUBKEY not set — skipping web admin RPC setup."
+    log_warn "To enable later, add the key to /etc/backup-pi.conf and re-run."
+else
+    # Service user (idempotent, mirrors borg/kopiauser blocks)
+    if id webadmin &>/dev/null; then
+        log_info "User 'webadmin' already exists"
+    else
+        useradd -m -s /bin/bash webadmin
+        log_info "Created user 'webadmin'"
+    fi
+
+    # /usr/local/bin/pi-rpc.sh — forced SSH command + dispatcher
+    cat > /usr/local/bin/pi-rpc.sh << 'RPCSCRIPT'
+#!/bin/bash
+# Forced SSH command for the webadmin user. Whitelists $SSH_ORIGINAL_COMMAND
+# against the fixed set below; rejects everything else. Installed via:
+#   command="/usr/local/bin/pi-rpc.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <key>
+# in ~webadmin/.ssh/authorized_keys. Both pi-status.sh and pi-action.sh
+# are invoked via sudo so they run as root with a clean environment.
+
+set -e
+
+case "${SSH_ORIGINAL_COMMAND:-}" in
+    status)
+        exec sudo -n /usr/local/sbin/pi-status.sh
+        ;;
+    "action restart-kopia"|"action apt-upgrade"|"action borg-check"|"action borg-prune"|"action reboot")
+        action="${SSH_ORIGINAL_COMMAND#action }"
+        exec sudo -n /usr/local/sbin/pi-action.sh "$action"
+        ;;
+    *)
+        logger -t pi-rpc "rejected: ${SSH_ORIGINAL_COMMAND:-<empty>}"
+        echo "ERROR: command not allowed" >&2
+        exit 1
+        ;;
+esac
+RPCSCRIPT
+    chown root:root /usr/local/bin/pi-rpc.sh
+    chmod 755 /usr/local/bin/pi-rpc.sh
+
+    # /usr/local/sbin/pi-status.sh — emits one JSON object describing Pi state.
+    # Runs as root (via sudo from pi-rpc.sh) so it can read /etc/backup-pi.conf
+    # directly and sudo -u borg cleanly.
+    cat > /usr/local/sbin/pi-status.sh << 'STATUSSCRIPT'
+#!/bin/bash
+# Gathers backup-pi state and emits a single JSON object on stdout.
+# Invoked as root via the SSH RPC dispatcher.
+
+set -u
+
+# shellcheck source=/dev/null
+source /etc/backup-pi.conf
+
+DRIVE_MOUNTED=false
+DISK_SIZE_KB=0
+DISK_USED_KB=0
+DISK_AVAIL_KB=0
+DISK_PERCENT=0
+if mountpoint -q "$MOUNT_POINT"; then
+    DRIVE_MOUNTED=true
+    DISK_LINE=$(df --output=size,used,avail,pcent "$MOUNT_POINT" | tail -1)
+    DISK_SIZE_KB=$(echo "$DISK_LINE" | awk '{print $1}')
+    DISK_USED_KB=$(echo "$DISK_LINE" | awk '{print $2}')
+    DISK_AVAIL_KB=$(echo "$DISK_LINE" | awk '{print $3}')
+    DISK_PERCENT=$(echo "$DISK_LINE" | awk '{print $4}' | tr -d %)
+fi
+
+LAST_BORG_ISO=""
+LAST_BORG_NAME=""
+if $DRIVE_MOUNTED && [[ -d "$BORG_REPO_PATH/data" ]]; then
+    BORG_LINE=$(sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
+        borg list --last 1 --format '{time}|{archive}' "$BORG_REPO_PATH" 2>/dev/null | head -1 || true)
+    if [[ -n "$BORG_LINE" ]]; then
+        LAST_BORG_ISO="${BORG_LINE%%|*}"
+        LAST_BORG_NAME="${BORG_LINE#*|}"
+    fi
+fi
+
+KOPIA_ACTIVE=$(systemctl is-active kopia-server 2>/dev/null || echo "inactive")
+
+TS_BACKEND=$(tailscale status --json 2>/dev/null \
+    | grep -oP '"BackendState":\s*"\K[^"]+' | head -1 || echo "")
+TS_IP=$(tailscale ip -4 2>/dev/null | head -1 || echo "")
+
+LAST_HEALTH_EPOCH=0
+HEALTH_FILE="$MOUNT_POINT/health/last-check.txt"
+if [[ -f "$HEALTH_FILE" ]]; then
+    LAST_HEALTH_EPOCH=$(stat -c %Y "$HEALTH_FILE")
+fi
+
+UPTIME_SECONDS=$(awk '{print int($1)}' /proc/uptime)
+HOSTNAME=$(hostname)
+NOW_EPOCH=$(date +%s)
+
+# Escape strings minimally — none of these should contain " or \ in practice
+cat <<JSON
+{
+  "hostname": "$HOSTNAME",
+  "now_epoch": $NOW_EPOCH,
+  "uptime_seconds": $UPTIME_SECONDS,
+  "drive": {
+    "mounted": $DRIVE_MOUNTED,
+    "mount_point": "$MOUNT_POINT",
+    "size_kb": $DISK_SIZE_KB,
+    "used_kb": $DISK_USED_KB,
+    "avail_kb": $DISK_AVAIL_KB,
+    "percent": $DISK_PERCENT
+  },
+  "borg": {
+    "last_archive_iso": "$LAST_BORG_ISO",
+    "last_archive_name": "$LAST_BORG_NAME"
+  },
+  "kopia": {
+    "service_active": "$KOPIA_ACTIVE"
+  },
+  "tailscale": {
+    "backend_state": "$TS_BACKEND",
+    "ip": "$TS_IP"
+  },
+  "health": {
+    "last_check_epoch": $LAST_HEALTH_EPOCH
+  }
+}
+JSON
+STATUSSCRIPT
+    chown root:root /usr/local/sbin/pi-status.sh
+    chmod 755 /usr/local/sbin/pi-status.sh
+
+    # /usr/local/sbin/pi-action.sh — runs a whitelisted maintenance action.
+    # Invoked as root (via sudo from pi-rpc.sh, with arg-matching in sudoers).
+    cat > /usr/local/sbin/pi-action.sh << 'ACTIONSCRIPT'
+#!/bin/bash
+# Runs one whitelisted maintenance action. First arg = action name.
+# Invoked as root via sudo from /usr/local/bin/pi-rpc.sh; sudoers limits
+# which (script + arg) tuples webadmin can invoke.
+
+set -u
+
+ACTION="${1:-}"
+
+# shellcheck source=/dev/null
+source /etc/backup-pi.conf
+
+case "$ACTION" in
+    restart-kopia)
+        echo ">>> Restarting kopia-server..."
+        systemctl restart kopia-server
+        sleep 2
+        systemctl status kopia-server --no-pager
+        ;;
+    apt-upgrade)
+        export DEBIAN_FRONTEND=noninteractive
+        echo ">>> apt-get update"
+        apt-get update
+        echo ">>> apt-get upgrade -y"
+        apt-get upgrade -y
+        echo ">>> done"
+        ;;
+    borg-check)
+        echo ">>> borg check (this can take a while)..."
+        sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
+            borg check "$BORG_REPO_PATH"
+        echo ">>> borg check passed"
+        ;;
+    borg-prune)
+        echo ">>> running /home/$ADMIN_USER/borg-prune.sh"
+        bash "/home/$ADMIN_USER/borg-prune.sh"
+        ;;
+    reboot)
+        echo ">>> rebooting in 5 seconds..."
+        sleep 5
+        /sbin/reboot
+        ;;
+    *)
+        echo "ERROR: unknown action: $ACTION" >&2
+        exit 2
+        ;;
+esac
+ACTIONSCRIPT
+    chown root:root /usr/local/sbin/pi-action.sh
+    chmod 755 /usr/local/sbin/pi-action.sh
+
+    # SSH key restriction (forced command, no port/X11/agent forwarding, no pty)
+    mkdir -p /home/webadmin/.ssh
+    cat > /home/webadmin/.ssh/authorized_keys << EOF
+command="/usr/local/bin/pi-rpc.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ${WEBADMIN_SSH_PUBKEY}
+EOF
+    chown -R webadmin:webadmin /home/webadmin/.ssh
+    chmod 700 /home/webadmin/.ssh
+    chmod 600 /home/webadmin/.ssh/authorized_keys
+
+    # Sudoers — write to tempfile, validate with visudo -cf, then install.
+    # Each (script + arg) tuple is granted explicitly; webadmin has no other sudo.
+    SUDOERS_TMP=$(mktemp)
+    cat > "$SUDOERS_TMP" << 'SUDOERS'
+# webadmin: only the actions invoked by /usr/local/bin/pi-rpc.sh
+webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-status.sh
+webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh restart-kopia
+webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh apt-upgrade
+webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh borg-check
+webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh borg-prune
+webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh reboot
+SUDOERS
+
+    if visudo -cf "$SUDOERS_TMP" >/dev/null; then
+        install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/webadmin
+        log_info "Sudoers entry installed for webadmin"
+    else
+        log_error "Sudoers file failed visudo validation; aborting"
+        rm -f "$SUDOERS_TMP"
+        exit 1
+    fi
+    rm -f "$SUDOERS_TMP"
+
+    log_info "Web admin RPC ready: ssh webadmin@${TAILSCALE_HOSTNAME} status"
+fi
+
+# ============================================================
 # STEP 20: Summary
 # ============================================================
 echo ""
@@ -629,17 +894,26 @@ echo "  Tailscale IP:          $TAILSCALE_IP"
 echo "  Tailscale hostname:    $TAILSCALE_HOSTNAME"
 echo ""
 echo "  Borg repo:             $BORG_REPO_PATH"
+if $BORG_KEY_EXPORTED_THIS_RUN; then
 echo "  Borg key exported to:  /home/${ADMIN_USER}/borg-key-backup.txt"
 echo -e "  ${RED}>>> SAVE THIS KEY SECURELY AND DELETE FROM PI <<<${NC}"
+fi
 echo ""
 echo "  Kopia server:          https://${TAILSCALE_IP}:${KOPIA_SERVER_PORT}"
 if [[ -n "$KOPIA_FINGERPRINT" ]]; then
 echo "  Kopia cert fingerprint: $KOPIA_FINGERPRINT"
 fi
+if $KOPIA_CERT_GENERATED_THIS_RUN; then
 echo -e "  ${RED}>>> RECORD THE FINGERPRINT FOR CLIENT SETUP <<<${NC}"
+else
+echo "  (Kopia cert + fingerprint unchanged from previous setup — clients OK)"
+fi
 echo "  Kopia server user:     $KOPIA_USER_NAME"
 echo ""
 echo "  Borg user shell:       /usr/local/bin/borg-serve-only.sh (append-only)"
+if [[ "${WEBADMIN_SSH_PUBKEY:-CONFIGURE_ME}" != "CONFIGURE_ME" ]]; then
+echo "  Web admin RPC:         /usr/local/bin/pi-rpc.sh (webadmin user)"
+fi
 echo "  Firewall:              Active (Tailscale only)"
 echo "  Health checks:         Every 6 hours via cron"
 echo "  Borg prune:            Weekly Sunday 3am"
