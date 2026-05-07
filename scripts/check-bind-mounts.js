@@ -46,6 +46,9 @@ function isLikelyFileBasename(name) {
   // Avoid treating ".env" / ".gitignore" / etc as having an extension —
   // a leading dot is the entire name.
   if (name.startsWith(".")) return false;
+  // Linux drop-in directory convention (e.g. custom-cont-init.d,
+  // /etc/init.d, conf.d) — trailing ".d" is a directory, not a file.
+  if (name.endsWith(".d")) return false;
   return FILE_EXT.test(name);
 }
 
