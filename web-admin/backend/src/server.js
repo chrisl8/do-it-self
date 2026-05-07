@@ -43,6 +43,7 @@ import {
   deleteSecret,
   createFolder,
 } from "./infisicalClient.js";
+import { runAction as runBackupPiAction } from "./backupPi.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -2305,6 +2306,32 @@ async function webserver() {
             }),
           );
         }
+      } else if (message.type === "backupPiAction") {
+        const action = message.payload?.action;
+        if (!action) {
+          ws.send(
+            JSON.stringify({
+              type: "backupPiActionResult",
+              action,
+              success: false,
+              error: "No action provided",
+            }),
+          );
+          return;
+        }
+        // runBackupPiAction handles allow-list, single-flight, config, and
+        // streams output back to this ws via type "backupPiActionOutput".
+        runBackupPiAction(action, ws).catch((err) => {
+          console.error("[backuppi] action failed:", err);
+          ws.send(
+            JSON.stringify({
+              type: "backupPiActionResult",
+              action,
+              success: false,
+              error: err?.message || "action failed",
+            }),
+          );
+        });
       }
     });
 

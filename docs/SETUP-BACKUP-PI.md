@@ -793,6 +793,87 @@ If the USB drive fails:
 4. Re-init the borg and kopia repos
 5. Initial backups will need to re-seed (there is no shortcut here — the data must transfer again)
 
+## Web Admin Integration
+
+The provisioning script can also set up an SSH-based RPC channel that lets the platform's web admin (`~/containers/web-admin`) monitor disk/borg/kopia state and trigger maintenance actions (restart kopia, apt upgrade, borg check, borg prune, reboot) from a browser. **This is fully optional** — leave `WEBADMIN_SSH_PUBKEY` as `CONFIGURE_ME` in `backup-pi.conf` to skip it.
+
+### Architecture
+
+```
+Web admin browser
+    │  WebSocket
+    ▼
+web-admin backend (~/containers/web-admin/backend/src/backupPi.js)
+    │  ssh -i <key> webadmin@<pi> <command>
+    ▼
+Pi: /usr/local/bin/pi-rpc.sh   ← forced by ~webadmin/.ssh/authorized_keys
+    │  (whitelists SSH_ORIGINAL_COMMAND against a fixed set)
+    ├─→ /usr/local/sbin/pi-status.sh   (JSON to stdout)
+    └─→ /usr/local/sbin/pi-action.sh <action>   (streams to stdout)
+```
+
+The model mirrors the existing `borg-serve-only.sh` restricted-shell pattern used for the borg user. The web-admin host's SSH key is the **only** thing accepted by the `webadmin` user, and that key is forced (`command="..."` in `authorized_keys`) to invoke `pi-rpc.sh`. The dispatcher only allows:
+
+| `SSH_ORIGINAL_COMMAND` | Dispatches to |
+|---|---|
+| `status` | `sudo /usr/local/sbin/pi-status.sh` |
+| `action restart-kopia` | `sudo /usr/local/sbin/pi-action.sh restart-kopia` |
+| `action apt-upgrade` | `sudo /usr/local/sbin/pi-action.sh apt-upgrade` |
+| `action borg-check` | `sudo /usr/local/sbin/pi-action.sh borg-check` |
+| `action borg-prune` | `sudo /usr/local/sbin/pi-action.sh borg-prune` |
+| `action reboot` | `sudo /usr/local/sbin/pi-action.sh reboot` |
+| anything else | logged to syslog as `pi-rpc` and rejected with exit 1 |
+
+`/etc/sudoers.d/webadmin` grants `webadmin` NOPASSWD only on those exact `(script + arg)` tuples — no glob, no `ALL`. The `webadmin` user has no other sudo, no interactive shell (forced command), no port/X11/agent forwarding, and no pty.
+
+### Setup
+
+1. **On the web-admin host**, generate a dedicated keypair (one-time):
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/backup-pi-webadmin -N ""
+   cat ~/.ssh/backup-pi-webadmin.pub
+   ```
+2. **In `backup-pi.conf`**, paste the public key into `WEBADMIN_SSH_PUBKEY`.
+3. **On the Pi**, re-run `sudo bash setup-backup-pi.sh`. The new step "STEP 19b: Web admin RPC" provisions the user, dispatcher, helper scripts, and sudoers fragment. `visudo -cf` validates the sudoers file before installing it; the script aborts loudly if validation fails.
+4. **In `~/containers/user-config.yaml` on the web-admin host**, add a `backuppi` section:
+   ```yaml
+   backuppi:
+     enabled: true
+     host: backup-pi               # Tailscale hostname or IP
+     ssh_user: webadmin
+     ssh_key_path: ~/.ssh/backup-pi-webadmin
+     poll_interval_seconds: 60
+   ```
+5. Restart web-admin. A "Backup Pi" tab appears in the dashboard.
+
+### Adding a new action
+
+Three places to touch, in order:
+
+1. **`/usr/local/sbin/pi-action.sh`** (set up by `setup-backup-pi.sh`): add a new case branch with the work to do.
+2. **`/usr/local/bin/pi-rpc.sh`** (same): add `"action <new-name>"` to the `case` statement so the dispatcher routes it.
+3. **`/etc/sudoers.d/webadmin`** (same): add a line:
+   ```
+   webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh <new-name>
+   ```
+4. **`~/containers/web-admin/backend/src/backupPi.js`**: add the action name to `ALLOWED_ACTIONS`.
+5. **`~/containers/web-admin/frontend/src/BackupPi.jsx`**: add the button to the `ACTIONS` array with a confirm-dialog string.
+
+The Pi-side changes are distributed by re-running `setup-backup-pi.sh` (the script's idempotency means re-runs land new helper scripts and sudoers without disturbing existing state).
+
+### Manual probing
+
+Once provisioned, you can test the RPC channel from the web-admin host without the UI:
+
+```bash
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi status     # JSON
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi action restart-kopia
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi             # rejected: empty SSH_ORIGINAL_COMMAND
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi 'rm -rf /'  # rejected, exit 1
+```
+
+`/var/log/auth.log` (sudo) and `/var/log/syslog` (logger -t pi-rpc) on the Pi record every RPC attempt — the rejected ones too.
+
 ## File Structure on the Pi
 
 ```
@@ -800,6 +881,18 @@ If the USB drive fails:
 ├── check-health.sh             # Health monitoring script
 ├── borg-prune.sh               # Borg pruning script
 └── borg-key-backup.txt         # DELETE AFTER SAVING ELSEWHERE
+
+/home/webadmin/                 # Only present if WEBADMIN_SSH_PUBKEY is set
+└── .ssh/authorized_keys        # Forced command="/usr/local/bin/pi-rpc.sh"
+
+/usr/local/bin/
+└── pi-rpc.sh                   # SSH dispatcher (whitelists SSH_ORIGINAL_COMMAND)
+
+/usr/local/sbin/
+├── pi-status.sh                # Emits JSON status (run as root via sudo)
+└── pi-action.sh                # Runs whitelisted maintenance actions
+
+/etc/sudoers.d/webadmin         # NOPASSWD only for the (script + arg) tuples above
 
 /mnt/backup/
 ├── borg/                       # Borg repository

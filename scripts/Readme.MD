@@ -78,4 +78,28 @@ What re-running does:
 
 When new conf vars are added, they always have sensible defaults (`${VAR:-...}`) so an old conf keeps working. To see what's available to opt into, diff `/etc/backup-pi.conf` against the current `setup-backup-pi.conf.example`.
 
+### Web admin integration (optional)
+
+The web admin at `~/containers/web-admin` can monitor and operate the Pi over Tailscale via a locked-down `webadmin` SSH user. Setting `WEBADMIN_SSH_PUBKEY` in `backup-pi.conf` enables it; leaving it as `CONFIGURE_ME` skips the setup entirely.
+
+To enable:
+
+1. **On the host running web-admin** — generate a key:
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/backup-pi-webadmin -N ""
+   cat ~/.ssh/backup-pi-webadmin.pub
+   ```
+2. **In `backup-pi.conf`** — paste the `.pub` contents into `WEBADMIN_SSH_PUBKEY`.
+3. **On the Pi** — re-run `sudo bash setup-backup-pi.sh`. This creates the `webadmin` user, installs `/usr/local/bin/pi-rpc.sh` (the SSH-forced dispatcher), `/usr/local/sbin/pi-status.sh`, `/usr/local/sbin/pi-action.sh`, and a tight `/etc/sudoers.d/webadmin` granting only the specific (script + arg) tuples the dispatcher needs.
+4. **In `~/containers/user-config.yaml`** — add a `backuppi` section:
+   ```yaml
+   backuppi:
+     enabled: true
+     host: backup-pi               # Tailscale hostname or IP
+     ssh_user: webadmin
+     ssh_key_path: ~/.ssh/backup-pi-webadmin
+     poll_interval_seconds: 60
+   ```
+5. Restart web-admin (`pm2 restart web-admin` or via the script). A new "Backup Pi" tab appears with disk/borg/kopia/tailscale status and one-click actions (restart kopia, apt upgrade, borg check/prune, reboot).
+
 See `docs/SETUP-BACKUP-PI.md` for the full provisioning spec — what to flash to the SD card, how to ship the Pi, how to connect clients, and drive-replacement procedures.

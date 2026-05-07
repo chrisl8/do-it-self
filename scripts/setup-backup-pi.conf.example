@@ -42,5 +42,16 @@ SMTP_PASSWORD="CONFIGURE_ME"
 # Then paste the contents of ~/.ssh/borg_backup.pub here
 BORG_CLIENT_SSH_PUBKEY="CONFIGURE_ME"
 
+# SSH public key for the web-admin RPC (the host running ~/containers/web-admin).
+# When set, the script provisions a 'webadmin' user whose SSH key is forced to
+# invoke /usr/local/bin/pi-rpc.sh — a dispatcher that whitelists `status` and a
+# fixed set of `action <name>` commands. Leave as CONFIGURE_ME to skip the RPC
+# setup entirely (for users who don't run the web admin).
+#
+# Generate on the web-admin host:
+#   ssh-keygen -t ed25519 -f ~/.ssh/backup-pi-webadmin -N ""
+# Then paste the contents of ~/.ssh/backup-pi-webadmin.pub here.
+WEBADMIN_SSH_PUBKEY="CONFIGURE_ME"
+
 # External health monitoring (leave empty to skip)
 HEALTHCHECK_URL=""
