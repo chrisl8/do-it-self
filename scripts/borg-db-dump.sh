@@ -36,7 +36,7 @@ load_secret() {
 if [ "${SECRETS_AVAILABLE}" = "true" ]; then
     MARIADB_ROOT_PASSWORD=$(load_secret "mariadb" "MARIADB_ROOT_PASSWORD") || true
     NEXTCLOUD_MYSQL_ROOT_PASSWORD=$(load_secret "nextcloud" "MYSQL_ROOT_PASSWORD") || true
-    PASTE_MYSQL_ROOT_PASSWORD=$(load_secret "paste" "PASTE_MYSQL_ROOT_PASSWORD") || true
+    PASTE_MYSQL_ROOT_PASSWORD=$(load_secret "paste" "PASTE_DB_ROOT_PASSWORD") || true
     echo "Credential status: MariaDB=$([ -n "${MARIADB_ROOT_PASSWORD}" ] && echo ok || echo MISSING)" \
          "Nextcloud=$([ -n "${NEXTCLOUD_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo MISSING)" \
          "Paste=$([ -n "${PASTE_MYSQL_ROOT_PASSWORD}" ] && echo ok || echo fallback)"
@@ -60,7 +60,7 @@ docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM;'
 
 
 if [ -z "${PASTE_MYSQL_ROOT_PASSWORD}" ]; then
-    echo "  WARNING: PASTE_MYSQL_ROOT_PASSWORD not set — paste DB dump will be skipped. Set it in Infisical at /paste"
+    echo "  WARNING: PASTE_DB_ROOT_PASSWORD not set — paste DB dump will be skipped. Set it in Infisical at /paste"
 fi
 
 mkdir -p "${BORG_DB_DUMP_DIR}"
