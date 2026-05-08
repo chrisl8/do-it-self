@@ -23,6 +23,8 @@ Mirrored at [Codeberg](https://codeberg.org/Chris10/do-it-self) and [GitHub](htt
 
 Container directories at the platform root (`~/containers/<name>/`) contain only compose configuration and platform metadata — never user state. All persistent data lives elsewhere: volume data in `~/container-mounts/`, credentials in `~/credentials/`, user overrides in `user-config.yaml`. A container directory can be deleted and re-created from a module without losing any user data.
 
+**Editing compose.yaml: edit the module, not the root copy.** The platform-root `<container>/compose.yaml` files are gitignored renders sourced from `.modules/do-it-self-containers/<container>/compose.yaml` or `.modules/do-it-self-personal/<container>/compose.yaml`. Edits to the root copies will be lost on the next `module.sh update`. To persist a change: edit the file under `.modules/<module>/<container>/`, then commit/push to that module repo (each is a separate clone with its own remote on `forgejo.jamnapari-goblin.ts.net`). The platform root copy will pick up the change next time the module syncs. The main `containers` repo only owns a few non-module files directly (e.g. `web-admin/compose.yaml`).
+
 Files preserved during module update (never overwritten from the module source):
 - `config-personal/` — user's config overrides
 - `compose.override.yaml` — hardware-specific (e.g. GPU passthrough)
