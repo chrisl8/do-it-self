@@ -108,6 +108,8 @@ dump_postgres "formbricks_postgres" "postgres" "formbricks" &
 PG_PIDS[3]=$!
 dump_postgres "onlyoffice-postgresql" "onlyoffice" "onlyoffice" &
 PG_PIDS[4]=$!
+dump_postgres "infisical-db" "infisical" "infisical" &
+PG_PIDS[5]=$!
 
 for pid in "${PG_PIDS[@]}"; do
     if ! wait "${pid}"; then
