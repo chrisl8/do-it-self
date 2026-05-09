@@ -15,6 +15,7 @@
 */container-mounts/paperless-ngx/database/
 */container-mounts/formbricks/data/
 */container-mounts/onlyoffice/db_data/
+*/container-mounts/infisical/db/
 # MariaDB
 */container-mounts/mariadb/db/
 */container-mounts/nextcloud/db/
