@@ -552,8 +552,9 @@ fi
 # Ping healthchecks.io if configured
 if [ -n "$HEALTHCHECK_URL" ]; then
     if [ ${#ALERTS[@]} -gt 0 ]; then
-        # Report failure
-        curl -fsS --retry 3 "${HEALTHCHECK_URL}/fail" > /dev/null 2>&1 || true
+        # Report failure with alert text as POST body so the reason shows up
+        # in the healthchecks.io UI and notification emails.
+        curl -fsS --retry 3 --data-raw "$BODY" "${HEALTHCHECK_URL}/fail" > /dev/null 2>&1 || true
     else
         # Report success
         curl -fsS --retry 3 "$HEALTHCHECK_URL" > /dev/null 2>&1 || true
