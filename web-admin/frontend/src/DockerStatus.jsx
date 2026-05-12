@@ -496,18 +496,6 @@ const DockerStatus = ({
           </Alert>
         ))}
 
-      {dockerStatus.invalidPendingUpdates?.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          <AlertTitle>Invalid Stack Names in Updates File</AlertTitle>
-          The following stack names in the updates file no longer exist:{" "}
-          <strong>{dockerStatus.invalidPendingUpdates.join(", ")}</strong>
-          <br />
-          <Typography variant="caption">
-            Update or remove these entries from pendingContainerUpdates.txt
-          </Typography>
-        </Alert>
-      )}
-
       <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
         <Chip
           label={`All (${allCount})`}
