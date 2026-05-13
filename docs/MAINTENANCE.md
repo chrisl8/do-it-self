@@ -52,18 +52,45 @@ scripts/system-os-upgrades.sh
 scripts/system-graceful-shutdown.sh --reboot
 ```
 
-The upgrade script runs `apt update && apt upgrade && apt autoremove`. It does not reboot automatically — you decide when.
+The upgrade script runs `apt update && apt upgrade && apt autoremove` with pre- and post-flight checks. It does not reboot automatically — you decide when.
+
+Pre-flight checks (script aborts on failure):
+- Enforces that `unattended-upgrades` is disabled — see below.
+- On hosts with NVIDIA: verifies `nvidia-smi` and DKMS show a healthy driver for the running kernel. The script refuses to start if the driver is already broken so you can fix that first instead of layering a kernel upgrade on top.
+
+Post-flight: if a new kernel package was installed, the script runs `dkms autoinstall -k <new-kernel>` and verifies the NVIDIA module built before recommending a reboot. If DKMS fails, the script will tell you **not to reboot** until you re-run the NVIDIA installer.
+
+Every run produces a transcript at `~/logs/system-os-upgrades-<timestamp>.log`.
+
+### Why `unattended-upgrades` is disabled
+
+The upgrade script is the **only** sanctioned path for installing package upgrades on hosts that use this repo. `unattended-upgrades` is disabled (and the script auto-disables it on every run as a regression guard) so the DKMS verification gate always runs before a kernel change, and so kernel upgrades never happen unattended at 6 AM with no operator present.
+
+If you need to re-enable automatic upgrades for some reason, expect that the upgrade script will switch it back off the next time it runs.
 
 ### NVIDIA GPU driver
 
-Kernel updates can break the NVIDIA driver. The startup script detects this and sends an email alert. If it happens, reinstall the driver as root:
+Kernel updates can break the NVIDIA driver. Two safety nets are in place:
+
+1. **`system-os-upgrades.sh` post-flight gate** (above) catches a failed DKMS build before you reboot.
+2. **`system-cron-startup.sh` boot-time check** tries one non-destructive recovery (`modprobe nvidia`, or `dkms autoinstall` for the running kernel) if `sudo -n` is permitted for those commands, then emails on failure. It also checks the NVENC patch state and alerts if it has been reverted.
+
+If both safety nets fail, reinstall the driver as root:
 
 ```bash
-/opt/nvidia/NVIDIA-Linux-x86_64-*.run --dkms
-/opt/nvidia/nvidia-patch/patch.sh
+sudo /opt/nvidia/NVIDIA-Linux-x86_64-*.run --dkms
+sudo /opt/nvidia/nvidia-patch/patch.sh
 ```
 
 GPU-dependent containers (jellyfin, obsidian, secure-browser) will fail to start until the driver is reinstalled.
+
+**Emergency fallback:** if the system boots without a working driver and you need GPU containers up immediately, reboot and choose the previous kernel from GRUB's "Advanced options" menu. The NVIDIA module is still installed for that kernel, so containers will work while you fix DKMS for the newer one.
+
+**Optional: enable boot-time auto-recovery.** The boot script attempts recovery via `sudo -n modprobe nvidia` / `sudo -n dkms autoinstall`. These succeed only if your user has passwordless sudo for those exact commands. To enable, add a sudoers rule in `/etc/sudoers.d/nvidia-recovery` (replace `youruser` with your username):
+
+```
+youruser ALL=(root) NOPASSWD: /usr/sbin/modprobe nvidia, /usr/sbin/dkms autoinstall -k *
+```
 
 ## Applying container image updates
 
