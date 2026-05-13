@@ -836,19 +836,36 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
               fi
             done < <(node "${GIT_REPOS_HELPER}" --container "${CONTAINER_DIR}" 2>/dev/null)
           fi
-          # Special case: caddy/site/my-digital-garden requires npm rebuild after pull
+          # Special case: caddy/site/my-digital-garden requires npm rebuild after pull.
+          # Wrap in set +e: a transient npm/network/build failure here should not abort
+          # the whole container update — the existing dist/ keeps serving until the next
+          # successful rebuild.
           if [[ -e site/my-digital-garden/.git ]];then
             printf "${YELLOW}  Updating git repository in site/my-digital-garden${NC}\n"
-            cd site/my-digital-garden || continue
-            git pull
-            printf "${YELLOW}    Updating dependencies in site/my-digital-garden${NC}\n"
-            rm -rf node_modules
-            rm package-lock.json
-            npm i
-            printf "${YELLOW}    Rebuilding site/my-digital-garden${NC}\n"
-            npm run build
-            /usr/bin/chmod -R o+rX dist
-            cd "${SCRIPT_DIR}/${CONTAINER_DIR}" || exit
+            set +e
+            cd site/my-digital-garden
+            DG_EXIT=$?
+            if [[ ${DG_EXIT} -eq 0 ]]; then
+              git pull
+              printf "${YELLOW}    Updating dependencies in site/my-digital-garden${NC}\n"
+              rm -rf node_modules
+              rm -f package-lock.json
+              npm i
+              DG_EXIT=$?
+              if [[ ${DG_EXIT} -eq 0 ]]; then
+                printf "${YELLOW}    Rebuilding site/my-digital-garden${NC}\n"
+                npm run build
+                DG_EXIT=$?
+                if [[ ${DG_EXIT} -eq 0 ]]; then
+                  /usr/bin/chmod -R o+rX dist
+                fi
+              fi
+              cd "${SCRIPT_DIR}/${CONTAINER_DIR}"
+            fi
+            if [[ ${DG_EXIT} -ne 0 ]]; then
+              printf "${RED}  WARNING: my-digital-garden rebuild failed (exit code ${DG_EXIT}), continuing with existing dist/...${NC}\n"
+            fi
+            set -e
           fi
         fi
         if [[ ${GET_UPDATES} = true ]];then
