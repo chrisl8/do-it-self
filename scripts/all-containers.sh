@@ -161,8 +161,11 @@ DIUN_UPDATE_FILE=""
 # and VOL_DIUN_SCRIPT is set by scripts/generate-env.js based on container-registry.yaml.
 DIUN_ENV_FILE="$SCRIPT_DIR/diun/.env"
 if [ -f "$DIUN_ENV_FILE" ]; then
-  # shellcheck disable=SC1090
-  set -a; source "$DIUN_ENV_FILE"; set +a
+  # Read only VOL_DIUN_SCRIPT directly. A full `set -a; source` would
+  # auto-export every variable in diun/.env (e.g. HOMEPAGE_GROUP=System
+  # Monitoring), which then overrides each container's own .env during
+  # `docker compose up` since shell-exported vars win over .env values.
+  VOL_DIUN_SCRIPT=$(grep '^VOL_DIUN_SCRIPT=' "$DIUN_ENV_FILE" | cut -d= -f2-)
   SCRIPT_VOLUME_PATH="${VOL_DIUN_SCRIPT:-$HOME/container-data}/container-mounts/diun/script"
   DIUN_UPDATE_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
 fi
