@@ -2,18 +2,23 @@
 
 ## Overview
 
-A provisioning script (`setup-backup-pi.sh`) that configures a Raspberry Pi as a headless, network-isolated remote backup node. The Pi receives backups from two sources over Tailscale:
+A provisioning script (`setup-backup-pi.sh`) that configures a Raspberry Pi as a headless, network-isolated remote backup node. The Pi receives borg backups from multiple Linux clients over Tailscale (currently `neuromancer` and `wintermute`).
 
-- **Borg** — from a Linux home server (server system data)
-- **Kopia** — from a Windows desktop client (user files via marker-based backup system)
+The Pi is **passive**: it accepts append-only `borg serve` connections from each client, and runs `borg-manage.sh` operations when the **manager** host (neuromancer) drives them via SSH with a per-operation passphrase forwarded over `SendEnv`. The Pi holds NO borg passphrases at rest, so physical theft yields encrypted trash.
+
+Management is centralized on neuromancer via `scripts/borg-pi-manage.sh`, which fetches passphrases from Infisical at use-time and drives prune, check, freshness monitoring, and weekly restore-tests against every configured client repo.
 
 The Pi is designed to be provisioned at home, seeded with an initial full backup over LAN, then physically shipped to a remote location (friend or family member's house) where it runs unattended.
 
 ## Deliverables
 
-This spec produces **one artifact**: `setup-backup-pi.sh` — a single bash script. Claude Code can build this on any platform (Windows, Mac, Linux) since it's just a text file. Nothing needs to compile or run locally.
+This spec produces:
+- `scripts/setup-backup-pi.sh` — provisioning script that runs on the Pi.
+- `scripts/setup-backup-pi.conf.example` — template for `/etc/backup-pi.conf`.
+- `scripts/borg-pi-manage.sh` — management orchestrator that runs on neuromancer as `chrisl8` (not root). Drives daily prune+freshness, weekly check, weekly restore-test.
+- `scripts/borg-pi-manage.conf.example` — template for the manager-side conf.
 
-The script generates all supporting files during execution on the Pi (health check script, borg prune script, kopia systemd unit, msmtp config, cron entries). These are not separate deliverables.
+The setup script generates all supporting files on the Pi (the two wrappers, the sshd hardening drop-in, fail2ban jail, cron file, webadmin RPC scripts, sudoers). These are not separate deliverables.
 
 ## Prerequisites — Before Running the Script
 
@@ -68,17 +73,16 @@ sudo bash ~/setup-backup-pi.sh
 
 You'll need the following values to fill in the script's configuration section:
 
-- **Tailscale pre-auth key** — generate from [Tailscale admin console](https://login.tailscale.com/admin/settings/keys) (reusable, set an expiry)
-- **Borg repo passphrase** — generate a strong passphrase and store it in your password manager
-- **Kopia repo password** — generate a strong password and store it in your password manager
-- **Kopia server control password** — a separate password for the server management API
-- **SMTP credentials** — app-specific password from your SMTP provider for sending alert emails (Fastmail used as the default example, but any provider works — set `SMTP_HOST` and `SMTP_PORT` in the conf)
+- **Tailscale pre-auth key** — generate from [Tailscale admin console](https://login.tailscale.com/admin/settings/keys). MUST be reusable, non-ephemeral, and tagged with `tag:backup-target` (the tag must already exist in `tagOwners`; see Tailscale ACLs section below).
+- **Borg repo passphrases** — one per client, stored in **Infisical on neuromancer** under `/borgbackup` as `BORG_REMOTE_PASSPHRASE` (neuromancer) and `BORG_REMOTE_PASSPHRASE_WINTERMUTE` (wintermute). The Pi never sees them at rest. The web admin's BackupPi page has a "Set passphrase" button per client that writes the value to Infisical via the local API (since Infisical is bound to `127.0.0.1` and not directly reachable from elsewhere on the tailnet). Source of truth for each passphrase is the matching client's borg config: `~/containers/scripts/borg-backup.conf` on neuromancer, the borgmatic config on wintermute. Read the value from there, paste into the web admin.
+- **Manager SSH key** — generate on neuromancer as `chrisl8`: `ssh-keygen -t ed25519 -f ~/.ssh/borg-pi-mgmt -N "" -C "neuromancer-borg-pi-mgmt"`. Paste the `.pub` into `MANAGER_SSH_PUBKEY=` in `/etc/backup-pi.conf` on the Pi. This key drives all server-side management; treat as privileged.
+- **Healthchecks.io URLs** — four total: one freshness check + one restore-test check per client. Configured in neuromancer's `borg-pi-manage.conf` (not on the Pi).
 
 ## Hardware
 
 | Component       | Spec                                | Notes                                                         |
 | --------------- | ----------------------------------- | ------------------------------------------------------------- |
-| Raspberry Pi    | Pi 4 (2GB) or Pi 5 (2GB)            | 2GB is sufficient; borg/kopia are I/O bound not RAM bound     |
+| Raspberry Pi    | Pi 4 (2GB) or Pi 5 (2GB)            | 2GB is sufficient; borg is I/O bound, not RAM bound           |
 | MicroSD card    | 32GB, Class A2                      | OS only — all backup data goes to USB drive                   |
 | USB drive       | 6 TB external USB HDD               | Bus-powered 2.5" or externally-powered 3.5" — must be USB 3.0 |
 | Power supply    | Official USB-C PSU for the Pi model | Use the official one to avoid undervoltage issues             |
@@ -105,17 +109,17 @@ Internet
 ┌──────┴───────┐
 │  Raspberry Pi │
 └──────┬───────┘
-       │ tailscale0 (100.x.x.x) — ALL SERVICES HERE
-       │   • SSH (port 22)
-       │   • Borg (via SSH)
-       │   • Kopia server (port 51515)
+       │ tailscale0 (100.x.x.x) — INBOUND-ONLY (per Tailscale ACL)
+       │   • SSH (port 22) — only path into the Pi
+       │   • Borg over SSH (backup + management paths)
        │
        ▼
   Tailscale Network
     │         │
     ▼         ▼
- Linux     Neuromancer
- Server    (Windows)
+ Neuromancer  Wintermute
+ (manager     (borg client)
+  + client)
 ```
 
 ### Firewall Rules (ufw)
@@ -138,22 +142,93 @@ ufw enable
 This means:
 
 - Devices on the host's LAN **cannot** reach the Pi at all (no SSH, no ping, nothing)
-- The Pi **can** reach the internet outbound (Tailscale, apt updates, DNS)
-- All services (SSH, borg, kopia) are accessible **only** over Tailscale
+- The Pi **can** reach the internet outbound (apt updates, Tailscale coordination plane, DNS, NTP)
+- All Pi services (SSH only) are accessible **over Tailscale only**
 - The Pi is invisible to the host network
 
 ### Tailscale Configuration
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --auth-key=<PRE_AUTH_KEY> --ssh --hostname=backup-pi
+tailscale up \
+    --auth-key=<PRE_AUTH_KEY> \
+    --hostname=backup-pi \
+    --advertise-tags=tag:backup-target
 ```
 
-- `--auth-key`: Use a reusable, pre-authorized auth key from the Tailscale admin console. Set an expiry (90 days) and tag it appropriately.
-- `--ssh`: Enables Tailscale SSH, so SSH access is authenticated via Tailscale identity — no need to manage SSH keys on the Pi itself.
+- `--auth-key`: Use a reusable, NON-ephemeral auth key from the Tailscale admin console. The key MUST be authorized to claim `tag:backup-target` — set the tag in the key's "Tags" field when generating it. Without that authorization, the `--advertise-tags` claim is refused and you have to manually authorize the device every reboot.
+- `--advertise-tags=tag:backup-target`: Tags the Pi at join time so the tailnet ACL policy can restrict it (see *Tailscale ACLs* section below).
 - `--hostname`: Sets the Tailscale hostname so other devices can reach it as `backup-pi` via MagicDNS.
 
+**Why no `--ssh`:** Tailscale SSH would expose `backup-pi` as a Tailscale-SSH target. We don't want that — we want sshd to handle keyed auth with forced commands, and we want the Pi to be reachable only on the specific paths we provision (borg + webadmin RPC). The setup script explicitly runs `tailscale set --ssh=false` after join.
+
 **Important:** Generate the auth key just before provisioning. If using a reusable key for multiple Pi nodes in the future, store it securely and rotate it periodically.
+
+### SSH hardening + fail2ban
+
+The provisioning script applies these at the sshd layer (unconditionally; there's no opt-in flag):
+
+- `PasswordAuthentication no`
+- `PermitRootLogin no`
+- `AllowUsers <ADMIN_USER> borg [webadmin]` — webadmin only if `WEBADMIN_SSH_PUBKEY` is set
+- fail2ban installed with an sshd jail (5 retries within 10 min → 1 h ban)
+
+Tailscale-only access is enforced by **UFW**, not by sshd `ListenAddress`. UFW's `default deny incoming` + `allow in on tailscale0` already restricts sshd to the Tailscale interface at the kernel level; doing it again with `ListenAddress=<tailscale-ip>` is redundant and introduces a real boot-time race (sshd starting before tailscaled has assigned the IP, then failing to bind and refusing to start). An earlier version of this script had a `HARDEN_SSHD=true` opt-in that did the `ListenAddress` flip with a `127.0.0.1` console fallback; that path was removed after hitting the race in practice. The setup script will clean up any leftover `/etc/systemd/system/ssh.service.d/wait-tailscale.conf` from that era on the next re-run.
+
+The script validates the rendered sshd_config with `sshd -t` before reloading, so a syntax error aborts the run instead of breaking sshd.
+
+The sshd config also includes `AcceptEnv BORG_PASSPHRASE` and `AcceptEnv BORG_PASSPHRASE_*` — required for the management path (`borg-manage.sh`) and the web admin's status poll (`pi-status.sh`) to receive per-operation passphrases forwarded by the manager over `SendEnv`. Never broaden this to `AcceptEnv *` — that's a credential-leak hole.
+
+### Tailscale ACLs
+
+The Pi joins with `--advertise-tags=tag:backup-target`. By itself the tag does nothing — Tailscale's default ACL is "all members reach all members." To actually restrict the Pi to inbound-only (so a compromised Pi cannot pivot to other tailnet nodes), the operator must edit the tailnet's ACL policy in the admin console.
+
+**Pre-requisite (one-time):**
+
+1. Add the tag to `tagOwners` at [https://login.tailscale.com/admin/acls/file](https://login.tailscale.com/admin/acls/file):
+   ```hujson
+   "tagOwners": {
+     "tag:backup-target": ["autogroup:admin"]
+   }
+   ```
+2. Edit the auth key being used to join the Pi: under "Tags," add `tag:backup-target`. Without this, the Pi's `--advertise-tags` claim is rejected.
+
+**ACL change** (the setup script's STEP 20 summary prints this verbatim at the end of each run):
+
+Replace the default `{"action": "accept", "src": ["*"], "dst": ["*:*"]}` rule with:
+
+```hujson
+{
+  "tagOwners": {
+    "tag:backup-target": ["autogroup:admin"]
+  },
+  "acls": [
+    // Your existing devices reach each other (preserves connectivity
+    // between neuromancer, wintermute, anything else you have):
+    {"action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:member:*"]},
+
+    // Your devices reach the backup Pi on SSH only:
+    {"action": "accept", "src": ["autogroup:member"], "dst": ["tag:backup-target:22"]}
+
+    // NO rule with src=tag:backup-target — the Pi is denied initiating
+    // any tailnet connection.
+  ]
+}
+```
+
+**Verification** (after applying the ACL):
+
+| From       | Command                                              | Expected         |
+| ---------- | ---------------------------------------------------- | ---------------- |
+| Pi         | `tailscale ping -c 1 -timeout 3s neuromancer`        | no path / fail   |
+| Neuromancer| `tailscale ping -c 1 backup-pi`                      | success          |
+| Pi         | `ssh -o ConnectTimeout=3 chrisl8@neuromancer 'true'` | timeout / refused|
+
+The setup script's `STEP 8b` probe runs the first check automatically and warns if the Pi can still initiate outbound — that's a clear signal the ACL is not yet restrictive.
+
+**What this protects against:** if the Pi is compromised (physical theft → tailscaled.state extracted, or remote root via some future vuln), the attacker has an SSH server they can be reached AT but cannot reach FROM. They can't enumerate neuromancer/wintermute or move laterally.
+
+**What this does NOT change:** the Pi still reaches the public internet (apt repos, Tailscale coordination server). ACLs only govern tailnet-internal traffic.
 
 ## Operating System
 
@@ -189,7 +264,7 @@ apt install unattended-upgrades
 dpkg-reconfigure -plow unattended-upgrades
 ```
 
-This ensures security patches are applied automatically. Borg and Kopia are stable enough that apt upgrades rarely break anything.
+This ensures security patches are applied automatically. The Pi runs only borgbackup, openssh-server, ufw, smartmontools, and fail2ban — a small package set, low blast radius for apt-upgrade surprises.
 
 ## USB Drive Setup
 
@@ -225,9 +300,9 @@ sudo mount -a
 
 ```
 /mnt/backup/
-├── borg/           # Borg repository (Linux server backups)
-├── kopia/          # Kopia repository (Neuromancer backups)
-└── health/         # Health check timestamps and logs
+├── borg/                  # neuromancer's borg repo (legacy path)
+└── borg-wintermute/       # wintermute's borg repo
+                           # New clients go in /mnt/backup/borg-<name>
 ```
 
 ### Drive Health Monitoring
@@ -241,437 +316,137 @@ sudo smartctl -i /dev/sda
 
 If SMART is supported, add a weekly check via cron. If not (common with USB enclosures), rely on filesystem checks and I/O error monitoring.
 
-## Borg Setup
+## Borg setup
 
-### Dedicated User
+### Pi-side schema (passphrase-free)
 
-```bash
-sudo useradd -m -s /bin/bash borg
-sudo mkdir -p /mnt/backup/borg
-sudo chown borg:borg /mnt/backup/borg
+`/etc/backup-pi.conf` on the Pi holds **no** borg passphrases. Per-client passphrases live in Infisical on neuromancer (the manager) and are forwarded to the Pi over SSH `SendEnv` for each operation that needs them.
+
+```sh
+CLIENTS="neuromancer wintermute"
+
+CLIENT_NEUROMANCER_PUBKEY="ssh-ed25519 …"   # backup-path key
+CLIENT_NEUROMANCER_REPO_PATH="/mnt/backup/borg"          # legacy path
+
+CLIENT_WINTERMUTE_PUBKEY="ssh-ed25519 …"
+CLIENT_WINTERMUTE_REPO_PATH="/mnt/backup/borg-wintermute"
+
+# The management-path key (one for the whole tailnet — neuromancer).
+MANAGER_SSH_PUBKEY="ssh-ed25519 …"
 ```
 
-### Repository Initialization
+A generated `/etc/backup-pi.clients.env` (mode 644, no secrets) is the runtime source of truth that the Pi-side wrappers source on every invocation.
 
-Run this during provisioning (at home, before shipping):
+### Two SSH paths
 
-```bash
-sudo -u borg borg init --encryption=repokey-blake2 /mnt/backup/borg
-```
+1. **Backup path (per client).** Each client's SSH key has a forced command:
+   ```
+   command="/usr/local/bin/borg-serve-only.sh <name>",restrict <pubkey>
+   ```
+   `borg-serve-only.sh` validates `<name>` against `$CLIENTS` and execs `borg serve --restrict-to-path <CLIENT_<NAME>_REPO_PATH> --append-only`. The client can write new archives; it cannot delete or rewrite anything. A leaked client key can only reach its own repo.
 
-- **`repokey-blake2`**: Encryption key stored in the repo, passphrase-protected. Faster than `repokey` (AES) on ARM.
-- **CRITICAL:** Back up the repo key immediately after init:
-  ```bash
-  sudo -u borg borg key export /mnt/backup/borg /home/piadmin/borg-key-backup.txt
-  ```
-  Copy this key off the Pi and store it somewhere safe (password manager, printed in a safe). Without it, the repo is unrecoverable.
+2. **Management path (one key shared by manager).** The manager's SSH key has a different forced command:
+   ```
+   command="/usr/local/bin/borg-manage.sh",restrict <MANAGER_SSH_PUBKEY>
+   ```
+   `borg-manage.sh` parses `<verb> <client> [args...]` from `$SSH_ORIGINAL_COMMAND`, validates both against the allowlist, reads `BORG_PASSPHRASE` from the SSH env (forwarded via the manager's `SendEnv BORG_PASSPHRASE`), and runs `borg <verb>` with hardcoded args. Allowed verbs: `prune` (hardcoded `--keep-daily 14 --keep-weekly 4`, no `--prefix`), `compact`, `check`, `list`, `list-last`, `info`, `extract <archive> <path>` (path validated, no `..` allowed). Anything else is rejected and logged via `logger -t borg-manage`.
 
-### Borg Access Over Tailscale
+### Why two paths
 
-The Linux home server will connect to the Pi via Tailscale SSH:
+A compromised client can only push corrupt new archives (append-only protects the rest). It cannot trigger prune, list other clients' repos, or invoke arbitrary borg commands. The management path with hardcoded retention bounds the damage even when the manager itself is compromised — `--keep-daily 14 --keep-weekly 4` is non-destructive within retention, and there is no `delete` verb.
 
-```bash
-# From the Linux server:
-borg create borg@backup-pi:/mnt/backup/borg::home-{now:%Y-%m-%d} /path/to/data
-```
+### Repository initialization
 
-No special borg daemon needed — borg runs over SSH natively. Since Tailscale SSH is enabled, the server authenticates via Tailscale identity.
+The provisioning script loops over `$CLIENTS` and only inits a repo when `<repo>/data` is missing. **The conf has no passphrases**, so on a fresh init the operator is prompted at the TTY for the passphrase (must be confirmed by re-entry, must be non-empty). Use the value already stored in Infisical on neuromancer.
 
-### Borg Server-Side Restrictions (Optional but Recommended)
+After init, the borg key is exported to `/home/$ADMIN_USER/borg-key-backup-<name>.txt`. Copy each file off the Pi and delete it. Without it, the repo is unrecoverable if Infisical is ever lost AND the wrapped repokey inside the repo is damaged — having a separate offsite copy of the key is a belt+suspenders defense.
 
-To limit what the remote borg client can do, restrict the borg user's SSH access. Create `/home/borg/.ssh/authorized_keys` with a forced command:
+### Hand-edited authorized_keys are dropped on re-run
 
-```
-command="borg serve --restrict-to-path /mnt/backup/borg --append-only",restrict ssh-ed25519 AAAA... server-backup-key
-```
+The provisioning script rebuilds `/home/borg/.ssh/authorized_keys` from `$CLIENTS` + `MANAGER_SSH_PUBKEY` each run. Any key added by hand will be removed (with a backup written to `/home/borg/.ssh/authorized_keys.bak.<timestamp>` and a warning line listing what got dropped). To make a new client permanent, add it to the `CLIENTS` list and define its `CLIENT_<NAME>_PUBKEY` / `CLIENT_<NAME>_REPO_PATH` in `/etc/backup-pi.conf`.
 
-- **`--restrict-to-path`**: Client can only access this repo
-- **`--append-only`**: Client can create new archives but cannot delete or prune (protects against ransomware or accidental deletion from the server side)
+## Management (neuromancer)
 
-**Note:** With `--append-only`, pruning must be done directly on the Pi (over Tailscale SSH as piadmin). This is a deliberate security trade-off.
+All borg management runs on neuromancer via `scripts/borg-pi-manage.sh`, **as the chrisl8 user** (not root). The script:
 
-If using Tailscale SSH exclusively (no traditional SSH keys), this restriction is configured differently — the `borg serve` restriction would need to be enforced via a wrapper script that Tailscale SSH invokes. This is a detail to work out during implementation.
+- Reads `scripts/borg-pi-manage.conf` for the per-client management config (repo path, freshness hours, HC.io URLs, Infisical key name, restore-test path + expected content).
+- Fetches each client's borg passphrase from Infisical at use-time (`infisical secrets get`, mirroring the `load_secret` pattern in `borg-backup.sh`). 5-minute in-memory cache.
+- SSHes to `borg@backup-pi` with `~/.ssh/borg-pi-mgmt` and `SendEnv BORG_PASSPHRASE`.
 
-## Kopia Server Setup
+Subcommands:
 
-### Dedicated User
+| Subcommand     | What it does                                                     | Suggested cron   |
+| -------------- | ---------------------------------------------------------------- | ---------------- |
+| `prune`        | `prune` + `compact` for every client                              | Daily            |
+| `check`        | `borg check` for every client (slow; bandwidth-heavy)             | Weekly           |
+| `freshness`    | `list-last` per client; ping per-client HC.io URL accordingly     | Daily            |
+| `restore-test` | Extract a known file from each latest archive; verify content     | Weekly           |
+| `all`          | `prune` + `freshness` (typical daily cron)                        | Daily            |
 
-```bash
-sudo useradd -m -s /bin/bash kopiauser
-sudo mkdir -p /mnt/backup/kopia
-sudo chown kopiauser:kopiauser /mnt/backup/kopia
-```
-
-### Repository Initialization
-
-```bash
-sudo -u kopiauser kopia repository create filesystem \
-    --path /mnt/backup/kopia \
-    --password <REPO_PASSWORD>
-```
-
-Store this password securely — it's needed to connect from Neuromancer.
-
-### Kopia Server Mode
-
-Kopia can run as a server that clients connect to over HTTPS. This is how Neuromancer will push backups to the Pi.
-
-Create a systemd service at `/etc/systemd/system/kopia-server.service`:
-
-```ini
-[Unit]
-Description=Kopia Repository Server
-After=network-online.target tailscaled.service
-Wants=network-online.target
-RequiresMountsFor=/mnt/backup
-
-[Service]
-Type=simple
-User=kopiauser
-Group=kopiauser
-ExecStart=/usr/bin/kopia server start \
-    --address=100.x.x.x:51515 \
-    --tls-generate-cert \
-    --server-control-password=<SERVER_CONTROL_PASSWORD> \
-    --no-legacy-api
-Restart=on-failure
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Important configuration:**
-
-- **`--address=100.x.x.x:51515`**: Bind ONLY to the Tailscale IP, not `0.0.0.0`. This ensures the Kopia server is not accessible from the LAN, only over Tailscale. Replace `100.x.x.x` with the Pi's actual Tailscale IP.
-- **`--tls-generate-cert`**: Auto-generates a TLS certificate for encrypted transport.
-- **`--server-control-password`**: Password for server management API.
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable kopia-server
-sudo systemctl start kopia-server
-```
-
-### Connecting Neuromancer to the Kopia Server
-
-On the Windows desktop, connect KopiaUI to the remote server:
+Recommended chrisl8 user crontab on neuromancer:
 
 ```
-kopia repository connect server \
-    --url https://backup-pi:51515 \
-    --server-cert-fingerprint <FINGERPRINT> \
-    --password <REPO_PASSWORD> \
-    --config-file repository-remote.config
+0 4 * * *  ~/containers/scripts/borg-pi-manage.sh all
+0 5 * * 0  ~/containers/scripts/borg-pi-manage.sh check
+0 6 * * 0  ~/containers/scripts/borg-pi-manage.sh restore-test
 ```
 
-The `--server-cert-fingerprint` is printed when the Kopia server first starts. Record it during provisioning.
+### Healthchecks.io structure
 
-### Kopia Server User Management
+Two URLs per client, configured in `borg-pi-manage.conf`:
 
-Add Neuromancer as an authorized user on the server:
+- **Freshness URL** — pinged daily by `freshness`. `/success` on fresh, `/fail` with reason on stale.
+- **Restore-test URL** — pinged weekly by `restore-test`. `/success` if the known file extracts and matches the expected content; `/fail` if anything goes wrong (passphrase, SSH, extract failure, content mismatch).
 
-```bash
-# On the Pi
-kopia server user add chris10@wintermute --user-password <USER_PASSWORD>
-```
+Set the HC.io period on each check to slightly longer than its expected cadence (e.g. 50h for a daily freshness check with 48h threshold) so a one-time late ping doesn't fire a false positive.
 
-This allows the Windows Kopia client to authenticate and create snapshots.
+### Restore-test is the long-game ransomware detector
 
-## Monitoring & Health Checks
+If an attacker pushes corrupt-but-borg-create-valid archives via the legit backup path daily, after 14 days the original good archives age out of retention and only corrupt archives remain. The freshness check stays green (pushes "succeed"). The restore-test catches this: extract a known file (`etc/hostname` is good — small, stable, present in every backup) and confirm the content. If it doesn't match, an attacker is in the loop. Without this check, the 14-day attack is undetectable by anything else in the design.
 
-### Backup Freshness
-
-Create a script at `/home/piadmin/check-health.sh`:
-
-```bash
-#!/bin/bash
-
-# Check if backup drive is mounted
-if ! mountpoint -q /mnt/backup; then
-    echo "CRITICAL: Backup drive not mounted" | mail -s "[Backup Pi] Drive not mounted" user@example.com
-    exit 1
-fi
-
-# Check disk usage
-USAGE=$(df --output=pcent /mnt/backup | tail -1 | tr -d ' %')
-if [ "$USAGE" -gt 85 ]; then
-    echo "WARNING: Backup drive at ${USAGE}% capacity" | mail -s "[Backup Pi] Disk space warning" user@example.com
-fi
-
-# Check borg repo - last archive timestamp
-LAST_BORG=$(sudo -u borg borg list --last 1 --format '{time}' /mnt/backup/borg 2>/dev/null)
-# Parse and compare to threshold (e.g., 48 hours)
-
-# Check kopia server is running
-if ! systemctl is-active --quiet kopia-server; then
-    echo "WARNING: Kopia server is not running" | mail -s "[Backup Pi] Kopia server down" user@example.com
-    systemctl start kopia-server  # Attempt restart
-fi
-
-# Touch a health file for external monitoring
-date > /mnt/backup/health/last-check.txt
-```
-
-Schedule via cron:
-
-```
-0 */6 * * * /home/piadmin/check-health.sh
-```
-
-### External Monitoring (Optional)
-
-Ping a healthcheck endpoint (e.g., healthchecks.io free tier) from the health check script. If the ping stops, you get alerted that the Pi is offline.
-
-```bash
-curl -fsS --retry 3 https://hc-ping.com/<CHECK_UUID> > /dev/null
-```
-
-### Disk Space Alerts
-
-In addition to the percentage-based check, monitor absolute free space:
-
-```bash
-FREE_GB=$(df --output=avail /mnt/backup | tail -1)
-FREE_GB=$((FREE_GB / 1048576))
-if [ "$FREE_GB" -lt 500 ]; then
-    # Less than 500 GB free — send alert
-fi
-```
-
-### Borg Repo Health
-
-Schedule a weekly `borg check`:
-
-```
-0 4 * * 0 sudo -u borg borg check /mnt/backup/borg 2>&1 | logger -t borg-check
-```
-
-This verifies repository integrity. It's I/O intensive so run it during off-hours.
+(Healthchecks.io URLs and cron schedules are documented above in the *Management* section. Configuration lives in `scripts/borg-pi-manage.conf` on neuromancer, not on the Pi.)
 
 ## Provisioning Script
 
 ### Design
 
-A single `setup-backup-pi.sh` script that runs after flashing the SD card and booting the Pi for the first time. It should be idempotent (safe to run multiple times).
+`scripts/setup-backup-pi.sh` runs after flashing the SD card and booting the Pi for the first time. It is idempotent (safe to run multiple times) and is the source of truth — read the script for the authoritative step list.
 
-### Variables at Top of Script
+Headline steps:
 
-```bash
-#!/bin/bash
-set -euo pipefail
+1. **Preflight** — validates CLIENTS/CLIENT_*/MANAGER_SSH_PUBKEY/TAILSCALE_AUTH_KEY. Warns about Tailscale auth key requirements (reusable, non-ephemeral, tagged) if Tailscale isn't already connected. Warns about the upcoming piadmin password requirement.
+2. **System update + packages** — `apt install borgbackup openssh-server ufw smartmontools fail2ban unattended-upgrades`. No kopia (retired).
+3. **USB drive setup** — format/label/mount idempotently.
+4. **Service users** — `borg` only (kopiauser is removed/userdel'd by the tear-down block).
+5. **Permissions + `/etc/backup-pi.clients.env`** — generates the non-secret clients env file consumed by the wrappers.
+6. **`/home/borg/.ssh/authorized_keys`** — rebuilt per-run from `$CLIENTS` (one backup-path line each) + `MANAGER_SSH_PUBKEY` (one mgmt line). Hand-added keys are dropped with a warning.
+7. **Tailscale** — `tailscale up --advertise-tags=tag:backup-target`. Disables Tailscale SSH.
+8. **SSH hardening + fail2ban** — sshd_config drop-in (no password, no root login, `AllowUsers`, `AcceptEnv BORG_PASSPHRASE BORG_PASSPHRASE_*`). Removes `/etc/sudoers.d/010_pi-nopasswd` and `/etc/sudoers.d/90-cloud-init-users` so piadmin needs a password for sudo.
+9. **Tailscale ACL probe** — `tailscale ping` outbound; warn if it succeeds (ACLs not yet restrictive).
+10. **Firewall** — UFW default-deny, allow `tailscale0` inbound, allow eth0 DHCP only.
+11. **Borg repos** — `borg init` per missing client repo. **Prompts the operator at the TTY for the passphrase** (it's not in the conf). Exports the key to `/home/piadmin/borg-key-backup-<name>.txt`.
+12. **Wrappers** — `/usr/local/bin/borg-serve-only.sh` (backup path) and `/usr/local/bin/borg-manage.sh` (mgmt path).
+13. **Kopia tear-down** — stops, masks, removes systemd unit, deletes repo + user + package + apt source.
+14. **Pi-side cron** — SMART monitoring only. No borg cron on the Pi.
+15. **Web admin RPC (optional)** — pi-rpc.sh / pi-status.sh / pi-action.sh / sudoers — minimal allowlist (status, apt-upgrade, reboot). Sudoers has `env_keep += BORG_PASSPHRASE_*` so the web admin's status poll can pass through.
 
-# ============================================================
-# CONFIGURATION — Edit these before running
-# ============================================================
+The script ends with a "Next steps" block that includes the exact Tailscale ACL JSON to paste into the admin console.
 
-# Tailscale
-# https://login.tailscale.com/admin/settings/keys
-TAILSCALE_AUTH_KEY="tskey-auth-XXXXXXXX"
-TAILSCALE_HOSTNAME="backup-pi"
+## Initial backup seeding (at home, before shipping)
 
-# Borg
-BORG_REPO_PATH="/mnt/backup/borg"
-BORG_REPO_PASSPHRASE="CONFIGURE_ME"
-
-# Kopia
-KOPIA_REPO_PATH="/mnt/backup/kopia"
-KOPIA_REPO_PASSWORD="CONFIGURE_ME"
-KOPIA_SERVER_CONTROL_PASSWORD="CONFIGURE_ME"
-KOPIA_SERVER_PORT=51515
-
-# USB Drive
-DRIVE_DEVICE="/dev/sda"
-DRIVE_LABEL="backupdrive"
-MOUNT_POINT="/mnt/backup"
-
-# Email for alerts (configured later for msmtp or similar)
-ALERT_EMAIL="CONFIGURE_ME"
-
-# ============================================================
-# END CONFIGURATION
-# ============================================================
-```
-
-### Script Steps (in order)
-
-1. **System update**
-
-   ```bash
-   apt update && apt upgrade -y
-   ```
-
-2. **Install packages**
-
-   ```bash
-   apt install -y borgbackup ufw smartmontools msmtp msmtp-mta mailutils unattended-upgrades
-   ```
-
-   Kopia is not in the default repos — install from Kopia's official repo:
-
-   ```bash
-   curl -s https://kopia.io/signing-key | gpg --dearmor -o /usr/share/keyrings/kopia-keyring.gpg
-   echo "deb [signed-by=/usr/share/keyrings/kopia-keyring.gpg] http://packages.kopia.io/apt/ stable main" > /etc/apt/sources.list.d/kopia.list
-   apt update && apt install -y kopia
-   ```
-
-3. **Format and mount USB drive**
-   - Check if already formatted (idempotent)
-   - Partition, format ext4 with label
-   - Add fstab entry
-   - Mount
-   - Create directory structure
-
-4. **Create service users**
-
-   ```bash
-   useradd -m -s /bin/bash borg
-   useradd -m -s /bin/bash kopiauser
-   ```
-
-5. **Set directory permissions**
-
-   ```bash
-   mkdir -p /mnt/backup/{borg,kopia,health}
-   chown borg:borg /mnt/backup/borg
-   chown kopiauser:kopiauser /mnt/backup/kopia
-   chown piadmin:piadmin /mnt/backup/health
-   ```
-
-6. **Install and configure Tailscale**
-
-   ```bash
-   curl -fsSL https://tailscale.com/install.sh | sh
-   tailscale up --auth-key="$TAILSCALE_AUTH_KEY" --ssh --hostname="$TAILSCALE_HOSTNAME"
-   ```
-
-7. **Get Tailscale IP** (needed for Kopia server binding and firewall)
-
-   ```bash
-   TAILSCALE_IP=$(tailscale ip -4)
-   ```
-
-8. **Configure firewall**
-
-   ```bash
-   ufw default deny incoming
-   ufw default allow outgoing
-   ufw allow in on tailscale0
-   ufw --force enable
-   ```
-
-9. **Initialize Borg repo**
-
-   ```bash
-   sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
-       borg init --encryption=repokey-blake2 "$BORG_REPO_PATH"
-   # Export key for backup
-   sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
-       borg key export "$BORG_REPO_PATH" /home/piadmin/borg-key-backup.txt
-   echo "!!! SAVE THIS KEY FILE AND STORE IT SECURELY !!!"
-   ```
-
-10. **Initialize Kopia repo and start server**
-
-    ```bash
-    sudo -u kopiauser kopia repository create filesystem \
-        --path "$KOPIA_REPO_PATH" \
-        --password "$KOPIA_REPO_PASSWORD"
-    ```
-
-    - Write systemd unit file (templated with `$TAILSCALE_IP` and `$KOPIA_SERVER_PORT`)
-    - Enable and start the service
-    - Print the TLS certificate fingerprint for the user to record
-
-11. **Configure email alerts (msmtp)**
-
-    ```bash
-    # Write /etc/msmtprc with Fastmail SMTP settings
-    # This allows the health check script to send email
-    ```
-
-12. **Install health check script and cron jobs**
-    - Write `/home/piadmin/check-health.sh`
-    - Add cron entries for health checks (every 6 hours) and borg check (weekly)
-
-13. **Configure unattended upgrades**
-
-14. **Print summary**
-
-    ```
-    ============================================
-    Backup Pi provisioning complete!
-
-    Tailscale IP:          100.x.x.x
-    Tailscale hostname:    backup-pi
-
-    Borg repo:             /mnt/backup/borg
-    Borg key exported to:  /home/piadmin/borg-key-backup.txt
-    >>> SAVE THIS KEY SECURELY AND DELETE FROM PI <<<
-
-    Kopia server:          https://100.x.x.x:51515
-    Kopia cert fingerprint: XXXXXXXX
-    >>> RECORD THIS FINGERPRINT FOR CLIENT SETUP <<<
-
-    Firewall:              Active (Tailscale only)
-    Health checks:         Every 6 hours via cron
-
-    Next steps:
-    1. Save the borg key and kopia cert fingerprint
-    2. Run initial borg backup from the Linux server
-    3. Connect Neuromancer's KopiaUI to the remote server
-    4. Run initial Kopia backup from Neuromancer
-    5. Verify both backups with test restores
-    6. Ship the Pi to the remote location
-    ============================================
-    ```
-
-## Initial Backup Seeding (At Home)
-
-Before shipping the Pi, run the full initial backups over LAN:
-
-### Borg (from Linux server)
+Each client runs its first full `borg create` over LAN. With the new `borg-pi-mgmt` key in place and the conf installed, you can also run management commands from neuromancer before shipping:
 
 ```bash
-# First backup — this will take hours for TB-scale data
-export BORG_PASSPHRASE="<passphrase>"
-borg create --progress --stats \
-    borg@backup-pi:/mnt/backup/borg::initial-{now:%Y-%m-%d} \
-    /path/to/server/data
-
-# Verify
-borg check borg@backup-pi:/mnt/backup/borg
+# Neuromancer — drive the first management cycle once both clients have at
+# least one archive pushed. Verifies the manager path end-to-end.
+~/containers/scripts/borg-pi-manage.sh freshness
+~/containers/scripts/borg-pi-manage.sh restore-test
+~/containers/scripts/borg-pi-manage.sh check     # I/O heavy; weekend OK
 ```
 
-### Kopia (from Neuromancer)
+## Deployment at remote location
 
-1. Connect KopiaUI to the remote server using the cert fingerprint from provisioning
-2. The backup-manager script will have already set up policies for all `.backupme` folders
-3. Trigger a manual "Snapshot Now" for all sources
-4. Wait for completion — this is the big initial transfer
-
-### Verify Before Shipping
-
-```bash
-# Check borg repo size and integrity
-ssh piadmin@backup-pi "sudo -u borg borg info /mnt/backup/borg"
-ssh piadmin@backup-pi "sudo -u borg borg check /mnt/backup/borg"
-
-# Check kopia repo size
-ssh piadmin@backup-pi "du -sh /mnt/backup/kopia"
-
-# Check total disk usage
-ssh piadmin@backup-pi "df -h /mnt/backup"
-
-# Check Tailscale is stable
-ssh piadmin@backup-pi "tailscale status"
-```
-
-## Deployment at Remote Location
-
-### Instructions for the Host
-
-Provide the person hosting the Pi with simple instructions:
+### Instructions for the host
 
 ```
 Setup Instructions for Backup Device
@@ -690,55 +465,35 @@ wait 10 seconds, plug it back in.
 You don't need to do anything else. Thank you!
 ```
 
-### Post-Deployment Verification
-
-After the Pi is set up at the remote location:
+### Post-deployment verification
 
 ```bash
-# Verify Tailscale connectivity
+# Pi reachable + Tailscale up
 tailscale ping backup-pi
+ssh piadmin@backup-pi "uptime && mountpoint /mnt/backup && df -h /mnt/backup"
 
-# Verify SSH access
-ssh piadmin@backup-pi "uptime"
+# Drive a backup from each client; freshness check should ping success.
+~/containers/scripts/borg-pi-manage.sh freshness
 
-# Verify drive is mounted
-ssh piadmin@backup-pi "mountpoint /mnt/backup && df -h /mnt/backup"
-
-# Verify Kopia server is running
-ssh piadmin@backup-pi "systemctl status kopia-server"
-
-# Trigger a test borg backup
-borg create --stats borg@backup-pi:/mnt/backup/borg::test-remote-{now:%Y-%m-%d} /tmp/testfile
-
-# Trigger a test Kopia snapshot from Neuromancer
-# (via KopiaUI "Snapshot Now" button)
+# ACL verification — Pi should NOT be able to reach you back.
+ssh piadmin@backup-pi "tailscale ping -c 1 -timeout 3s neuromancer"   # expect fail
 ```
 
 ## Maintenance
 
-### Borg Pruning (Run from the Pi)
+### Borg pruning (run from neuromancer, NOT the Pi)
 
-Since the borg repo may be in append-only mode from the server's perspective, pruning must be done on the Pi itself. Schedule a weekly prune via cron on the Pi:
+Prune happens via `scripts/borg-pi-manage.sh prune` on neuromancer, **not** via a Pi-side cron. The Pi holds no passphrases; the manager fetches them from Infisical at use-time and forwards over SSH `SendEnv`. The wrapper on the Pi (`borg-manage.sh`) runs with **hardcoded retention** — `--keep-daily 14 --keep-weekly 4`, no `--prefix` flag, no `--keep-daily 0` override possible.
 
-```bash
-# /home/piadmin/borg-prune.sh
-#!/bin/bash
-export BORG_PASSPHRASE="<passphrase>"  # Or use a key file
-borg prune \
-    --keep-daily 3 \
-    --keep-weekly 2 \
-    /mnt/backup/borg
+That retention is deliberately short. The Pi is the **disaster-recovery target** — "house burned down, the Pi is my only copy" or "ransomware ate every machine, the Pi is sealed off." The long historical tail (months / years of recovery points) lives in each client's *local* borg repo, not on the Pi.
 
-borg compact /mnt/backup/borg
-```
+Cron line (chrisl8's user crontab on neuromancer):
 
 ```
-0 3 * * 0 /home/piadmin/borg-prune.sh 2>&1 | logger -t borg-prune
+0 4 * * *  ~/containers/scripts/borg-pi-manage.sh all          # prune + freshness
+0 5 * * 0  ~/containers/scripts/borg-pi-manage.sh check        # weekly integrity
+0 6 * * 0  ~/containers/scripts/borg-pi-manage.sh restore-test # weekly recovery probe
 ```
-
-### Kopia Maintenance
-
-Kopia runs automatic maintenance when the server is running. No additional cron needed. The retention policy set on the remote repo's global policy controls how many snapshots are kept.
 
 ### Remote Updates
 
@@ -761,8 +516,8 @@ ssh piadmin@backup-pi "sudo bash setup-backup-pi.sh"
 
 What re-running does:
 
-- **Detects existing state and skips** — packages, service users, drive label/mount, borg/kopia repo init, Tailscale connection. These are one-time setup steps; the script checks for them before acting.
-- **Unconditionally rewrites generated files** — `/home/$ADMIN_USER/check-health.sh`, `/home/$ADMIN_USER/borg-prune.sh`, `/etc/msmtprc`, `/etc/systemd/system/kopia-server.service`, `/etc/cron.d/backup-pi`, `/usr/local/bin/borg-serve-only.sh`. This is how new features actually land, so **don't hand-edit these files** — your changes will be lost on the next re-run. If you need a custom check or cron job, add it as a separate sibling script.
+- **Detects existing state and skips** — packages, service users, drive label/mount, borg repo init, Tailscale connection. These are one-time setup steps; the script checks for them before acting.
+- **Unconditionally rewrites generated files** — `/etc/backup-pi.clients.env`, `/etc/cron.d/backup-pi`, `/usr/local/bin/borg-serve-only.sh`, `/usr/local/bin/borg-manage.sh`, `/usr/local/bin/pi-rpc.sh`, `/usr/local/sbin/pi-status.sh`, `/usr/local/sbin/pi-action.sh`, `/etc/sudoers.d/webadmin`, `/etc/fail2ban/jail.d/sshd.local`, `/etc/ssh/sshd_config.d/99-backup-pi.conf`. This is how new features actually land, so **don't hand-edit these files** — your changes will be lost on the next re-run.
 - **Never touches `/etc/backup-pi.conf`** — your stored secrets are safe across upgrades.
 
 #### Adding new conf variables
@@ -787,102 +542,100 @@ For features that *require* a secret with no sensible default (e.g., a new third
 
 If the USB drive fails:
 
-1. SSH into the Pi
-2. Plug in a new drive
-3. Re-run the drive formatting portion of the setup script
-4. Re-init the borg and kopia repos
-5. Initial backups will need to re-seed (there is no shortcut here — the data must transfer again)
+1. SSH into the Pi.
+2. Plug in a new drive.
+3. Re-run `sudo bash setup-backup-pi.sh`. The script reformats / mounts / chowns the new drive, prompts you (interactively) for each client's borg passphrase, re-inits the empty repos, and re-exports the borg keys.
+4. Initial backups will need to re-seed from each client — there's no shortcut; the data must transfer again over Tailscale.
 
-## Web Admin Integration
+## Web admin integration
 
-The provisioning script can also set up an SSH-based RPC channel that lets the platform's web admin (`~/containers/web-admin`) monitor disk/borg/kopia state and trigger maintenance actions (restart kopia, apt upgrade, borg check, borg prune, reboot) from a browser. **This is fully optional** — leave `WEBADMIN_SSH_PUBKEY` as `CONFIGURE_ME` in `backup-pi.conf` to skip it.
+The provisioning script can set up an SSH-based RPC channel that lets the platform's web admin (`~/containers/web-admin`) monitor Pi state and trigger maintenance actions from a browser. **This is fully optional** — leave `WEBADMIN_SSH_PUBKEY` as `CONFIGURE_ME` in `/etc/backup-pi.conf` to skip it.
 
-### Architecture
+The web admin has **two SSH paths** to the Pi (mirroring the manager + backup model used by `borg-pi-manage.sh`):
+
+1. **webadmin path** (`pi-rpc.sh` → `pi-action.sh`): minimal allowlist — `status`, `apt-upgrade`, `reboot`. No borg verbs, no passphrases.
+2. **manager path** (`borg-manage.sh`): borg-related buttons (`borg-check`, `borg-prune`, per-client variants). The web admin fetches the relevant passphrase from Infisical and forwards it via SSH `SendEnv BORG_PASSPHRASE` for each operation. Same key/wrapper used by `borg-pi-manage.sh`.
+
+### webadmin path — RPC dispatcher
 
 ```
-Web admin browser
-    │  WebSocket
-    ▼
-web-admin backend (~/containers/web-admin/backend/src/backupPi.js)
-    │  ssh -i <key> webadmin@<pi> <command>
+web-admin backend
+    │  ssh -i <webadmin-key> webadmin@<pi> <command>
     ▼
 Pi: /usr/local/bin/pi-rpc.sh   ← forced by ~webadmin/.ssh/authorized_keys
-    │  (whitelists SSH_ORIGINAL_COMMAND against a fixed set)
-    ├─→ /usr/local/sbin/pi-status.sh   (JSON to stdout)
-    └─→ /usr/local/sbin/pi-action.sh <action>   (streams to stdout)
+    ├─→ status            → sudo /usr/local/sbin/pi-status.sh
+    ├─→ action apt-upgrade → sudo /usr/local/sbin/pi-action.sh apt-upgrade
+    ├─→ action reboot      → sudo /usr/local/sbin/pi-action.sh reboot
+    └─→ anything else     → logged to `pi-rpc`, exit 1
 ```
 
-The model mirrors the existing `borg-serve-only.sh` restricted-shell pattern used for the borg user. The web-admin host's SSH key is the **only** thing accepted by the `webadmin` user, and that key is forced (`command="..."` in `authorized_keys`) to invoke `pi-rpc.sh`. The dispatcher only allows:
-
-| `SSH_ORIGINAL_COMMAND` | Dispatches to |
-|---|---|
-| `status` | `sudo /usr/local/sbin/pi-status.sh` |
-| `action restart-kopia` | `sudo /usr/local/sbin/pi-action.sh restart-kopia` |
-| `action apt-upgrade` | `sudo /usr/local/sbin/pi-action.sh apt-upgrade` |
-| `action borg-check` | `sudo /usr/local/sbin/pi-action.sh borg-check` |
-| `action borg-prune` | `sudo /usr/local/sbin/pi-action.sh borg-prune` |
-| `action reboot` | `sudo /usr/local/sbin/pi-action.sh reboot` |
-| anything else | logged to syslog as `pi-rpc` and rejected with exit 1 |
-
-`/etc/sudoers.d/webadmin` grants `webadmin` NOPASSWD only on those exact `(script + arg)` tuples — no glob, no `ALL`. The `webadmin` user has no other sudo, no interactive shell (forced command), no port/X11/agent forwarding, and no pty.
+`/etc/sudoers.d/webadmin` grants NOPASSWD only on those exact `(script + arg)` tuples and includes `Defaults:webadmin env_keep += "BORG_PASSPHRASE_*"` so `pi-status.sh` can read per-client passphrases forwarded by the web admin during status polls. No other sudo, no interactive shell, no forwarding, no pty.
 
 ### Setup
 
-1. **On the web-admin host**, generate a dedicated keypair (one-time):
+1. **On the web-admin host**, generate one-time webadmin keypair:
    ```bash
    ssh-keygen -t ed25519 -f ~/.ssh/backup-pi-webadmin -N ""
-   cat ~/.ssh/backup-pi-webadmin.pub
    ```
-2. **In `backup-pi.conf`**, paste the public key into `WEBADMIN_SSH_PUBKEY`.
-3. **On the Pi**, re-run `sudo bash setup-backup-pi.sh`. The new step "STEP 19b: Web admin RPC" provisions the user, dispatcher, helper scripts, and sudoers fragment. `visudo -cf` validates the sudoers file before installing it; the script aborts loudly if validation fails.
-4. **In `~/containers/user-config.yaml` on the web-admin host**, add a `backuppi` section:
+2. **In `/etc/backup-pi.conf`** on the Pi, paste the public key into `WEBADMIN_SSH_PUBKEY`.
+3. **On the Pi**, re-run `sudo bash setup-backup-pi.sh`. STEP 19b provisions `webadmin`, the dispatcher, the helper scripts, and the sudoers fragment.
+4. **In `~/containers/user-config.yaml`** on the web-admin host, add:
    ```yaml
    backuppi:
      enabled: true
-     host: backup-pi               # Tailscale hostname or IP
+     host: backup-pi
      ssh_user: webadmin
      ssh_key_path: ~/.ssh/backup-pi-webadmin
+     mgmt_ssh_user: borg
+     mgmt_ssh_key_path: ~/.ssh/borg-pi-mgmt
+     clients:
+       - name: neuromancer
+         infisical_path: /borgbackup
+         infisical_key: BORG_REMOTE_PASSPHRASE
+         freshness_hours: 48
+       - name: wintermute
+         infisical_path: /borgbackup
+         infisical_key: BORG_REMOTE_PASSPHRASE_WINTERMUTE
+         freshness_hours: 48
    ```
 5. Restart web-admin. A "Backup Pi" tab appears in the dashboard.
 
-### Adding a new action
-
-Three places to touch, in order:
-
-1. **`/usr/local/sbin/pi-action.sh`** (set up by `setup-backup-pi.sh`): add a new case branch with the work to do.
-2. **`/usr/local/bin/pi-rpc.sh`** (same): add `"action <new-name>"` to the `case` statement so the dispatcher routes it.
-3. **`/etc/sudoers.d/webadmin`** (same): add a line:
-   ```
-   webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh <new-name>
-   ```
-4. **`~/containers/web-admin/backend/src/backupPi.js`**: add the action name to `ALLOWED_ACTIONS`.
-5. **`~/containers/web-admin/frontend/src/BackupPi.jsx`**: add the button to the `ACTIONS` array with a confirm-dialog string.
-
-The Pi-side changes are distributed by re-running `setup-backup-pi.sh` (the script's idempotency means re-runs land new helper scripts and sudoers without disturbing existing state).
-
 ### Manual probing
 
-Once provisioned, you can test the RPC channel from the web-admin host without the UI:
-
 ```bash
-ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi status     # JSON
-ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi action restart-kopia
-ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi             # rejected: empty SSH_ORIGINAL_COMMAND
-ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi 'rm -rf /'  # rejected, exit 1
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi status                      # JSON
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi action apt-upgrade          # OK
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi action reboot               # OK
+ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi 'rm -rf /'                  # rejected
+
+# Manager path:
+BORG_PASSPHRASE=… ssh -o SendEnv=BORG_PASSPHRASE -i ~/.ssh/borg-pi-mgmt \
+    borg@backup-pi list-last neuromancer                                        # most recent archive
+ssh -i ~/.ssh/borg-pi-mgmt borg@backup-pi 'delete neuromancer'                  # rejected (verb)
+ssh -i ~/.ssh/borg-pi-mgmt borg@backup-pi 'prune nonexistent'                   # rejected (client)
+ssh -i ~/.ssh/borg-pi-mgmt borg@backup-pi 'extract neuromancer x ../etc/passwd' # rejected (traversal)
 ```
 
-`/var/log/auth.log` (sudo) and `/var/log/syslog` (logger -t pi-rpc) on the Pi record every RPC attempt — the rejected ones too.
+`/var/log/auth.log` (sudo) and `journalctl -t pi-rpc -t borg-manage -t borg-serve-only` on the Pi record every RPC attempt — the rejected ones too.
 
-## File Structure on the Pi
+## File structure on the Pi
 
 ```
 /home/piadmin/
-├── check-health.sh             # Health monitoring script
-├── borg-prune.sh               # Borg pruning script
-└── borg-key-backup.txt         # DELETE AFTER SAVING ELSEWHERE
+└── borg-key-backup-<name>.txt      # One per client, DELETE AFTER SAVING ELSEWHERE
 
-/home/webadmin/                 # Only present if WEBADMIN_SSH_PUBKEY is set
-└── .ssh/authorized_keys        # Forced command="/usr/local/bin/pi-rpc.sh"
+/etc/
+├── backup-pi.conf                  # Passphrase-free schema + Tailscale + manager key (600)
+├── backup-pi.clients.env           # Non-secret derived: $CLIENTS + per-client REPO_PATH (644)
+├── ssh/sshd_config.d/99-backup-pi.conf  # Hardening drop-in (PasswordAuth=no, PermitRootLogin=no, AllowUsers, AcceptEnv BORG_PASSPHRASE*)
+└── fail2ban/jail.d/sshd.local      # 5 retries / 10m → 1h ban
+
+/usr/local/bin/
+├── borg-serve-only.sh              # Backup path (append-only, per-client repo restriction)
+└── borg-manage.sh                  # Mgmt path (allowlist verbs, env passphrase)
+
+/home/webadmin/                     # Only present if WEBADMIN_SSH_PUBKEY is set
+└── .ssh/authorized_keys            # Forced command="/usr/local/bin/pi-rpc.sh"
 
 /usr/local/bin/
 └── pi-rpc.sh                   # SSH dispatcher (whitelists SSH_ORIGINAL_COMMAND)
@@ -894,55 +647,38 @@ ssh -i ~/.ssh/backup-pi-webadmin webadmin@backup-pi 'rm -rf /'  # rejected, exit
 /etc/sudoers.d/webadmin         # NOPASSWD only for the (script + arg) tuples above
 
 /mnt/backup/
-├── borg/                       # Borg repository
-├── kopia/                      # Kopia repository
-└── health/
-    └── last-check.txt          # Timestamp of last health check
-
-/etc/systemd/system/
-└── kopia-server.service        # Kopia server systemd unit
-
-/etc/msmtprc                    # Email relay config for alerts
+├── borg/                       # neuromancer's borg repository
+└── borg-wintermute/            # wintermute's borg repository
+                                # New clients go in /mnt/backup/borg-<name>
 ```
 
-## Security Summary
+## Security model
 
-| Layer                 | Protection                                                                        |
-| --------------------- | --------------------------------------------------------------------------------- |
-| Network               | UFW blocks all LAN inbound; services only on Tailscale interface                  |
-| Transport             | Tailscale (WireGuard) encrypts all traffic between nodes                          |
-| SSH access            | Tailscale SSH — no password auth over network, no exposed SSH port on LAN         |
-| Borg data at rest     | repokey-blake2 encryption — data unreadable without passphrase                    |
-| Kopia data at rest    | Repository password encryption — data unreadable without password                 |
-| Borg write protection | append-only mode from server (optional) — compromised server can't delete backups |
-| Console access        | Local TTY login available for emergency diagnostics only                          |
-| OS updates            | Unattended upgrades for security patches                                          |
+| Threat                          | Defense                                                                                                                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Physical theft of the Pi        | No borg passphrases at rest. Repos are repokey-blake2 encrypted, keys wrapped by passphrases held only in Infisical on neuromancer. Tailscale node identity must be revoked from the admin console; tag:backup-target ACL limits lateral reach pre-revoke. |
+| Long-game theft (Pi discarded years later) | Same. Sealed unit yields encrypted trash forever.                                                                                                                                                                          |
+| Network attacker on the LAN     | UFW default-deny on eth0; sshd inaccessible from LAN.                                                                                                                                                                                  |
+| Compromised foreign Tailscale node | sshd `PasswordAuthentication=no`; fail2ban jails brute-force; Tailscale ACL limits which tags can reach `tag:backup-target:22`.                                                                                                     |
+| Ransomware on neuromancer (manager) | `borg-manage.sh` allowlist with hardcoded retention (`--keep-daily 14 --keep-weekly 4`, no `--prefix`, no `delete` verb). `piadmin` requires a sudo password — wipe attempts via piadmin SSH need an interactive password not on neuromancer. |
+| Ransomware on a client (e.g. wintermute) | Backup-path `borg serve --append-only` protects existing archives. Client has no manager key, can't trigger prune. Per-client `--restrict-to-path` keeps the blast radius to its own repo.                                       |
+| 14-day-corrupt-archives attack  | Weekly `borg-pi-manage.sh restore-test` extracts a known file (`etc/hostname`) from the latest archive and verifies content. Mismatch = `/fail` ping to HC.io.                                                                         |
+| Console access                  | Local TTY login available for emergency diagnostics. `piadmin`'s strong password is now the gate (NOPASSWD sudo is removed by setup).                                                                                                  |
+| OS updates                      | Unattended upgrades for security patches.                                                                                                                                                                                              |
 
-## Future: Multiple Pi Nodes
+## Future: multiple Pi nodes
 
-This setup is designed to be repeatable. To deploy a second Pi at another location:
+The schema scales: a second Pi gets its own `MANAGER_SSH_PUBKEY` (could share neuromancer's), its own `CLIENTS` list, and its own entry in `borg-pi-manage.conf` (add a `PI_HOST_2`, etc., or run multiple instances of the script). Each Pi is fully independent — no replication.
 
-1. Flash a new SD card
-2. Edit the configuration variables (different hostname, new Tailscale auth key, new passwords)
-3. Run the provisioning script
-4. Seed initial backups
-5. Ship
-
-Each Pi is a fully independent backup target. The borg repo and kopia repo on each Pi are separate — there is no replication between Pi nodes.
-
-## Relationship to Client-Side Tooling
-
-The Pi provisioning script sets up the infrastructure that client-side backup tooling targets:
+## Relationship to client-side tooling
 
 ```
-Windows desktop client (Kopia)
-    │
-    ├── Manages Kopia policies on LOCAL repo (home server)
-    │       └── KopiaUI takes snapshots per schedule
-    │
-    └── Manages Kopia policies on REMOTE repo (this Pi)
-            └── KopiaUI takes snapshots per schedule, pushed over Tailscale
+neuromancer (manager + borg client)
+    ├── scripts/borg-backup.sh                  # creates local + remote archives (append-only path)
+    └── scripts/borg-pi-manage.sh               # weekly + daily: prune, check, freshness, restore-test
+                                                # uses ~/.ssh/borg-pi-mgmt + Infisical passphrases
 
-Linux home server cron job (see scripts/borg-backup.sh)
-    └── Runs borg create to REMOTE repo (this Pi) over Tailscale
+wintermute (borg client only — borgmatic)
+    └── borgmatic                               # backs up to ssh://borg@backup-pi/mnt/backup/borg-wintermute
+                                                # (append-only path only — no mgmt key on wintermute)
 ```
