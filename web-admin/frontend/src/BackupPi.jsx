@@ -9,7 +9,13 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogActions from "@mui/material/DialogActions";
+import TextField from "@mui/material/TextField";
+import Divider from "@mui/material/Divider";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
 import LinearProgress from "@mui/material/LinearProgress";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
@@ -17,13 +23,10 @@ import Spinner from "@mui/material/CircularProgress";
 import useBackupPi from "./hooks/useBackupPi";
 import LogOutput from "./LogOutput";
 
+// `perClient: true` means the renderer shows a "Client" dropdown next to
+// the button. Default "all" sends the bare verb (runs across every client
+// on the Pi); a specific client sends `<verb>-<clientName>`.
 const ACTIONS = [
-  {
-    name: "restart-kopia",
-    label: "Restart Kopia server",
-    confirmText: "Restart the Kopia server on the Pi?",
-    danger: false,
-  },
   {
     name: "apt-upgrade",
     label: "apt update + upgrade",
@@ -35,15 +38,17 @@ const ACTIONS = [
     name: "borg-check",
     label: "Borg check",
     confirmText:
-      "Run a full borg integrity check? This can take a while on large repos.",
+      "Run a borg integrity check. This can take a while on large repos.",
     danger: false,
+    perClient: true,
   },
   {
     name: "borg-prune",
     label: "Borg prune",
     confirmText:
-      "Run borg prune + compact now? Old archives outside the retention policy will be deleted permanently.",
+      "Run borg prune + compact. Old archives outside the retention policy (14d/4w on the Pi) will be deleted permanently.",
     danger: true,
+    perClient: true,
   },
   {
     name: "reboot",
@@ -82,12 +87,18 @@ const formatRelativeAge = (epochSeconds, nowEpoch) => {
   return `${Math.floor(ageSec / 86400)}d ago`;
 };
 
-const ageHours = (iso) => {
-  if (!iso) return null;
-  // Borg --format {time} typically emits a human-readable form; try parsing.
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return null;
-  return (Date.now() - ts) / 3600000;
+// Permissive parser — handles both borg `{time}` ("Fri, 2026-05-15 03:25:40")
+// and `{isoformat}` ("2026-05-15T03:25:40"). Returns ms epoch or NaN.
+const parseBorgArchiveTimestamp = (s) => {
+  if (!s) return NaN;
+  let t = Date.parse(s);
+  if (!Number.isNaN(t)) return t;
+  const m = /^(?:[A-Za-z]{3},\s+)?(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})/.exec(s);
+  if (m) {
+    t = Date.parse(`${m[1]}T${m[2]}`);
+    if (!Number.isNaN(t)) return t;
+  }
+  return NaN;
 };
 
 const archiveAgeColor = (hours) => {
@@ -97,7 +108,7 @@ const archiveAgeColor = (hours) => {
   return "error";
 };
 
-const StatusCard = ({ status }) => {
+const StatusCard = ({ status, onSetPassphrase }) => {
   if (!status) {
     return (
       <Card>
@@ -134,37 +145,24 @@ const StatusCard = ({ status }) => {
     );
   }
 
-  const archiveAge = ageHours(status.borg?.last_archive_iso);
   const tsConnected = status.tailscale?.backend_state === "Running";
-  const kopiaActive = status.kopia?.service_active === "active";
+  const clients = Array.isArray(status.clients) ? status.clients : [];
 
   return (
     <Card>
       <CardContent>
-        <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+        <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap">
           <Typography variant="h6">{status.hostname || "backup-pi"}</Typography>
           <Chip
             label={tsConnected ? "Tailscale up" : `Tailscale: ${status.tailscale?.backend_state || "?"}`}
             color={tsConnected ? "success" : "error"}
             size="small"
           />
-          <Chip
-            label={kopiaActive ? "Kopia: active" : `Kopia: ${status.kopia?.service_active || "?"}`}
-            color={kopiaActive ? "success" : "warning"}
-            size="small"
-          />
-          <Chip
-            label={
-              archiveAge === null
-                ? "No borg archives yet"
-                : `Last borg: ${formatRelativeAge(
-                    Math.floor(Date.parse(status.borg.last_archive_iso) / 1000),
-                    status.now_epoch,
-                  )}`
-            }
-            color={archiveAgeColor(archiveAge)}
-            size="small"
-          />
+          {status.any_client_stale ? (
+            <Chip label="A client is stale" color="error" size="small" />
+          ) : clients.length > 0 ? (
+            <Chip label="All clients fresh" color="success" size="small" />
+          ) : null}
         </Stack>
 
         {status.drive?.mounted ? (
@@ -199,21 +197,105 @@ const StatusCard = ({ status }) => {
           </Alert>
         )}
 
+        {clients.length > 0 && (
+          <Box mt={2}>
+            <Divider sx={{ mb: 1 }} />
+            <Typography variant="subtitle2" gutterBottom>
+              Clients
+            </Typography>
+            <Stack spacing={1}>
+              {clients.map((c) => {
+                const lastEpochMs = c.last_archive_iso
+                  ? parseBorgArchiveTimestamp(c.last_archive_iso)
+                  : NaN;
+                const lastEpoch = Number.isNaN(lastEpochMs)
+                  ? null
+                  : Math.floor(lastEpochMs / 1000);
+                const hours =
+                  lastEpoch && status.now_epoch
+                    ? (status.now_epoch - lastEpoch) / 3600
+                    : null;
+                return (
+                  <Stack key={c.name} spacing={0.5}>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={2}
+                      flexWrap="wrap"
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{ minWidth: 120, fontWeight: 500 }}
+                      >
+                        {c.name}
+                      </Typography>
+                      <Chip
+                        label={
+                          lastEpoch
+                            ? `Last: ${formatRelativeAge(lastEpoch, status.now_epoch)}`
+                            : c.error
+                              ? "Error"
+                              : "No archives yet"
+                        }
+                        color={
+                          c.error
+                            ? "error"
+                            : c.stale
+                              ? "error"
+                              : hours !== null
+                                ? archiveAgeColor(hours)
+                                : "default"
+                        }
+                        size="small"
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        {c.archive_count} archive
+                        {c.archive_count === 1 ? "" : "s"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        threshold {c.freshness_threshold_hours}h
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {c.repo_path}
+                      </Typography>
+                      {c.has_passphrase === false && (
+                        <Chip
+                          label="No passphrase"
+                          color="warning"
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => onSetPassphrase?.(c.name)}
+                      >
+                        Set passphrase
+                      </Button>
+                    </Stack>
+                    {c.error && (
+                      <Typography
+                        variant="caption"
+                        color="error"
+                        sx={{ pl: 14 }}
+                      >
+                        {c.error}
+                      </Typography>
+                    )}
+                  </Stack>
+                );
+              })}
+            </Stack>
+          </Box>
+        )}
+
         <Stack direction="row" spacing={3} mt={2} flexWrap="wrap">
           <Typography variant="caption" color="text.secondary">
             Uptime: {formatDuration(status.uptime_seconds)}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Tailscale IP: {status.tailscale?.ip || "—"}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Health check:{" "}
-            {status.health?.last_check_epoch
-              ? formatRelativeAge(
-                  status.health.last_check_epoch,
-                  status.now_epoch,
-                )
-              : "never"}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Status fetched:{" "}
@@ -235,11 +317,27 @@ const BackupPi = () => {
     lastResult,
     runAction,
     clearOutput,
+    setClientPassphrase,
+    lastSecretResult,
+    clearSecretResult,
   } = useBackupPi();
   const [confirmAction, setConfirmAction] = useState(null);
+  // Map of action name → selected client ("" = all). Only used for
+  // actions with perClient: true (borg-check, borg-prune).
+  const [actionClient, setActionClient] = useState({});
+  // "Set passphrase" dialog state — opened from per-client row buttons.
+  const [secretDialog, setSecretDialog] = useState({
+    open: false,
+    clientName: "",
+    passphrase: "",
+  });
 
   const piDisabled = !status || !status.enabled || !status.reachable;
   const buttonsDisabled = piDisabled || !!actionInFlight;
+  const clientNames = useMemo(
+    () => (Array.isArray(status?.clients) ? status.clients.map((c) => c.name) : []),
+    [status],
+  );
 
   const outputText = useMemo(
     () => output.map((c) => c.chunk).join(""),
@@ -248,36 +346,85 @@ const BackupPi = () => {
 
   const handleConfirm = () => {
     if (!confirmAction) return;
-    runAction(confirmAction.name);
+    const clientName = confirmAction.perClient
+      ? actionClient[confirmAction.name] || ""
+      : "";
+    runAction(confirmAction.name, clientName || undefined);
     setConfirmAction(null);
+  };
+
+  const isActionRunning = (a) => {
+    if (!actionInFlight) return false;
+    if (actionInFlight === a.name) return true;
+    if (a.perClient && actionInFlight.startsWith(`${a.name}-`)) return true;
+    return false;
   };
 
   return (
     <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="h5">Backup Pi</Typography>
 
-      <StatusCard status={status} />
+      <StatusCard
+        status={status}
+        onSetPassphrase={(name) => {
+          clearSecretResult();
+          setSecretDialog({ open: true, clientName: name, passphrase: "" });
+        }}
+      />
 
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             Actions
           </Typography>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            {ACTIONS.map((a) => (
-              <Button
-                key={a.name}
-                variant={a.danger ? "outlined" : "contained"}
-                color={a.danger ? "error" : "primary"}
-                disabled={buttonsDisabled}
-                onClick={() => setConfirmAction(a)}
-              >
-                {actionInFlight === a.name ? (
-                  <Spinner size={18} sx={{ mr: 1 }} />
-                ) : null}
-                {a.label}
-              </Button>
-            ))}
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+            {ACTIONS.map((a) => {
+              const selected = actionClient[a.name] || "";
+              return (
+                <Stack
+                  key={a.name}
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                >
+                  <Button
+                    variant={a.danger ? "outlined" : "contained"}
+                    color={a.danger ? "error" : "primary"}
+                    disabled={buttonsDisabled}
+                    onClick={() => setConfirmAction(a)}
+                  >
+                    {isActionRunning(a) ? (
+                      <Spinner size={18} sx={{ mr: 1 }} />
+                    ) : null}
+                    {a.label}
+                  </Button>
+                  {a.perClient && clientNames.length > 0 && (
+                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                      <InputLabel id={`client-${a.name}-label`}>Client</InputLabel>
+                      <Select
+                        labelId={`client-${a.name}-label`}
+                        label="Client"
+                        value={selected}
+                        disabled={buttonsDisabled}
+                        onChange={(e) =>
+                          setActionClient((prev) => ({
+                            ...prev,
+                            [a.name]: e.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="">all clients</MenuItem>
+                        {clientNames.map((name) => (
+                          <MenuItem key={name} value={name}>
+                            {name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                </Stack>
+              );
+            })}
             <Button
               variant="text"
               disabled={!output.length && !lastResult}
@@ -320,7 +467,14 @@ const BackupPi = () => {
         open={!!confirmAction}
         onClose={() => setConfirmAction(null)}
       >
-        <DialogTitle>{confirmAction?.label}</DialogTitle>
+        <DialogTitle>
+          {confirmAction?.label}
+          {confirmAction?.perClient && (
+            <Typography variant="caption" component="div" color="text.secondary">
+              Target: {actionClient[confirmAction.name] || "all clients"}
+            </Typography>
+          )}
+        </DialogTitle>
         <DialogContent>
           <DialogContentText>{confirmAction?.confirmText}</DialogContentText>
         </DialogContent>
@@ -333,6 +487,92 @@ const BackupPi = () => {
             autoFocus
           >
             Run
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={secretDialog.open}
+        onClose={() =>
+          setSecretDialog({ open: false, clientName: "", passphrase: "" })
+        }
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Set borg passphrase for {secretDialog.clientName}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Writes the passphrase to Infisical under the path / key configured
+            for this client in <code>backuppi.clients</code>. The Pi never
+            sees this value at rest — it's fetched on demand and forwarded
+            over SSH only for each operation that needs it.
+          </DialogContentText>
+          <TextField
+            label="Passphrase"
+            type="password"
+            fullWidth
+            autoFocus
+            value={secretDialog.passphrase}
+            onChange={(e) =>
+              setSecretDialog((prev) => ({
+                ...prev,
+                passphrase: e.target.value,
+              }))
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && secretDialog.passphrase) {
+                setClientPassphrase(
+                  secretDialog.clientName,
+                  secretDialog.passphrase,
+                );
+                setSecretDialog({
+                  open: false,
+                  clientName: "",
+                  passphrase: "",
+                });
+              }
+            }}
+          />
+          {lastSecretResult &&
+            lastSecretResult.clientName === secretDialog.clientName && (
+              <Alert
+                severity={lastSecretResult.ok ? "success" : "error"}
+                sx={{ mt: 2 }}
+              >
+                {lastSecretResult.ok
+                  ? `Saved to Infisical (${lastSecretResult.path}/${lastSecretResult.key}).`
+                  : `Failed: ${lastSecretResult.error}`}
+              </Alert>
+            )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() =>
+              setSecretDialog({
+                open: false,
+                clientName: "",
+                passphrase: "",
+              })
+            }
+          >
+            Close
+          </Button>
+          <Button
+            disabled={!secretDialog.passphrase}
+            variant="contained"
+            onClick={() => {
+              setClientPassphrase(
+                secretDialog.clientName,
+                secretDialog.passphrase,
+              );
+              // Don't close — let the user see the result alert. They can
+              // close manually or change the input and retry.
+              setSecretDialog((prev) => ({ ...prev, passphrase: "" }));
+            }}
+          >
+            Save
           </Button>
         </DialogActions>
       </Dialog>
