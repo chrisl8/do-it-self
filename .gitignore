@@ -51,6 +51,7 @@ scripts/post-startup-hook.sh
 scripts/kopia-backup-check.conf
 scripts/kopia-host-thresholds.json
 scripts/kopia-ignored-sources.json
+scripts/borg-pi-manage.conf
 
 # Module system runtime
 installed-modules.yaml
