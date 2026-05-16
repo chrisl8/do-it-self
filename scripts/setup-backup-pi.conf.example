@@ -1,57 +1,93 @@
 # Backup Pi configuration
 # Copy this file, fill in the values, then run:
 #   sudo bash setup-backup-pi.sh /path/to/backup-pi.conf
+#
+# Threat model: this file holds NO borg passphrases and NO kopia secrets.
+# Physical theft of the Pi must not yield decryptable data. Backups are
+# encrypted with passphrases held in Infisical on the manager host; the
+# manager (neuromancer) injects them per-operation via SSH SendEnv.
 
 # Admin user on the Pi (the user that owns scripts and backup keys).
 # Default matches the Raspberry Pi Imager username from docs/SETUP-BACKUP-PI.md.
 ADMIN_USER="piadmin"
 
-# Tailscale
+# ── Tailscale ─────────────────────────────────────────────────────
+#
+# The auth key MUST be:
+#   (a) REUSABLE — single-use keys are consumed on first join. A drive
+#       replacement that re-runs this script with a single-use key fails.
+#   (b) NOT ephemeral — ephemeral nodes auto-expire on disconnect.
+#   (c) Tagged with `tag:backup-target` — required for the ACL setup
+#       (see docs/SETUP-BACKUP-PI.md "Tailscale ACLs"). Without this tag
+#       on the key, Tailscale rejects the Pi's --advertise-tags claim.
+# Generate at https://login.tailscale.com/admin/settings/keys with:
+#   Reusable: ON   Ephemeral: OFF   Tags: tag:backup-target
 TAILSCALE_AUTH_KEY="CONFIGURE_ME"
 TAILSCALE_HOSTNAME="backup-pi"
 
-# Borg
-BORG_REPO_PATH="/mnt/backup/borg"
-BORG_REPO_PASSPHRASE="CONFIGURE_ME"
+# ── Clients (whitespace-separated list) ──────────────────────────
+#
+# For every name listed here, set CLIENT_<UPPERNAME>_PUBKEY and
+# CLIENT_<UPPERNAME>_REPO_PATH below. Per-client passphrases and
+# freshness/HC URLs live on the manager (neuromancer's
+# ~/containers/scripts/borg-pi-manage.conf), not here.
+#
+# Each name must match [a-z0-9-]+ (used as a directory suffix and validated
+# by borg-serve-only.sh).
+CLIENTS="neuromancer wintermute"
 
-# Kopia
-KOPIA_REPO_PATH="/mnt/backup/kopia"
-KOPIA_REPO_PASSWORD="CONFIGURE_ME"
-KOPIA_SERVER_CONTROL_PASSWORD="CONFIGURE_ME"
-KOPIA_SERVER_PORT=51515
+# ── neuromancer (this host backs itself up to the Pi) ──
+# REPO_PATH stays at /mnt/backup/borg (legacy path — kept to avoid moving
+# data). New clients should follow the /mnt/backup/borg-<name> convention.
+CLIENT_NEUROMANCER_PUBKEY="CONFIGURE_ME"
+CLIENT_NEUROMANCER_REPO_PATH="/mnt/backup/borg"
 
-# Kopia server user (the username your Kopia client logs in as)
-KOPIA_USER_NAME="user@yourclient"
-KOPIA_USER_PASSWORD="CONFIGURE_ME"
+# ── wintermute (Linux desktop, runs borgmatic) ──
+CLIENT_WINTERMUTE_PUBKEY="CONFIGURE_ME"
+CLIENT_WINTERMUTE_REPO_PATH="/mnt/backup/borg-wintermute"
 
-# USB Drive
+# ── Manager SSH key ──────────────────────────────────────────────
+#
+# Public key of the management-path SSH key on the manager host. The Pi's
+# /home/borg/.ssh/authorized_keys gets a line forcing
+#   /usr/local/bin/borg-manage.sh
+# under this key — the manager (neuromancer) drives prune / check / list /
+# restore-test by SSHing with this key and SendEnv BORG_PASSPHRASE.
+#
+# Generate on the manager (as the user that will run cron — chrisl8):
+#   ssh-keygen -t ed25519 -f ~/.ssh/borg-pi-mgmt -N "" -C "neuromancer-borg-pi-mgmt"
+# Then paste the contents of ~/.ssh/borg-pi-mgmt.pub here.
+MANAGER_SSH_PUBKEY="CONFIGURE_ME"
+
+# ── USB drive ────────────────────────────────────────────────────
 DRIVE_DEVICE="/dev/sda"
 DRIVE_LABEL="backupdrive"
 MOUNT_POINT="/mnt/backup"
 
-# SMTP server for email alerts (Fastmail used as the default example;
-# any provider works — set the host/port/credentials for yours).
-SMTP_HOST="smtp.fastmail.com"
-SMTP_PORT="587"
-ALERT_EMAIL="CONFIGURE_ME"
-SMTP_USER="CONFIGURE_ME"
-SMTP_PASSWORD="CONFIGURE_ME"
-
-# SSH public key for the borg backup client.
-# Generate on the client: ssh-keygen -t ed25519 -f ~/.ssh/borg_backup -N ""
-# Then paste the contents of ~/.ssh/borg_backup.pub here
-BORG_CLIENT_SSH_PUBKEY="CONFIGURE_ME"
-
-# SSH public key for the web-admin RPC (the host running ~/containers/web-admin).
-# When set, the script provisions a 'webadmin' user whose SSH key is forced to
-# invoke /usr/local/bin/pi-rpc.sh — a dispatcher that whitelists `status` and a
-# fixed set of `action <name>` commands. Leave as CONFIGURE_ME to skip the RPC
-# setup entirely (for users who don't run the web admin).
+# ── Web admin RPC (optional) ─────────────────────────────────────
+#
+# When set, the script provisions a 'webadmin' user whose SSH key is forced
+# to invoke /usr/local/bin/pi-rpc.sh — a dispatcher that whitelists `status`,
+# `apt-upgrade`, and `reboot`. Borg-related verbs (check/prune) are NOT
+# routed through this path; the web admin uses the manager key for those,
+# fetching passphrases from Infisical the same way borg-pi-manage.sh does.
+#
+# Leave as CONFIGURE_ME to skip the web admin RPC setup entirely.
 #
 # Generate on the web-admin host:
 #   ssh-keygen -t ed25519 -f ~/.ssh/backup-pi-webadmin -N ""
 # Then paste the contents of ~/.ssh/backup-pi-webadmin.pub here.
 WEBADMIN_SSH_PUBKEY="CONFIGURE_ME"
 
-# External health monitoring (leave empty to skip)
-HEALTHCHECK_URL=""
+# ── sshd hardening (always-on, no flag) ──────────────────────────
+# The setup script unconditionally installs an sshd_config drop-in with
+# PasswordAuthentication=no, PermitRootLogin=no, AllowUsers <admin> borg
+# [webadmin], and AcceptEnv BORG_PASSPHRASE / BORG_PASSPHRASE_*. fail2ban
+# is installed with an sshd jail. Tailscale-only access is enforced by UFW
+# (not by ListenAddress — that caused a boot-time race in an earlier
+# revision). No tunable flag for any of this.
+#
+# Also unconditional: /etc/sudoers.d/010_pi-nopasswd and
+# /etc/sudoers.d/90-cloud-init-users (the Pi Imager / cloud-init NOPASSWD
+# entries for ADMIN_USER) are REMOVED. Future re-runs of setup-backup-pi.sh
+# prompt for piadmin's password. SET A STRONG ONE before disconnecting.

@@ -28,11 +28,44 @@ fi
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
 
-# Defaults for optional config values (the conf example sets these explicitly,
-# but ${VAR:-default} keeps older conf files working without edits).
+# Default for optional config value.
 ADMIN_USER="${ADMIN_USER:-piadmin}"
-SMTP_HOST="${SMTP_HOST:-smtp.fastmail.com}"
-SMTP_PORT="${SMTP_PORT:-587}"
+
+# ── Multi-client schema ─────────────────────────────────────────
+#
+# The Pi holds NO borg passphrases. Management is driven by the manager
+# host (neuromancer) via the SSH key whose pubkey is in MANAGER_SSH_PUBKEY.
+# Each client has its own SSH key for the append-only backup path.
+
+client_var() {
+    # client_var <name> <KEY> → echoes CLIENT_<UPPERNAME>_<KEY>.
+    # Uppercases name and replaces '-' with '_'.
+    local name="$1"
+    local key="$2"
+    local upper
+    upper=$(echo "$name" | tr 'a-z-' 'A-Z_')
+    local var="CLIENT_${upper}_${key}"
+    echo "${!var:-}"
+}
+
+if [[ -z "${CLIENTS:-}" ]]; then
+    echo "[ERROR] CLIENTS is empty. Set it in /etc/backup-pi.conf (see conf.example)."
+    exit 1
+fi
+for _name in $CLIENTS; do
+    if [[ ! "$_name" =~ ^[a-z0-9-]+$ ]]; then
+        echo "[ERROR] Client name '$_name' must match [a-z0-9-]+"
+        exit 1
+    fi
+    for _key in PUBKEY REPO_PATH; do
+        _v=$(client_var "$_name" "$_key")
+        if [[ -z "$_v" || "$_v" == "CONFIGURE_ME" ]]; then
+            echo "[ERROR] CLIENT_$(echo "$_name" | tr 'a-z-' 'A-Z_')_${_key} is not set"
+            exit 1
+        fi
+    done
+done
+unset _name _key _v
 
 # Persist config to /etc for future re-runs (skip if already there)
 if [[ "$CONFIG_FILE" != "/etc/backup-pi.conf" ]]; then
@@ -51,16 +84,15 @@ fi
 # SD card at /etc/backup-pi.conf, not the USB drive.
 #
 # What to know:
-#   - Tailscale auth key expiry doesn't matter — Tailscale is
-#     already connected on the Pi, so it stays up.
+#   - Tailscale auth key MUST be reusable + non-ephemeral +
+#     tagged with tag:backup-target (see preflight warning).
 #   - SSH keys survive drive replacement (they're on the SD card,
 #     not the USB drive). No re-keying needed.
-#   - A NEW borg encryption key is generated for the new repo.
-#     You MUST save it again from /home/"${ADMIN_USER}"/borg-key-backup.txt.
-#   - A NEW Kopia TLS cert is generated. The Kopia client
-#     must reconnect using the new certificate fingerprint.
+#   - A NEW borg encryption key is generated for each fresh repo.
+#     The operator is prompted for the passphrase interactively —
+#     the conf doesn't hold it.
 #   - All backup data starts from scratch — previous archives
-#     and snapshots lived on the old drive.
+#     lived on the old drive.
 # ============================================================
 
 # Colors for output
@@ -102,11 +134,11 @@ if [[ "$CONFIG_FILE" == "/etc/backup-pi.conf" ]]; then
     done
 fi
 
-# Check for unconfigured values
+# Check for unconfigured values. The Pi holds no borg/kopia passphrases —
+# only TAILSCALE_AUTH_KEY (used at join time) and MANAGER_SSH_PUBKEY are
+# required globals. Per-client PUBKEY + REPO_PATH validated above.
 UNCONFIGURED=0
-for var in TAILSCALE_AUTH_KEY BORG_REPO_PASSPHRASE KOPIA_REPO_PASSWORD \
-           KOPIA_SERVER_CONTROL_PASSWORD KOPIA_USER_PASSWORD \
-           ALERT_EMAIL SMTP_USER SMTP_PASSWORD BORG_CLIENT_SSH_PUBKEY; do
+for var in TAILSCALE_AUTH_KEY MANAGER_SSH_PUBKEY; do
     if [[ "${!var:-CONFIGURE_ME}" == "CONFIGURE_ME" ]]; then
         log_error "$var is still set to CONFIGURE_ME"
         UNCONFIGURED=1
@@ -133,6 +165,40 @@ fi
 
 log_info "Drive $DRIVE_DEVICE found (not the boot device)"
 lsblk "$DRIVE_DEVICE" --output NAME,SIZE,MODEL,SERIAL 2>/dev/null || true
+
+# Warn about the Tailscale auth key — only when we're actually about to
+# use it (i.e., Tailscale isn't connected yet). On routine re-runs of an
+# already-joined Pi, the key is unused and the warning is noise.
+if ! tailscale status &>/dev/null; then
+    log_warn ""
+    log_warn "=== Tailscale auth key requirements ==="
+    log_warn "If this is a fresh install or drive replacement, the auth key MUST be:"
+    log_warn "  (a) REUSABLE — single-use keys are consumed on first join and a"
+    log_warn "      future drive replacement that re-runs this script would fail."
+    log_warn "  (b) NOT ephemeral — ephemeral nodes auto-expire on disconnect."
+    log_warn "  (c) Tagged with tag:backup-target — required for the ACL setup"
+    log_warn "      (see STEP 20 summary at the end of this run)."
+    log_warn "Generate at https://login.tailscale.com/admin/settings/keys with:"
+    log_warn "  Reusable: ON   Ephemeral: OFF   Tags: tag:backup-target"
+    log_warn ""
+    log_warn "Continuing in 5 seconds — Ctrl-C now if the key isn't right."
+    sleep 5
+fi
+
+# Print piadmin password warning — surfaces here, also restated at the end
+# in STEP 20. NOPASSWD sudoers entries for ADMIN_USER get removed in STEP 7b,
+# so piadmin's interactive password becomes the last line of defense against
+# ransomware-on-neuromancer trying to wipe /mnt/backup.
+log_warn ""
+log_warn "=== piadmin password ==="
+log_warn "This script removes the Pi-Imager / cloud-init NOPASSWD sudo rules"
+log_warn "for ${ADMIN_USER}. After this run, ${ADMIN_USER}'s password is the last"
+log_warn "line of defense if your neuromancer SSH key is compromised."
+log_warn "Before you disconnect, set a strong password (20+ random chars):"
+log_warn "    sudo passwd ${ADMIN_USER}"
+log_warn "The script does not change it for you (we can't verify strength)."
+log_warn ""
+
 log_info "All preflight checks passed"
 
 # ============================================================
@@ -150,20 +216,7 @@ log_info "System updated"
 log_step "Install packages"
 
 DEBIAN_FRONTEND=noninteractive apt install -y \
-    borgbackup openssh-server ufw smartmontools msmtp msmtp-mta mailutils unattended-upgrades
-
-# Install Kopia from official repo
-if ! command -v kopia &>/dev/null; then
-    log_info "Adding Kopia apt repository"
-    curl -s https://kopia.io/signing-key | gpg --dearmor -o /usr/share/keyrings/kopia-keyring.gpg
-    echo "deb [signed-by=/usr/share/keyrings/kopia-keyring.gpg] http://packages.kopia.io/apt/ stable main" \
-        > /etc/apt/sources.list.d/kopia.list
-    apt update
-    DEBIAN_FRONTEND=noninteractive apt install -y kopia
-    log_info "Kopia installed"
-else
-    log_info "Kopia already installed"
-fi
+    borgbackup openssh-server ufw smartmontools unattended-upgrades
 
 log_info "All packages installed"
 
@@ -202,9 +255,10 @@ else
     log_info "Drive already mounted at $MOUNT_POINT"
 fi
 
-# Create directory structure
-mkdir -p "$MOUNT_POINT"/{borg,kopia,health}
-log_info "Directory structure created"
+# Create base directory. Per-client repo dirs are created in the chown loop
+# below, so we don't hardcode any repo subdirs here.
+mkdir -p "$MOUNT_POINT"
+log_info "Mount point directory ready"
 
 # ============================================================
 # STEP 4: Create service users
@@ -218,34 +272,105 @@ else
     log_info "Created user 'borg'"
 fi
 
-if id kopiauser &>/dev/null; then
-    log_info "User 'kopiauser' already exists"
-else
-    useradd -m -s /bin/bash kopiauser
-    log_info "Created user 'kopiauser'"
-fi
+# kopia is no longer used (retired). Tear-down happens in STEP 11.
 
 # ============================================================
-# STEP 5: Set directory permissions
+# STEP 5: Set directory permissions + write clients.env
 # ============================================================
 log_step "Set directory permissions"
 
-chown borg:borg "$MOUNT_POINT/borg"
-chown kopiauser:kopiauser "$MOUNT_POINT/kopia"
-chown "${ADMIN_USER}":"${ADMIN_USER}" "$MOUNT_POINT/health"
+# Each client's repo parent dir exists and is borg-owned. Idempotent — for
+# existing repos (e.g. wintermute created out-of-band), no-op.
+for name in $CLIENTS; do
+    repo_path=$(client_var "$name" REPO_PATH)
+    mkdir -p "$repo_path"
+    chown borg:borg "$repo_path"
+done
 log_info "Permissions set"
 
+# ── Generate /etc/backup-pi.clients.env ─────────────────────────
+# Single source of truth consumed by:
+#   - /usr/local/bin/borg-serve-only.sh (allowlist + repo paths)
+#   - /usr/local/bin/borg-manage.sh (allowlist + repo paths)
+#   - /usr/local/sbin/pi-status.sh (per-client JSON in status output)
+# Contains no secrets — mode 644.
+log_step "Write /etc/backup-pi.clients.env"
+
+CLIENTS_ENV_TMP=$(mktemp)
+{
+    echo "# Auto-generated by setup-backup-pi.sh — do not hand-edit."
+    echo "# Source of truth for the multi-client schema. Re-run the setup"
+    echo "# script after editing /etc/backup-pi.conf to regenerate."
+    echo ""
+    echo "CLIENTS=\"${CLIENTS}\""
+    for name in $CLIENTS; do
+        upper=$(echo "$name" | tr 'a-z-' 'A-Z_')
+        echo "CLIENT_${upper}_REPO_PATH=\"$(client_var "$name" REPO_PATH)\""
+    done
+} > "$CLIENTS_ENV_TMP"
+install -m 0644 -o root -g root "$CLIENTS_ENV_TMP" /etc/backup-pi.clients.env
+rm -f "$CLIENTS_ENV_TMP"
+log_info "Wrote /etc/backup-pi.clients.env"
+
 # ============================================================
-# STEP 5b: SSH key auth for borg user
+# STEP 5b: SSH key auth for borg user (per-client forced commands)
 # ============================================================
+# Every client gets its own authorized_keys line with a forced command that
+# names the client; /usr/local/bin/borg-serve-only.sh (STEP 10) maps that
+# name → repo path. A leaked key can only reach the repo it was issued for.
 log_step "SSH key auth for borg user"
 
 mkdir -p /home/borg/.ssh
-echo "$BORG_CLIENT_SSH_PUBKEY" > /home/borg/.ssh/authorized_keys
-chown -R borg:borg /home/borg/.ssh
+
+AUTH_KEYS_TMP=$(mktemp)
+declare -A NEW_PUBKEYS=()
+
+# Per-client backup keys (force borg-serve-only.sh with --append-only).
+for name in $CLIENTS; do
+    pubkey=$(client_var "$name" PUBKEY)
+    # Use OpenSSH `restrict` keyword — implies no-port/X11/agent-fwd, no-pty,
+    # and is forward-compatible with future restrictions.
+    echo "command=\"/usr/local/bin/borg-serve-only.sh ${name}\",restrict ${pubkey}" >> "$AUTH_KEYS_TMP"
+    # Index by trailing base64 chunk (the key body) for the diff below
+    key_body=$(awk '{print $2}' <<<"$pubkey")
+    NEW_PUBKEYS["$key_body"]=1
+done
+
+# Manager key (forces borg-manage.sh — verb passed in SSH_ORIGINAL_COMMAND,
+# BORG_PASSPHRASE forwarded via SSH SendEnv).
+echo "command=\"/usr/local/bin/borg-manage.sh\",restrict ${MANAGER_SSH_PUBKEY}" >> "$AUTH_KEYS_TMP"
+mgr_body=$(awk '{print $2}' <<<"$MANAGER_SSH_PUBKEY")
+NEW_PUBKEYS["$mgr_body"]=1
+
+# Warn about any pubkeys we'd be removing — catches hand-edited keys the
+# operator may have forgotten about. Backup the existing file regardless.
+if [[ -f /home/borg/.ssh/authorized_keys ]]; then
+    backup="/home/borg/.ssh/authorized_keys.bak.$(date +%s)"
+    cp /home/borg/.ssh/authorized_keys "$backup"
+    chown borg:borg "$backup"
+    chmod 600 "$backup"
+    while IFS= read -r line; do
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+        # Match existing lines against our intended set by the base64 key body.
+        found=false
+        for body in "${!NEW_PUBKEYS[@]}"; do
+            if grep -qF "$body" <<<"$line"; then
+                found=true
+                break
+            fi
+        done
+        if ! $found; then
+            log_warn "authorized_keys: existing pubkey will be REMOVED (kept in $backup):"
+            log_warn "    ${line:0:80}…"
+        fi
+    done < /home/borg/.ssh/authorized_keys
+fi
+
+install -m 600 -o borg -g borg "$AUTH_KEYS_TMP" /home/borg/.ssh/authorized_keys
+rm -f "$AUTH_KEYS_TMP"
+chown borg:borg /home/borg/.ssh
 chmod 700 /home/borg/.ssh
-chmod 600 /home/borg/.ssh/authorized_keys
-log_info "SSH authorized_keys installed for borg user"
+log_info "SSH authorized_keys installed for borg user ($(echo "$CLIENTS" | wc -w) client key(s) + 1 manager key)"
 
 # ============================================================
 # STEP 6: Install and configure Tailscale
@@ -263,8 +388,14 @@ fi
 if tailscale status &>/dev/null; then
     log_info "Tailscale already connected"
 else
-    tailscale up --auth-key="$TAILSCALE_AUTH_KEY" --hostname="$TAILSCALE_HOSTNAME"
-    log_info "Tailscale connected as $TAILSCALE_HOSTNAME"
+    # --advertise-tags claims tag:backup-target so the tailnet ACLs can
+    # restrict the Pi to inbound-only (see docs/SETUP-BACKUP-PI.md "Tailscale
+    # ACLs"). The auth key MUST authorize this tag or the claim is rejected.
+    tailscale up \
+        --auth-key="$TAILSCALE_AUTH_KEY" \
+        --hostname="$TAILSCALE_HOSTNAME" \
+        --advertise-tags=tag:backup-target
+    log_info "Tailscale connected as $TAILSCALE_HOSTNAME with tag:backup-target"
 fi
 
 # Disable Tailscale SSH — use OpenSSH with key auth for unattended borg backups
@@ -275,6 +406,100 @@ tailscale set --ssh=false
 # ============================================================
 TAILSCALE_IP=$(tailscale ip -4)
 log_info "Tailscale IP: $TAILSCALE_IP"
+
+# ============================================================
+# STEP 7b: SSH hardening + fail2ban
+# ============================================================
+# Two pieces, both always-on:
+#   (a) fail2ban with sshd jail. UFW already blocks the LAN side of sshd,
+#       but fail2ban catches anything that gets past it (e.g. via Tailscale).
+#   (b) sshd_config drop-in: PasswordAuthentication=no, PermitRootLogin=no,
+#       AllowUsers <admin> borg [webadmin].
+#
+# What used to be here and isn't anymore: `ListenAddress <tailscale-ip>` and
+# an After=tailscaled.service drop-in. They were redundant with UFW (which
+# already restricts sshd to the Tailscale interface) AND introduced a real
+# boot-time race — sshd would try to bind the Tailscale IP before tailscaled
+# had finished bringing the interface up, and refuse to start. The 127.0.0.1
+# fallback didn't save it because sshd fails the whole startup if any
+# ListenAddress can't bind. Lesson learned the hard way.
+log_step "SSH hardening + fail2ban"
+
+DEBIAN_FRONTEND=noninteractive apt install -y fail2ban
+
+cat > /etc/fail2ban/jail.d/sshd.local << 'EOF'
+[sshd]
+enabled = true
+port    = ssh
+maxretry = 5
+findtime = 10m
+bantime = 1h
+EOF
+systemctl enable fail2ban >/dev/null 2>&1 || true
+systemctl restart fail2ban
+log_info "fail2ban installed and sshd jail active"
+
+# Build AllowUsers dynamically so we don't grant a user we never created
+# (webadmin is optional).
+ALLOW_USERS="${ADMIN_USER} borg"
+if [[ "${WEBADMIN_SSH_PUBKEY:-CONFIGURE_ME}" != "CONFIGURE_ME" ]]; then
+    ALLOW_USERS="${ALLOW_USERS} webadmin"
+fi
+
+SSHD_DROPIN="/etc/ssh/sshd_config.d/99-backup-pi.conf"
+cat > "$SSHD_DROPIN" << EOF
+# Backup Pi sshd hardening — managed by setup-backup-pi.sh.
+# Tailscale-only access is enforced by UFW (allow in on tailscale0,
+# default deny incoming), not by ListenAddress (which caused a boot-time
+# race with tailscaled in an earlier revision).
+PasswordAuthentication no
+PermitRootLogin no
+AllowUsers ${ALLOW_USERS}
+
+# Allow the manager / webadmin to forward per-operation passphrases via SSH
+# env. The Pi-side wrappers (borg-manage.sh, pi-status.sh) read these from
+# the environment. NEVER use AcceptEnv * — that's a credential-leak hole.
+AcceptEnv BORG_PASSPHRASE
+AcceptEnv BORG_PASSPHRASE_*
+EOF
+chmod 644 "$SSHD_DROPIN"
+
+# Validate before reloading; bail out hard if the rendered config is bad.
+if ! sshd -t 2>&1; then
+    log_error "sshd -t rejected the new config; removing drop-in and bailing"
+    rm -f "$SSHD_DROPIN"
+    exit 1
+fi
+
+# Clean up the old wait-tailscale.conf drop-in if it's still around from a
+# prior run that used the now-removed HARDEN_SSHD=true path.
+if [[ -f /etc/systemd/system/ssh.service.d/wait-tailscale.conf ]]; then
+    rm -f /etc/systemd/system/ssh.service.d/wait-tailscale.conf
+    rmdir /etc/systemd/system/ssh.service.d 2>/dev/null || true
+    systemctl daemon-reload
+    log_info "Removed stale /etc/systemd/system/ssh.service.d/wait-tailscale.conf"
+fi
+
+# Remove the Pi-Imager / cloud-init NOPASSWD sudo entries for ADMIN_USER.
+# After this, ${ADMIN_USER}'s password is required for sudo — the last line
+# of defense if neuromancer's SSH key is compromised by ransomware.
+# webadmin's NOPASSWD entries for pi-rpc scripts stay (STEP 19b owns those).
+PIADMIN_NOPASSWD_REMOVED=false
+for f in /etc/sudoers.d/010_pi-nopasswd /etc/sudoers.d/90-cloud-init-users; do
+    if [[ -f "$f" ]]; then
+        rm -f "$f"
+        log_info "Removed $f (was: ${ADMIN_USER} NOPASSWD sudo)"
+        PIADMIN_NOPASSWD_REMOVED=true
+    fi
+done
+if $PIADMIN_NOPASSWD_REMOVED; then
+    log_warn "${ADMIN_USER} now requires a password for sudo."
+    log_warn "Future re-runs of this script will prompt for it."
+    log_warn "Set a strong password if you have not already: passwd ${ADMIN_USER}"
+fi
+
+systemctl reload ssh || systemctl restart ssh
+log_info "sshd hardened: PasswordAuthentication=no, PermitRootLogin=no, AllowUsers=${ALLOW_USERS}, AcceptEnv BORG_PASSPHRASE*"
 
 # ============================================================
 # STEP 8: Configure firewall
@@ -290,338 +515,362 @@ ufw --force enable
 log_info "Firewall configured (Tailscale-only access)"
 
 # ============================================================
-# STEP 9: Initialize Borg repo
+# STEP 8b: Tailscale ACL probe (non-fatal)
+# ============================================================
+# The Pi should be reachable INBOUND from neuromancer + wintermute but
+# should not be able to initiate OUTBOUND to anything on the tailnet. The
+# tailnet's ACL policy is what enforces this — see docs/SETUP-BACKUP-PI.md
+# "Tailscale ACLs" for the exact JSON. The script can't apply ACLs (they're
+# managed in the Tailscale admin console), but it can detect when they
+# aren't restrictive yet and warn loudly.
+log_step "Tailscale ACL probe"
+
+# Pick a probe target — try a known peer the user is likely to have. Falls
+# back gracefully if no peer matches (e.g. a fresh tailnet with only the Pi).
+PROBE_TARGETS=("neuromancer" "wintermute")
+PROBE_RESULT="no-target"
+for target in "${PROBE_TARGETS[@]}"; do
+    if tailscale status "$target" &>/dev/null; then
+        if timeout 5 tailscale ping -c 1 -timeout 3s "$target" &>/dev/null; then
+            PROBE_RESULT="reachable:${target}"
+        else
+            PROBE_RESULT="blocked:${target}"
+        fi
+        break
+    fi
+done
+
+case "$PROBE_RESULT" in
+    blocked:*)
+        log_info "Pi cannot initiate outbound to ${PROBE_RESULT#blocked:} — ACLs appear restrictive ✓"
+        ;;
+    reachable:*)
+        log_warn ""
+        log_warn "Pi CAN initiate outbound to ${PROBE_RESULT#reachable:} over Tailscale."
+        log_warn "This means tailnet ACLs are NOT yet restricting tag:backup-target."
+        log_warn "A compromised Pi could pivot to your other tailnet devices."
+        log_warn "Follow the ACL setup instructions printed at the end of this run."
+        log_warn ""
+        ;;
+    no-target)
+        log_warn "Could not probe Tailscale ACLs (no known peer to test against)."
+        log_warn "Manually verify after setup: tailscale ping <peer-host> from the Pi"
+        log_warn "should fail once ACLs restrict tag:backup-target."
+        ;;
+esac
+
+# ============================================================
+# STEP 9: Initialize Borg repos (one per client)
 # ============================================================
 log_step "Borg repository setup"
 
-# Track whether we just initialized the repo this run, so the key export
-# (and its scary warning) only happens on first install or drive replacement —
-# not on every routine re-run when the user has already saved the key.
+# Track whether we exported any new keys this run — only print the scary
+# "SAVE THIS KEY" warning when at least one new repo was initialized, so
+# routine re-runs stay quiet.
 BORG_KEY_EXPORTED_THIS_RUN=false
 
-if [[ -d "$BORG_REPO_PATH/data" ]]; then
-    log_info "Borg repo already exists at $BORG_REPO_PATH"
-else
-    sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
-        borg init --encryption=repokey-blake2 "$BORG_REPO_PATH"
-    log_info "Borg repo initialized"
+for name in $CLIENTS; do
+    repo_path=$(client_var "$name" REPO_PATH)
+    if [[ -d "$repo_path/data" ]]; then
+        log_info "Borg repo for $name already exists at $repo_path"
+        continue
+    fi
 
-    # Export the encryption key to a file the user can copy off the Pi.
-    # Done once, at repo creation. The key never changes for an existing repo,
-    # so a re-export on every run would just recreate a file the user already
-    # saved (or deliberately deleted). To re-export manually any time:
-    #   sudo -u borg BORG_PASSPHRASE='<passphrase>' \
-    #       borg key export /mnt/backup/borg /tmp/borg-key.txt
-    sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
-        borg key export "$BORG_REPO_PATH" /home/borg/borg-key-backup.txt
-    cp /home/borg/borg-key-backup.txt /home/"${ADMIN_USER}"/borg-key-backup.txt
-    rm /home/borg/borg-key-backup.txt
-    chown "${ADMIN_USER}":"${ADMIN_USER}" /home/"${ADMIN_USER}"/borg-key-backup.txt
-    chmod 600 /home/"${ADMIN_USER}"/borg-key-backup.txt
-    log_warn "Borg key exported to /home/${ADMIN_USER}/borg-key-backup.txt"
-    log_warn ">>> SAVE THIS KEY SECURELY AND DELETE FROM PI <<<"
+    # The conf no longer holds passphrases — prompt the operator. Read
+    # interactively from the controlling TTY so a piped/scripted invocation
+    # fails loudly rather than initializing with an empty passphrase.
+    log_warn "No repo exists at $repo_path for client '$name' — fresh init required."
+    log_warn "The Pi does not store borg passphrases. Enter the passphrase NOW."
+    log_warn "It will also be stored in Infisical on the manager (neuromancer)"
+    log_warn "as BORG_REMOTE_PASSPHRASE_$(echo "$name" | tr 'a-z-' 'A-Z_'), so make"
+    log_warn "sure they match."
+    if [[ ! -t 0 ]]; then
+        log_error "stdin is not a TTY; cannot prompt for the borg passphrase."
+        log_error "Re-run this script in an interactive session (sudo bash setup-backup-pi.sh)"
+        exit 1
+    fi
+    init_passphrase=""
+    while [[ -z "$init_passphrase" ]]; do
+        read -rs -p "Passphrase for $name's borg repo: " init_passphrase </dev/tty
+        echo
+        if [[ -z "$init_passphrase" ]]; then
+            log_warn "Empty passphrase rejected; try again."
+        fi
+    done
+    read -rs -p "Confirm passphrase: " confirm </dev/tty
+    echo
+    if [[ "$init_passphrase" != "$confirm" ]]; then
+        log_error "Passphrases do not match. Aborting before repo init."
+        unset init_passphrase confirm
+        exit 1
+    fi
+    unset confirm
+
+    sudo -u borg BORG_PASSPHRASE="$init_passphrase" \
+        borg init --encryption=repokey-blake2 "$repo_path"
+    log_info "Borg repo for $name initialized at $repo_path"
+
+    # Export the encryption key once, at repo creation. The repokey is
+    # already inside the repo (wrapped by the passphrase); this exported
+    # copy is just a recovery option if the repo files are damaged.
+    key_dst="/home/${ADMIN_USER}/borg-key-backup-${name}.txt"
+    sudo -u borg BORG_PASSPHRASE="$init_passphrase" \
+        borg key export "$repo_path" "/home/borg/borg-key-${name}.txt"
+    mv "/home/borg/borg-key-${name}.txt" "$key_dst"
+    chown "${ADMIN_USER}":"${ADMIN_USER}" "$key_dst"
+    chmod 600 "$key_dst"
+    unset init_passphrase
+    log_warn "Borg key for $name exported to $key_dst"
+    log_warn ">>> SAVE THIS KEY OFF THE PI AND THEN DELETE IT <<<"
     BORG_KEY_EXPORTED_THIS_RUN=true
-fi
+done
 
 # ============================================================
-# STEP 10: Borg restricted shell wrapper
+# STEP 10: Borg restricted shell wrapper (arg-driven)
 # ============================================================
+# Called from the authorized_keys forced command as
+#   /usr/local/bin/borg-serve-only.sh <client-name>
+# Validates the client name against /etc/backup-pi.clients.env (defense in
+# depth — even if a leaked key were re-issued with a tampered command=,
+# the wrapper still pins the repo path to the one that client is allowed).
 log_step "Borg append-only restriction"
 
 cat > /usr/local/bin/borg-serve-only.sh << 'BORGWRAPPER'
 #!/bin/bash
-# Restricted shell for borg user — only allows borg serve in append-only mode.
-# This is the borg user's login shell, so any SSH connection as borg
-# runs borg serve unconditionally.
-exec borg serve --restrict-to-path /mnt/backup/borg --append-only
+set -e
+
+CLIENT_NAME="${1:-}"
+
+# Shape check first — keeps a malformed name out of the env lookup.
+if [[ ! "$CLIENT_NAME" =~ ^[a-z0-9-]+$ ]]; then
+    logger -t borg-serve-only "rejected: bad client name shape: ${CLIENT_NAME:-<empty>}"
+    echo "ERROR: invalid client name" >&2
+    exit 1
+fi
+
+# shellcheck source=/dev/null
+. /etc/backup-pi.clients.env
+
+# Allowlist check: $CLIENTS is space-separated.
+allowed=false
+for c in $CLIENTS; do
+    [[ "$c" == "$CLIENT_NAME" ]] && { allowed=true; break; }
+done
+if ! $allowed; then
+    logger -t borg-serve-only "rejected: not in CLIENTS allowlist: $CLIENT_NAME"
+    echo "ERROR: client not allowed" >&2
+    exit 1
+fi
+
+# Look up repo path for this client.
+upper=$(echo "$CLIENT_NAME" | tr 'a-z-' 'A-Z_')
+varname="CLIENT_${upper}_REPO_PATH"
+repo_path="${!varname:-}"
+
+if [[ -z "$repo_path" ]]; then
+    logger -t borg-serve-only "no REPO_PATH set for $CLIENT_NAME"
+    echo "ERROR: client repo path not configured" >&2
+    exit 1
+fi
+
+exec borg serve --restrict-to-path "$repo_path" --append-only
 BORGWRAPPER
 
 chmod 755 /usr/local/bin/borg-serve-only.sh
 
-# Add to /etc/shells if not present (required for chsh)
-if ! grep -q "/usr/local/bin/borg-serve-only.sh" /etc/shells; then
-    echo "/usr/local/bin/borg-serve-only.sh" >> /etc/shells
-fi
-
-chsh -s /usr/local/bin/borg-serve-only.sh borg
-log_info "Borg user restricted to append-only borg serve"
-
-# ============================================================
-# STEP 11: Initialize Kopia repo
-# ============================================================
-log_step "Kopia repository setup"
-
-KOPIA_CONFIG_DIR="/home/kopiauser/.config/kopia"
-
-if [[ -d "$KOPIA_REPO_PATH/kopia.repository" ]] || [[ -f "$KOPIA_REPO_PATH/kopia.repository.f" ]]; then
-    log_info "Kopia repo already exists at $KOPIA_REPO_PATH"
-else
-    sudo -u kopiauser kopia repository create filesystem \
-        --path "$KOPIA_REPO_PATH" \
-        --password "$KOPIA_REPO_PASSWORD"
-    log_info "Kopia repo initialized"
-fi
-
-# ============================================================
-# STEP 12: Kopia server systemd unit
-# ============================================================
-log_step "Kopia server setup"
-
-# Generate TLS cert if it doesn't exist yet (persists across restarts).
-# Track whether we generated a new cert this run, so the summary can show
-# the >>> RECORD THE FINGERPRINT <<< warning only when it actually matters.
-# A re-run reuses the existing cert; clients are already configured with
-# its fingerprint and don't need to do anything.
-KOPIA_CERT_FILE="/home/kopiauser/.config/kopia/server.cert"
-KOPIA_KEY_FILE="/home/kopiauser/.config/kopia/server.key"
-KOPIA_CERT_GENERATED_THIS_RUN=false
-if [[ ! -f "$KOPIA_CERT_FILE" ]]; then
-    sudo -u kopiauser openssl req -x509 -newkey rsa:4096 \
-        -keyout "$KOPIA_KEY_FILE" -out "$KOPIA_CERT_FILE" \
-        -days 3650 -nodes -subj "/CN=kopia-server" 2>/dev/null
-    log_info "Generated TLS certificate"
-    KOPIA_CERT_GENERATED_THIS_RUN=true
-else
-    log_info "TLS certificate already exists, reusing"
-fi
-
-cat > /etc/systemd/system/kopia-server.service << EOF
-[Unit]
-Description=Kopia Repository Server
-After=network-online.target tailscaled.service
-Wants=network-online.target
-RequiresMountsFor=$MOUNT_POINT
-
-[Service]
-Type=simple
-User=kopiauser
-Group=kopiauser
-ExecStart=/usr/bin/kopia server start \
-    --address=${TAILSCALE_IP}:${KOPIA_SERVER_PORT} \
-    --tls-cert-file /home/kopiauser/.config/kopia/server.cert \
-    --tls-key-file /home/kopiauser/.config/kopia/server.key \
-    --server-control-password=${KOPIA_SERVER_CONTROL_PASSWORD}
-Restart=on-failure
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable kopia-server
-systemctl restart kopia-server
-log_info "Kopia server running on https://${TAILSCALE_IP}:${KOPIA_SERVER_PORT}"
-
-# Wait for server to become ready
-sleep 5
-
-# Capture cert fingerprint
-KOPIA_FINGERPRINT=""
-if sudo -u kopiauser kopia server status --address="https://${TAILSCALE_IP}:${KOPIA_SERVER_PORT}" 2>/dev/null; then
-    KOPIA_FINGERPRINT=$(sudo -u kopiauser kopia server status \
-        --address="https://${TAILSCALE_IP}:${KOPIA_SERVER_PORT}" 2>&1 | grep -i fingerprint | head -1 || true)
-fi
-
-# Try to get fingerprint from the TLS cert file
-if [[ -z "$KOPIA_FINGERPRINT" ]]; then
-    CERT_FILE="/home/kopiauser/.config/kopia/server.cert"
-    if [[ -n "$CERT_FILE" ]]; then
-        KOPIA_FINGERPRINT=$(openssl x509 -in "$CERT_FILE" -noout -fingerprint -sha256 2>/dev/null \
-            | sed 's/sha256 Fingerprint=//i' | tr -d ':' | tr '[:upper:]' '[:lower:]' || true)
-    fi
-fi
-
-if [[ -n "$KOPIA_FINGERPRINT" ]]; then
-    log_info "Kopia TLS fingerprint: $KOPIA_FINGERPRINT"
-else
-    log_warn "Could not automatically capture Kopia TLS fingerprint"
-    log_warn "Check the Kopia server logs: journalctl -u kopia-server"
-fi
-
-# ============================================================
-# STEP 13: Add Kopia server user
-# ============================================================
-log_step "Kopia server user"
-
-# Connect to the repo first (needed for server user management)
-sudo -u kopiauser kopia repository connect filesystem \
-    --path "$KOPIA_REPO_PATH" \
-    --password "$KOPIA_REPO_PASSWORD" 2>/dev/null || true
-
-sudo -u kopiauser kopia server user add "$KOPIA_USER_NAME" \
-    --user-password "$KOPIA_USER_PASSWORD" 2>/dev/null || true
-
-# Restart server to pick up user changes
-systemctl restart kopia-server
-log_info "Kopia server user '$KOPIA_USER_NAME' configured"
-
-# ============================================================
-# STEP 14: Configure msmtp for email alerts
-# ============================================================
-log_step "Email configuration (msmtp)"
-
-cat > /etc/msmtprc << EOF
-# SMTP configuration for backup alerts
-defaults
-auth           on
-tls            on
-tls_trust_file /etc/ssl/certs/ca-certificates.crt
-logfile        /var/log/msmtp.log
-
-account        smtp
-host           ${SMTP_HOST}
-port           ${SMTP_PORT}
-from           ${ALERT_EMAIL}
-user           ${SMTP_USER}
-password       ${SMTP_PASSWORD}
-
-account default : smtp
-EOF
-
-chmod 600 /etc/msmtprc
-log_info "msmtp configured for ${SMTP_HOST}"
-
-# ============================================================
-# STEP 15: Health check script
-# ============================================================
-log_step "Health check script"
-
-cat > /home/"${ADMIN_USER}"/check-health.sh << 'HEALTHSCRIPT'
+# /usr/local/bin/borg-manage.sh — management path. Called from the
+# authorized_keys forced command for the manager key. Parses verb + client
+# from $SSH_ORIGINAL_COMMAND, validates both, reads BORG_PASSPHRASE from SSH
+# env (forwarded via SendEnv on the manager side), runs borg with hardcoded
+# args. Anything not in the allowlist is rejected and logged.
+cat > /usr/local/bin/borg-manage.sh << 'MANAGEWRAPPER'
 #!/bin/bash
+set -e
 
-ALERT_EMAIL="__ALERT_EMAIL__"
-HEALTHCHECK_URL="__HEALTHCHECK_URL__"
-MOUNT_POINT="__MOUNT_POINT__"
-BORG_REPO_PATH="__BORG_REPO_PATH__"
-BORG_PASSPHRASE="__BORG_PASSPHRASE__"
+# Parse "<verb> <client> [args...]" from SSH_ORIGINAL_COMMAND.
+cmd="${SSH_ORIGINAL_COMMAND:-}"
+read -r VERB CLIENT_NAME ARG1 ARG2 _ <<<"$cmd"
 
-ALERTS=()
-
-# Check if backup drive is mounted
-if ! mountpoint -q "$MOUNT_POINT"; then
-    ALERTS+=("CRITICAL: Backup drive not mounted at $MOUNT_POINT")
+if [[ ! "$VERB" =~ ^[a-z-]+$ ]]; then
+    logger -t borg-manage "rejected: bad verb shape: ${VERB:-<empty>}"
+    echo "ERROR: invalid verb" >&2
+    exit 1
+fi
+if [[ ! "$CLIENT_NAME" =~ ^[a-z0-9-]+$ ]]; then
+    logger -t borg-manage "rejected: bad client name: ${CLIENT_NAME:-<empty>}"
+    echo "ERROR: invalid client name" >&2
+    exit 1
 fi
 
-# Check disk usage (percentage)
-if mountpoint -q "$MOUNT_POINT"; then
-    USAGE=$(df --output=pcent "$MOUNT_POINT" | tail -1 | tr -d ' %')
-    if [ "$USAGE" -gt 85 ]; then
-        ALERTS+=("WARNING: Backup drive at ${USAGE}% capacity")
-    fi
+# shellcheck source=/dev/null
+. /etc/backup-pi.clients.env
 
-    # Check absolute free space
-    FREE_KB=$(df --output=avail "$MOUNT_POINT" | tail -1 | tr -d ' ')
-    FREE_GB=$((FREE_KB / 1048576))
-    if [ "$FREE_GB" -lt 500 ]; then
-        ALERTS+=("WARNING: Backup drive has only ${FREE_GB} GB free")
-    fi
+allowed=false
+for c in $CLIENTS; do [[ "$c" == "$CLIENT_NAME" ]] && { allowed=true; break; }; done
+if ! $allowed; then
+    logger -t borg-manage "rejected: not in CLIENTS allowlist: $CLIENT_NAME"
+    echo "ERROR: client not allowed" >&2
+    exit 1
 fi
 
-# Check borg repo freshness (48 hour threshold)
-if mountpoint -q "$MOUNT_POINT" && [ -d "$BORG_REPO_PATH/data" ]; then
-    LAST_ARCHIVE=$(sudo -u borg BORG_PASSPHRASE="$BORG_PASSPHRASE" \
-        borg list --last 1 --format '{time}' "$BORG_REPO_PATH" 2>/dev/null)
-    if [ -n "$LAST_ARCHIVE" ]; then
-        LAST_EPOCH=$(date -d "$LAST_ARCHIVE" +%s 2>/dev/null || echo 0)
-        NOW_EPOCH=$(date +%s)
-        AGE_HOURS=$(( (NOW_EPOCH - LAST_EPOCH) / 3600 ))
-        if [ "$AGE_HOURS" -gt 48 ]; then
-            ALERTS+=("WARNING: Last borg archive is ${AGE_HOURS} hours old (threshold: 48h)")
+upper=$(echo "$CLIENT_NAME" | tr 'a-z-' 'A-Z_')
+varname="CLIENT_${upper}_REPO_PATH"
+REPO_PATH="${!varname:-}"
+if [[ -z "$REPO_PATH" ]]; then
+    logger -t borg-manage "no REPO_PATH for $CLIENT_NAME"
+    echo "ERROR: client repo path not configured" >&2
+    exit 1
+fi
+
+if [[ -z "${BORG_PASSPHRASE:-}" ]]; then
+    logger -t borg-manage "rejected: no BORG_PASSPHRASE in env for $VERB $CLIENT_NAME"
+    echo "ERROR: BORG_PASSPHRASE must be forwarded via SSH SendEnv" >&2
+    exit 1
+fi
+export BORG_PASSPHRASE
+
+case "$VERB" in
+    prune)
+        # Hardcoded retention. No --prefix, no --keep-daily 0 from caller.
+        logger -t borg-manage "prune $CLIENT_NAME ($REPO_PATH)"
+        exec borg prune --keep-daily 14 --keep-weekly 4 --stats --show-rc "$REPO_PATH"
+        ;;
+    compact)
+        logger -t borg-manage "compact $CLIENT_NAME ($REPO_PATH)"
+        exec borg compact --show-rc "$REPO_PATH"
+        ;;
+    check)
+        logger -t borg-manage "check $CLIENT_NAME ($REPO_PATH)"
+        exec borg check --show-rc "$REPO_PATH"
+        ;;
+    list)
+        logger -t borg-manage "list $CLIENT_NAME ($REPO_PATH)"
+        exec borg list --short "$REPO_PATH"
+        ;;
+    list-last)
+        logger -t borg-manage "list-last $CLIENT_NAME ($REPO_PATH)"
+        exec borg list --last 1 --format '{isoformat}|{archive}' "$REPO_PATH"
+        ;;
+    info)
+        logger -t borg-manage "info $CLIENT_NAME ($REPO_PATH)"
+        exec borg info --json "$REPO_PATH"
+        ;;
+    extract)
+        # extract <archive> <path> — pipes contents of <path> from <archive> to stdout.
+        # Used by the restore-test to verify a known file is recoverable.
+        ARCHIVE="$ARG1"
+        EXTRACT_PATH="$ARG2"
+        if [[ ! "$ARCHIVE" =~ ^[A-Za-z0-9_:.-]+$ ]]; then
+            logger -t borg-manage "rejected: bad archive name: $ARCHIVE"
+            echo "ERROR: bad archive name" >&2
+            exit 1
         fi
-    fi
+        if [[ ! "$EXTRACT_PATH" =~ ^[A-Za-z0-9/_.-]+$ ]] || [[ "$EXTRACT_PATH" == *..* ]]; then
+            logger -t borg-manage "rejected: bad extract path: $EXTRACT_PATH"
+            echo "ERROR: bad extract path" >&2
+            exit 1
+        fi
+        logger -t borg-manage "extract $CLIENT_NAME ($REPO_PATH) :: $ARCHIVE :: $EXTRACT_PATH"
+        exec borg extract --stdout "${REPO_PATH}::${ARCHIVE}" "$EXTRACT_PATH"
+        ;;
+    *)
+        logger -t borg-manage "rejected: verb not in allowlist: $VERB"
+        echo "ERROR: verb not allowed" >&2
+        exit 1
+        ;;
+esac
+MANAGEWRAPPER
+
+chmod 755 /usr/local/bin/borg-manage.sh
+
+# borg's login shell stays /bin/bash. (An earlier revision chsh'd the borg
+# user to borg-serve-only.sh; that collided with sshd's `shell -c <forced>`
+# invocation pattern and broke the new arg-driven wrappers. /bin/bash here.)
+chsh -s /bin/bash borg
+
+# Clean up the wrapper's entry from /etc/shells if a prior run added it.
+if grep -q "^/usr/local/bin/borg-serve-only.sh$" /etc/shells 2>/dev/null; then
+    sed -i '\|^/usr/local/bin/borg-serve-only.sh$|d' /etc/shells
 fi
-
-# Check kopia server is running
-if ! systemctl is-active --quiet kopia-server; then
-    ALERTS+=("WARNING: Kopia server is not running — attempting restart")
-    systemctl start kopia-server 2>/dev/null || true
-fi
-
-# Touch health timestamp
-mkdir -p "$MOUNT_POINT/health" 2>/dev/null || true
-date > "$MOUNT_POINT/health/last-check.txt"
-
-# Send alerts if any
-if [ ${#ALERTS[@]} -gt 0 ]; then
-    BODY=$(printf '%s\n' "${ALERTS[@]}")
-    echo "$BODY" | mail -s "[Backup Pi] Health Alert" "$ALERT_EMAIL"
-    echo "[$(date)] ALERTS: $BODY" >> /var/log/backup-pi-health.log
-fi
-
-# Ping healthchecks.io if configured
-if [ -n "$HEALTHCHECK_URL" ]; then
-    if [ ${#ALERTS[@]} -gt 0 ]; then
-        # Report failure with alert text as POST body so the reason shows up
-        # in the healthchecks.io UI and notification emails.
-        curl -fsS --retry 3 --data-raw "$BODY" "${HEALTHCHECK_URL}/fail" > /dev/null 2>&1 || true
-    else
-        # Report success
-        curl -fsS --retry 3 "$HEALTHCHECK_URL" > /dev/null 2>&1 || true
-    fi
-fi
-HEALTHSCRIPT
-
-# Substitute actual config values into the health check script
-sed -i "s|__ALERT_EMAIL__|${ALERT_EMAIL}|g" /home/"${ADMIN_USER}"/check-health.sh
-sed -i "s|__HEALTHCHECK_URL__|${HEALTHCHECK_URL}|g" /home/"${ADMIN_USER}"/check-health.sh
-sed -i "s|__MOUNT_POINT__|${MOUNT_POINT}|g" /home/"${ADMIN_USER}"/check-health.sh
-sed -i "s|__BORG_REPO_PATH__|${BORG_REPO_PATH}|g" /home/"${ADMIN_USER}"/check-health.sh
-sed -i "s|__BORG_PASSPHRASE__|${BORG_REPO_PASSPHRASE}|g" /home/"${ADMIN_USER}"/check-health.sh
-
-chown "${ADMIN_USER}":"${ADMIN_USER}" /home/"${ADMIN_USER}"/check-health.sh
-chmod 755 /home/"${ADMIN_USER}"/check-health.sh
-log_info "Health check script installed"
+log_info "Borg wrappers installed: borg-serve-only.sh (backup, append-only) + borg-manage.sh (management, allowlist-gated)"
 
 # ============================================================
-# STEP 16: Borg prune script
+# STEPS 11-13: Kopia tear-down (kopia is retired)
 # ============================================================
-log_step "Borg prune script"
+# Kopia was previously the remote backup target for wintermute (a Windows
+# desktop). Wintermute has migrated to Linux + borgmatic, so kopia is no
+# longer used. Its presence on the Pi was a physical-theft liability:
+# KOPIA_REPO_PASSWORD was stored in /etc/backup-pi.conf, meaning the kopia
+# repo on the USB drive was decryptable from the Pi alone.
+#
+# This block tears down kopia idempotently. Runs on every re-run; once
+# nothing is left to remove, every line is a no-op.
+log_step "Kopia tear-down"
 
-cat > /home/"${ADMIN_USER}"/borg-prune.sh << PRUNESCRIPT
-#!/bin/bash
-# Run borg prune and compact as the borg user.
-# This script is called from cron as root.
-export BORG_PASSPHRASE="${BORG_REPO_PASSPHRASE}"
+systemctl stop kopia-server 2>/dev/null || true
+systemctl disable kopia-server 2>/dev/null || true
+systemctl mask kopia-server 2>/dev/null || true
+if [[ -f /etc/systemd/system/kopia-server.service ]]; then
+    rm -f /etc/systemd/system/kopia-server.service
+    systemctl daemon-reload
+fi
 
-sudo -u borg BORG_PASSPHRASE="\$BORG_PASSPHRASE" borg prune \\
-    --keep-daily 3 \\
-    --keep-weekly 4 \\
-    --keep-monthly 6 \\
-    ${BORG_REPO_PATH}
+# Remove kopia data + user. The repo data and any historical snapshots
+# from when wintermute backed up via kopia are deliberately discarded.
+rm -rf /mnt/backup/kopia /home/kopiauser 2>/dev/null || true
+if id kopiauser &>/dev/null; then
+    userdel kopiauser 2>/dev/null || true
+    log_info "Removed kopiauser system user"
+fi
 
-sudo -u borg BORG_PASSPHRASE="\$BORG_PASSPHRASE" borg compact ${BORG_REPO_PATH}
-PRUNESCRIPT
+# Remove kopia package + apt source. Best-effort; ignore failures on
+# already-clean systems.
+if command -v kopia &>/dev/null; then
+    apt purge -y kopia 2>/dev/null || true
+    log_info "Purged kopia package"
+fi
+rm -f /usr/share/keyrings/kopia-keyring.gpg /etc/apt/sources.list.d/kopia.list
 
-chown "${ADMIN_USER}":"${ADMIN_USER}" /home/"${ADMIN_USER}"/borg-prune.sh
-chmod 755 /home/"${ADMIN_USER}"/borg-prune.sh
-log_info "Borg prune script installed"
+# (STEP 14 — msmtp/email alerting — was removed in a prior revision.
+# Notifications flow through healthchecks.io exclusively.)
+
+log_info "Kopia tear-down complete"
 
 # ============================================================
-# STEP 17: Cron jobs
+# STEPS 15-16: Pi-side management script tear-down
+# ============================================================
+log_step "Pi-side management tear-down"
+
+# Previous revisions installed check-health.sh, borg-prune.sh, and
+# borg-check-all.sh on the Pi to manage repos using passphrases stored in
+# /etc/backup-pi.conf. Those scripts are now retired — all management runs
+# from neuromancer via scripts/borg-pi-manage.sh, with passphrases injected
+# per-operation via SSH SendEnv. The Pi holds no borg passphrases.
+#
+# Remove the old scripts and any leftover health log so a re-run cleanly
+# transitions from the old layout to the new one.
+rm -f /home/"${ADMIN_USER}"/check-health.sh \
+      /home/"${ADMIN_USER}"/borg-prune.sh \
+      /home/"${ADMIN_USER}"/borg-check-all.sh
+# Health log is rotated — leave any existing /var/log/backup-pi-health.log
+# alone as historical record. Future runs won't write to it.
+log_info "Removed legacy Pi-side management scripts"
+
+# ============================================================
+# STEP 17: Cron jobs (SMART monitoring only)
 # ============================================================
 log_step "Cron jobs"
 
-# Write a dedicated crontab file (overwrite, not append — idempotent)
+# The Pi is now passive. The only cron job is SMART drive health (added
+# below in STEP 18 if smartctl supports the drive). No borg cron jobs —
+# prune/check/restore-test run from neuromancer's user crontab.
 cat > /etc/cron.d/backup-pi << 'EOF'
 # Backup Pi cron jobs
-
-# Health check — every 6 hours (root for sudo -u borg and systemctl access)
-0 */6 * * * root /home/__ADMIN_USER__/check-health.sh 2>&1 | logger -t backup-pi-health
-
-# Borg prune — weekly Sunday 3am (root to sudo -u borg)
-0 3 * * 0 root /home/__ADMIN_USER__/borg-prune.sh 2>&1 | logger -t borg-prune
-
-# Borg integrity check — weekly Sunday 4am
-0 4 * * 0 root sudo -u borg BORG_PASSPHRASE="__BORG_PASSPHRASE__" borg check /mnt/backup/borg 2>&1 | logger -t borg-check
+# (Borg management cron lives on neuromancer, not the Pi. See
+# scripts/borg-pi-manage.sh on neuromancer.)
 EOF
-
-# Substitute placeholders into the cron file
-sed -i "s|__ADMIN_USER__|${ADMIN_USER}|g" /etc/cron.d/backup-pi
-sed -i "s|__BORG_PASSPHRASE__|${BORG_REPO_PASSPHRASE}|g" /etc/cron.d/backup-pi
-
 chmod 644 /etc/cron.d/backup-pi
-log_info "Cron jobs installed"
+log_info "Cron file rewritten (Pi-side borg jobs removed)"
 
 # ============================================================
 # STEP 18: SMART monitoring (best-effort)
@@ -676,21 +925,31 @@ else
     fi
 
     # /usr/local/bin/pi-rpc.sh — forced SSH command + dispatcher
+    # Allowlist contracted to status / apt-upgrade / reboot. Borg verbs
+    # (check, prune, list, restore-test) are NOT routed through this path;
+    # they go through /usr/local/bin/borg-manage.sh under the manager key,
+    # which accepts BORG_PASSPHRASE via SSH SendEnv. Kopia is retired.
     cat > /usr/local/bin/pi-rpc.sh << 'RPCSCRIPT'
 #!/bin/bash
 # Forced SSH command for the webadmin user. Whitelists $SSH_ORIGINAL_COMMAND
 # against the fixed set below; rejects everything else. Installed via:
-#   command="/usr/local/bin/pi-rpc.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <key>
-# in ~webadmin/.ssh/authorized_keys. Both pi-status.sh and pi-action.sh
-# are invoked via sudo so they run as root with a clean environment.
+#   command="/usr/local/bin/pi-rpc.sh",restrict <key>
+# in ~webadmin/.ssh/authorized_keys. pi-status.sh and pi-action.sh are
+# invoked via sudo so they run as root with a clean environment.
 
 set -e
 
 case "${SSH_ORIGINAL_COMMAND:-}" in
     status)
+        # pi-status.sh reads BORG_PASSPHRASE_<NAME> env vars (forwarded via
+        # SendEnv from the web admin) to populate per-client archive count
+        # and last-archive time. Without them it falls back to filesystem
+        # stat. Either way, no passphrase is stored on the Pi.
+        # env_keep in /etc/sudoers.d/webadmin lets BORG_PASSPHRASE_* survive
+        # the sudo boundary.
         exec sudo -n /usr/local/sbin/pi-status.sh
         ;;
-    "action restart-kopia"|"action apt-upgrade"|"action borg-check"|"action borg-prune"|"action reboot")
+    "action apt-upgrade"|"action reboot")
         action="${SSH_ORIGINAL_COMMAND#action }"
         exec sudo -n /usr/local/sbin/pi-action.sh "$action"
         ;;
@@ -705,15 +964,22 @@ RPCSCRIPT
     chmod 755 /usr/local/bin/pi-rpc.sh
 
     # /usr/local/sbin/pi-status.sh — emits one JSON object describing Pi state.
-    # Runs as root (via sudo from pi-rpc.sh) so it can read /etc/backup-pi.conf
-    # directly and sudo -u borg cleanly.
+    # Runs as root via sudo from pi-rpc.sh. For each client:
+    #   - If BORG_PASSPHRASE_<UPPERNAME> is in the env (forwarded via SSH
+    #     SendEnv from the web admin, which fetches from Infisical), call
+    #     `borg list` for full archive_count + last_archive_*.
+    #   - Else fall back to stat'ing <repo>/transactions mtime for
+    #     last_activity_iso.
+    # Either way, no passphrase is persisted on the Pi.
     cat > /usr/local/sbin/pi-status.sh << 'STATUSSCRIPT'
 #!/bin/bash
-# Gathers backup-pi state and emits a single JSON object on stdout.
-# Invoked as root via the SSH RPC dispatcher.
-
 set -u
 
+# shellcheck source=/dev/null
+source /etc/backup-pi.clients.env
+
+# MOUNT_POINT comes from /etc/backup-pi.conf but the conf is mode 600 root.
+# We're root (via sudo), so we can read it.
 # shellcheck source=/dev/null
 source /etc/backup-pi.conf
 
@@ -731,34 +997,73 @@ if mountpoint -q "$MOUNT_POINT"; then
     DISK_PERCENT=$(echo "$DISK_LINE" | awk '{print $4}' | tr -d %)
 fi
 
-LAST_BORG_ISO=""
-LAST_BORG_NAME=""
-if $DRIVE_MOUNTED && [[ -d "$BORG_REPO_PATH/data" ]]; then
-    BORG_LINE=$(sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
-        borg list --last 1 --format '{time}|{archive}' "$BORG_REPO_PATH" 2>/dev/null | head -1 || true)
-    if [[ -n "$BORG_LINE" ]]; then
-        LAST_BORG_ISO="${BORG_LINE%%|*}"
-        LAST_BORG_NAME="${BORG_LINE#*|}"
-    fi
-fi
+NOW_EPOCH=$(date +%s)
+CLIENT_JSON_PARTS=()
+for name in $CLIENTS; do
+    upper=$(echo "$name" | tr 'a-z-' 'A-Z_')
+    repo_var="CLIENT_${upper}_REPO_PATH"
+    pass_var="BORG_PASSPHRASE_${upper}"
+    repo_path="${!repo_var:-}"
+    [ -z "$repo_path" ] && continue
 
-KOPIA_ACTIVE=$(systemctl is-active kopia-server 2>/dev/null || echo "inactive")
+    last_iso=""
+    last_name=""
+    last_activity_epoch=0
+    archive_count=0
+    has_passphrase=false
+    error=""
+    if [[ -n "${!pass_var:-}" ]]; then
+        has_passphrase=true
+    fi
+
+    if $DRIVE_MOUNTED && [[ -d "$repo_path/data" ]]; then
+        # Fallback path: filesystem mtime of <repo>/transactions, which is
+        # rewritten on every successful borg create commit. No passphrase
+        # required. Sufficient to detect "wintermute hasn't backed up."
+        if [[ -f "$repo_path/transactions" ]]; then
+            last_activity_epoch=$(stat -c %Y "$repo_path/transactions")
+            last_iso=$(date -u -d "@$last_activity_epoch" +%Y-%m-%dT%H:%M:%SZ)
+        fi
+
+        # Richer path: only when the manager forwarded a passphrase via SSH
+        # SendEnv. Replaces last_iso with the actual archive timestamp and
+        # gives us archive_count + last_archive_name.
+        if $has_passphrase; then
+            borg_line=$(sudo -u borg BORG_PASSPHRASE="${!pass_var}" \
+                borg list --last 1 --format '{isoformat}|{archive}' "$repo_path" 2>/dev/null | head -1 || true)
+            if [[ -n "$borg_line" ]]; then
+                last_iso="${borg_line%%|*}"
+                last_name="${borg_line#*|}"
+            else
+                # Empty result with a passphrase set = either no archives or
+                # wrong passphrase. Probe to distinguish.
+                if sudo -u borg BORG_PASSPHRASE="${!pass_var}" \
+                    borg list --short "$repo_path" 2>&1 >/dev/null | grep -q "passphrase"; then
+                    error="passphrase mismatch on $repo_path"
+                fi
+            fi
+            archive_count=$(sudo -u borg BORG_PASSPHRASE="${!pass_var}" \
+                borg list --short "$repo_path" 2>/dev/null | wc -l || echo 0)
+        fi
+    fi
+
+    CLIENT_JSON_PARTS+=("{\"name\":\"$name\",\"repo_path\":\"$repo_path\",\"last_archive_iso\":\"$last_iso\",\"last_archive_name\":\"$last_name\",\"archive_count\":$archive_count,\"has_passphrase\":$has_passphrase,\"error\":\"$error\"}")
+done
+
+# Join with commas
+CLIENTS_JSON=""
+for ((i=0; i<${#CLIENT_JSON_PARTS[@]}; i++)); do
+    [ $i -gt 0 ] && CLIENTS_JSON="${CLIENTS_JSON},"
+    CLIENTS_JSON="${CLIENTS_JSON}${CLIENT_JSON_PARTS[$i]}"
+done
 
 TS_BACKEND=$(tailscale status --json 2>/dev/null \
     | grep -oP '"BackendState":\s*"\K[^"]+' | head -1 || echo "")
 TS_IP=$(tailscale ip -4 2>/dev/null | head -1 || echo "")
 
-LAST_HEALTH_EPOCH=0
-HEALTH_FILE="$MOUNT_POINT/health/last-check.txt"
-if [[ -f "$HEALTH_FILE" ]]; then
-    LAST_HEALTH_EPOCH=$(stat -c %Y "$HEALTH_FILE")
-fi
-
 UPTIME_SECONDS=$(awk '{print int($1)}' /proc/uptime)
 HOSTNAME=$(hostname)
-NOW_EPOCH=$(date +%s)
 
-# Escape strings minimally — none of these should contain " or \ in practice
 cat <<JSON
 {
   "hostname": "$HOSTNAME",
@@ -772,19 +1077,10 @@ cat <<JSON
     "avail_kb": $DISK_AVAIL_KB,
     "percent": $DISK_PERCENT
   },
-  "borg": {
-    "last_archive_iso": "$LAST_BORG_ISO",
-    "last_archive_name": "$LAST_BORG_NAME"
-  },
-  "kopia": {
-    "service_active": "$KOPIA_ACTIVE"
-  },
+  "clients": [$CLIENTS_JSON],
   "tailscale": {
     "backend_state": "$TS_BACKEND",
     "ip": "$TS_IP"
-  },
-  "health": {
-    "last_check_epoch": $LAST_HEALTH_EPOCH
   }
 }
 JSON
@@ -793,27 +1089,15 @@ STATUSSCRIPT
     chmod 755 /usr/local/sbin/pi-status.sh
 
     # /usr/local/sbin/pi-action.sh — runs a whitelisted maintenance action.
-    # Invoked as root (via sudo from pi-rpc.sh, with arg-matching in sudoers).
+    # Borg verbs are NOT here — they live in /usr/local/bin/borg-manage.sh
+    # under the manager key (so passphrases never persist on the Pi).
     cat > /usr/local/sbin/pi-action.sh << 'ACTIONSCRIPT'
 #!/bin/bash
-# Runs one whitelisted maintenance action. First arg = action name.
-# Invoked as root via sudo from /usr/local/bin/pi-rpc.sh; sudoers limits
-# which (script + arg) tuples webadmin can invoke.
-
 set -u
 
 ACTION="${1:-}"
 
-# shellcheck source=/dev/null
-source /etc/backup-pi.conf
-
 case "$ACTION" in
-    restart-kopia)
-        echo ">>> Restarting kopia-server..."
-        systemctl restart kopia-server
-        sleep 2
-        systemctl status kopia-server --no-pager
-        ;;
     apt-upgrade)
         export DEBIAN_FRONTEND=noninteractive
         echo ">>> apt-get update"
@@ -821,16 +1105,6 @@ case "$ACTION" in
         echo ">>> apt-get upgrade -y"
         apt-get upgrade -y
         echo ">>> done"
-        ;;
-    borg-check)
-        echo ">>> borg check (this can take a while)..."
-        sudo -u borg BORG_PASSPHRASE="$BORG_REPO_PASSPHRASE" \
-            borg check "$BORG_REPO_PATH"
-        echo ">>> borg check passed"
-        ;;
-    borg-prune)
-        echo ">>> running /home/$ADMIN_USER/borg-prune.sh"
-        bash "/home/$ADMIN_USER/borg-prune.sh"
         ;;
     reboot)
         echo ">>> rebooting in 5 seconds..."
@@ -846,25 +1120,27 @@ ACTIONSCRIPT
     chown root:root /usr/local/sbin/pi-action.sh
     chmod 755 /usr/local/sbin/pi-action.sh
 
-    # SSH key restriction (forced command, no port/X11/agent forwarding, no pty)
+    # SSH key restriction (forced command + `restrict` keyword)
     mkdir -p /home/webadmin/.ssh
     cat > /home/webadmin/.ssh/authorized_keys << EOF
-command="/usr/local/bin/pi-rpc.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ${WEBADMIN_SSH_PUBKEY}
+command="/usr/local/bin/pi-rpc.sh",restrict ${WEBADMIN_SSH_PUBKEY}
 EOF
     chown -R webadmin:webadmin /home/webadmin/.ssh
     chmod 700 /home/webadmin/.ssh
     chmod 600 /home/webadmin/.ssh/authorized_keys
 
     # Sudoers — write to tempfile, validate with visudo -cf, then install.
-    # Each (script + arg) tuple is granted explicitly; webadmin has no other sudo.
+    # env_keep lets pi-status.sh see BORG_PASSPHRASE_<NAME> env vars
+    # forwarded via SSH SendEnv from the web admin; nothing else stays.
     SUDOERS_TMP=$(mktemp)
     cat > "$SUDOERS_TMP" << 'SUDOERS'
-# webadmin: only the actions invoked by /usr/local/bin/pi-rpc.sh
+# webadmin: only the actions invoked by /usr/local/bin/pi-rpc.sh.
+# Keep BORG_PASSPHRASE_<NAME> across the sudo boundary so pi-status.sh can
+# emit full per-client status when the manager forwards passphrases.
+Defaults:webadmin env_keep += "BORG_PASSPHRASE_*"
+
 webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-status.sh
-webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh restart-kopia
 webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh apt-upgrade
-webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh borg-check
-webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh borg-prune
 webadmin ALL=(root) NOPASSWD: /usr/local/sbin/pi-action.sh reboot
 SUDOERS
 
@@ -894,50 +1170,82 @@ echo ""
 echo "  Tailscale IP:          $TAILSCALE_IP"
 echo "  Tailscale hostname:    $TAILSCALE_HOSTNAME"
 echo ""
-echo "  Borg repo:             $BORG_REPO_PATH"
+echo "  Configured clients:    $CLIENTS"
+for _name in $CLIENTS; do
+    _repo=$(client_var "$_name" REPO_PATH)
+    echo "    - $_name → $_repo"
+done
+unset _name _repo
 if $BORG_KEY_EXPORTED_THIS_RUN; then
-echo "  Borg key exported to:  /home/${ADMIN_USER}/borg-key-backup.txt"
-echo -e "  ${RED}>>> SAVE THIS KEY SECURELY AND DELETE FROM PI <<<${NC}"
+echo -e "  ${RED}>>> One or more new repos were created this run.${NC}"
+echo -e "  ${RED}>>> SAVE /home/${ADMIN_USER}/borg-key-backup-<name>.txt OFF THE PI <<<${NC}"
 fi
 echo ""
-echo "  Kopia server:          https://${TAILSCALE_IP}:${KOPIA_SERVER_PORT}"
-if [[ -n "$KOPIA_FINGERPRINT" ]]; then
-echo "  Kopia cert fingerprint: $KOPIA_FINGERPRINT"
-fi
-if $KOPIA_CERT_GENERATED_THIS_RUN; then
-echo -e "  ${RED}>>> RECORD THE FINGERPRINT FOR CLIENT SETUP <<<${NC}"
-else
-echo "  (Kopia cert + fingerprint unchanged from previous setup — clients OK)"
-fi
-echo "  Kopia server user:     $KOPIA_USER_NAME"
+echo "  Kopia:                 retired (data + service torn down this run if present)"
 echo ""
-echo "  Borg user shell:       /usr/local/bin/borg-serve-only.sh (append-only)"
+echo "  Borg backup path:      /usr/local/bin/borg-serve-only.sh (append-only)"
+echo "  Borg mgmt path:        /usr/local/bin/borg-manage.sh (allowlist, env passphrase)"
 if [[ "${WEBADMIN_SSH_PUBKEY:-CONFIGURE_ME}" != "CONFIGURE_ME" ]]; then
-echo "  Web admin RPC:         /usr/local/bin/pi-rpc.sh (webadmin user)"
+echo "  Web admin RPC:         /usr/local/bin/pi-rpc.sh (status, apt-upgrade, reboot)"
 fi
 echo "  Firewall:              Active (Tailscale only)"
-echo "  Health checks:         Every 6 hours via cron"
-echo "  Borg prune:            Weekly Sunday 3am"
-echo "  Borg integrity check:  Weekly Sunday 4am"
-echo "  Email alerts:          $ALERT_EMAIL via $SMTP_HOST"
-if [[ -n "$HEALTHCHECK_URL" ]]; then
-echo "  Healthchecks.io:       Configured"
-fi
+echo "  Pi-side cron:          SMART monitoring only (borg mgmt runs from neuromancer)"
 echo ""
-echo "  Next steps:"
-echo "  1. Save the borg key and kopia cert fingerprint"
-echo "  2. Test SSH: ssh -i ~/.ssh/borg_backup borg@backup-pi"
-echo "     (should see 'borg serve' and then hang — that's correct, Ctrl-C to exit)"
-echo "  3. Run initial borg backup from your backup client:"
-echo "     BORG_RSH=\"ssh -i ~/.ssh/borg_backup\" borg create \\"
-echo "         ssh://borg@backup-pi/mnt/backup/borg::initial /path/to/data"
-echo "  4. Connect your Kopia client to the remote server:"
-echo "     kopia repository connect server \\"
-echo "         --url https://${TAILSCALE_IP}:${KOPIA_SERVER_PORT} \\"
-echo "         --server-cert-fingerprint <FINGERPRINT> \\"
-echo "         --password <REPO_PASSWORD> \\"
-echo "         --config-file repository-remote.config"
-echo "  5. Run initial Kopia backup from your Kopia client"
-echo "  6. Verify both backups with test restores"
-echo "  7. Ship the Pi to the remote location"
-echo "============================================"
+
+cat <<NEXTSTEPS
+============================================
+  Next steps
+============================================
+
+1) Set a strong piadmin password (NOPASSWD sudo is gone after this run):
+       passwd ${ADMIN_USER}
+   (Skip if already strong. 20+ random chars from a password manager.)
+
+2) Install borg-pi-manage.sh on neuromancer (the manager host):
+       ~/containers/scripts/borg-pi-manage.sh
+       ~/containers/scripts/borg-pi-manage.conf
+   See ~/containers/docs/SETUP-BACKUP-PI.md for the full procedure.
+   Add daily prune+freshness and weekly check+restore-test to chrisl8's user
+   crontab on neuromancer.
+
+3) Tailscale ACL setup (in the admin console — the script can't do this):
+   The Pi is tagged tag:backup-target. Without ACLs, the tag is decorative
+   and a compromised Pi can pivot to other tailnet nodes. Apply this policy
+   at https://login.tailscale.com/admin/acls/file:
+
+       {
+         "tagOwners": {
+           "tag:backup-target": ["autogroup:admin"]
+         },
+         "acls": [
+           // Your existing devices reach each other:
+           {"action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:member:*"]},
+           // Your devices reach the backup Pi on SSH only:
+           {"action": "accept", "src": ["autogroup:member"], "dst": ["tag:backup-target:22"]}
+           // NO rule for src=tag:backup-target — the Pi is denied initiating.
+         ]
+       }
+
+   Verify after applying:
+     From the Pi: tailscale ping -c 1 -timeout 3s neuromancer  → expected fail
+     From neuromancer: tailscale ping -c 1 backup-pi           → expected OK
+
+4) Test the borg backup path (read-only smoke test) from each client:
+NEXTSTEPS
+for _name in $CLIENTS; do
+    _repo=$(client_var "$_name" REPO_PATH)
+    echo "     (as $_name)  BORG_PASSPHRASE=… BORG_RSH=\"ssh -i ~/.ssh/borg_backup\" \\"
+    echo "                    borg list ssh://borg@${TAILSCALE_HOSTNAME}${_repo}"
+done
+unset _name _repo
+cat <<NEXTSTEPS2
+
+5) Test the borg-manage path from neuromancer:
+     BORG_PASSPHRASE=\$(infisical secrets get BORG_REMOTE_PASSPHRASE ...) \\
+       ssh -o SendEnv=BORG_PASSPHRASE -i ~/.ssh/borg-pi-mgmt \\
+       borg@${TAILSCALE_HOSTNAME} list-last neuromancer
+   Should print the most recent archive line.
+
+6) Verify with the web admin BackupPi page (per-client status).
+============================================
+NEXTSTEPS2
