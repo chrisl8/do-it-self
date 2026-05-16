@@ -241,23 +241,12 @@ run_remote_backup() {
         fi
     fi
 
-    echo ""
-    echo "Pruning remote archives"
-    BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg prune \
-        --keep-daily="${BORG_REMOTE_KEEP_DAILY}" \
-        --keep-weekly="${BORG_REMOTE_KEEP_WEEKLY}" \
-        --keep-monthly="${BORG_REMOTE_KEEP_MONTHLY}" \
-        --keep-yearly="${BORG_REMOTE_KEEP_YEARLY}" \
-        --stats \
-        --show-rc \
-        "${BORG_REMOTE_REPO}" || echo "WARNING: remote borg prune had issues"
-
-    echo ""
-    echo "Compacting remote repository"
-    BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg compact \
-        --show-rc \
-        "${BORG_REMOTE_REPO}" || echo "WARNING: remote borg compact had issues"
-
+    # Remote prune/compact intentionally NOT done here. The remote borg user
+    # is restricted to `borg serve --append-only`, so client-issued prune is
+    # a no-op anyway. Pruning runs from scripts/borg-pi-manage.sh on its own
+    # cron, via a separate SSH key + dedicated wrapper (borg-manage.sh) on
+    # the Pi that gates the verb set and the retention args. See
+    # docs/SETUP-BACKUP-PI.md for the full management model.
     return 0
 }
 
