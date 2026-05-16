@@ -43,7 +43,10 @@ import {
   deleteSecret,
   createFolder,
 } from "./infisicalClient.js";
-import { runAction as runBackupPiAction } from "./backupPi.js";
+import {
+  runAction as runBackupPiAction,
+  setClientPassphrase as setBackupPiClientPassphrase,
+} from "./backupPi.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -2332,6 +2335,44 @@ async function webserver() {
             }),
           );
         });
+      } else if (message.type === "backupPiSetClientPassphrase") {
+        // Writes a per-client borg passphrase to Infisical so the web admin
+        // + scripts/borg-pi-manage.sh can fetch it at use-time. Used during
+        // initial setup (e.g. seeding wintermute's passphrase) and rotation.
+        const clientName = message.payload?.clientName;
+        const passphrase = message.payload?.passphrase;
+        if (!clientName || typeof passphrase !== "string") {
+          ws.send(
+            JSON.stringify({
+              type: "backupPiSetClientPassphraseResult",
+              clientName,
+              ok: false,
+              error: "clientName and passphrase are required",
+            }),
+          );
+          return;
+        }
+        setBackupPiClientPassphrase(clientName, passphrase)
+          .then((result) => {
+            ws.send(
+              JSON.stringify({
+                type: "backupPiSetClientPassphraseResult",
+                clientName,
+                ...result,
+              }),
+            );
+          })
+          .catch((err) => {
+            console.error("[backuppi] setClientPassphrase failed:", err);
+            ws.send(
+              JSON.stringify({
+                type: "backupPiSetClientPassphraseResult",
+                clientName,
+                ok: false,
+                error: err?.message || "set failed",
+              }),
+            );
+          });
       }
     });
 
