@@ -47,6 +47,10 @@ import {
   runAction as runBackupPiAction,
   setClientPassphrase as setBackupPiClientPassphrase,
 } from "./backupPi.js";
+import backupCoverageModule, {
+  acknowledgePath as ackBackupCoveragePath,
+  unacknowledgePath as unackBackupCoveragePath,
+} from "./backupCoverage.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -2370,6 +2374,56 @@ async function webserver() {
                 clientName,
                 ok: false,
                 error: err?.message || "set failed",
+              }),
+            );
+          });
+      } else if (message.type === "backupCoverageAcknowledge") {
+        // Append/replace an entry in the audit's ack file. The in-memory
+        // report is updated immediately; the next hourly audit picks the
+        // ack up naturally.
+        const path = message.payload?.path;
+        const reason = message.payload?.reason || "";
+        ackBackupCoveragePath(path, reason)
+          .then((result) => {
+            ws.send(
+              JSON.stringify({
+                type: "backupCoverageAcknowledgeResult",
+                path,
+                ...result,
+              }),
+            );
+          })
+          .catch((err) => {
+            console.error("[backup-coverage] ack failed:", err);
+            ws.send(
+              JSON.stringify({
+                type: "backupCoverageAcknowledgeResult",
+                path,
+                ok: false,
+                error: err?.message || "ack failed",
+              }),
+            );
+          });
+      } else if (message.type === "backupCoverageUnacknowledge") {
+        const path = message.payload?.path;
+        unackBackupCoveragePath(path)
+          .then((result) => {
+            ws.send(
+              JSON.stringify({
+                type: "backupCoverageUnacknowledgeResult",
+                path,
+                ...result,
+              }),
+            );
+          })
+          .catch((err) => {
+            console.error("[backup-coverage] unack failed:", err);
+            ws.send(
+              JSON.stringify({
+                type: "backupCoverageUnacknowledgeResult",
+                path,
+                ok: false,
+                error: err?.message || "unack failed",
               }),
             );
           });

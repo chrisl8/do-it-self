@@ -18,6 +18,7 @@ import { ColorModeContext } from "./main";
 import DockerStatus from "./DockerStatus";
 import BackupStatus from "./BackupStatus";
 import BackupPi from "./BackupPi";
+import BackupCoverage from "./BackupCoverage";
 import ContainerConfig from "./ContainerConfig";
 import Browse from "./Browse";
 import Sources from "./Sources";
@@ -31,6 +32,7 @@ const routes = [
   { path: "/sources", label: "Sources" },
   { path: "/backup-status", label: "Backups" },
   { path: "/backup-pi", label: "Backup Pi" },
+  { path: "/backup-coverage", label: "Coverage" },
 ];
 
 const Navigation = () => {
@@ -153,6 +155,7 @@ const App = () => {
         <Route path="/sources" element={<Sources />} />
         <Route path="/backup-status" element={<BackupStatus />} />
         <Route path="/backup-pi" element={<BackupPi />} />
+        <Route path="/backup-coverage" element={<BackupCoverage />} />
       </Routes>
     </BrowserRouter>
   );
