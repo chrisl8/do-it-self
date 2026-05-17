@@ -42,8 +42,16 @@ if ! flock -n 9; then
     exit 1
 fi
 
-# All output (script + child) goes to the log via tee for tailing.
-exec > >(tee -a "${LOG_FILE}") 2>&1
+# All output (script + child) goes to the log file. When run interactively
+# (stdout is a TTY) we ALSO tee to the terminal so the operator sees live
+# progress. Under cron stdout isn't a TTY, so we redirect straight to the
+# log — otherwise cron mails the operator a copy of every run, which is
+# redundant noise once healthchecks.io handles failure notifications.
+if [ -t 1 ]; then
+    exec > >(tee -a "${LOG_FILE}") 2>&1
+else
+    exec >> "${LOG_FILE}" 2>&1
+fi
 echo ""
 echo "=========================================="
 echo "borg-pi-manage.sh $* — $(date)"
