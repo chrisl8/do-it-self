@@ -12,14 +12,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
@@ -51,11 +44,83 @@ const statusChipColor = (status) => {
   }
 };
 
+// Entry layout: chip + size + mtime on the top row (allowed to wrap on
+// very narrow widths), action button right-aligned, path always on its
+// own line below so long paths never crush other columns. Same shape on
+// desktop and mobile — mobile-friendly without `useMediaQuery` branching.
+const EntryRow = ({ entry, onAck, onUnack, ackable }) => (
+  <Box
+    sx={{
+      py: 1.25,
+      borderBottom: 1,
+      borderColor: "divider",
+      "&:last-of-type": { borderBottom: 0 },
+    }}
+  >
+    <Stack
+      direction="row"
+      spacing={1.5}
+      alignItems="center"
+      flexWrap="wrap"
+      useFlexGap
+    >
+      <Chip
+        label={entry.status}
+        color={statusChipColor(entry.status)}
+        size="small"
+      />
+      <Typography variant="body2" component="code">
+        {entry.size_human || "?"}
+      </Typography>
+      <Tooltip title={entry.mtime_iso || ""}>
+        <Typography variant="body2" color="text.secondary">
+          {formatRelativeAge(entry.mtime_iso)}
+        </Typography>
+      </Tooltip>
+      <Box sx={{ flexGrow: 1 }} />
+      {ackable ? (
+        <Button size="small" variant="text" onClick={() => onAck(entry.path)}>
+          Acknowledge
+        </Button>
+      ) : (
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => onUnack(entry.path)}
+        >
+          Un-ack
+        </Button>
+      )}
+    </Stack>
+    <Typography
+      variant="body2"
+      component="code"
+      sx={{
+        display: "block",
+        mt: 0.5,
+        wordBreak: "break-word",
+        overflowWrap: "anywhere",
+      }}
+    >
+      {entry.path}
+    </Typography>
+    {entry.ack && entry.ack.reason && (
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: "block", mt: 0.25 }}
+      >
+        {entry.ack.reason}
+      </Typography>
+    )}
+  </Box>
+);
+
 const Section = ({ title, entries, onAck, onUnack, ackable }) => {
   if (!entries || entries.length === 0) return null;
 
-  // Sort: largest by stated size where it can be parsed, else by mtime desc.
-  // Keep simple — sort by mtime desc, fall through to path.
+  // Sort by mtime desc, then path. Newer entries (likely the user's recent
+  // activity) bubble up.
   const sorted = [...entries].sort((a, b) => {
     const at = a.mtime_iso ? Date.parse(a.mtime_iso) : 0;
     const bt = b.mtime_iso ? Date.parse(b.mtime_iso) : 0;
@@ -68,71 +133,17 @@ const Section = ({ title, entries, onAck, onUnack, ackable }) => {
       <Typography variant="subtitle1" gutterBottom>
         {title} ({entries.length})
       </Typography>
-      <TableContainer component={Box} sx={{ overflowX: "auto" }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ minWidth: 80 }}>Status</TableCell>
-              <TableCell sx={{ minWidth: 60 }}>Size</TableCell>
-              <TableCell sx={{ minWidth: 120 }}>Modified</TableCell>
-              <TableCell>Path</TableCell>
-              <TableCell sx={{ minWidth: 100 }}>Action</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sorted.map((e) => (
-              <TableRow key={e.path}>
-                <TableCell>
-                  <Chip
-                    label={e.status}
-                    color={statusChipColor(e.status)}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <code>{e.size_human || "?"}</code>
-                </TableCell>
-                <TableCell>
-                  <Tooltip title={e.mtime_iso || ""}>
-                    <span>{formatRelativeAge(e.mtime_iso)}</span>
-                  </Tooltip>
-                </TableCell>
-                <TableCell>
-                  <code style={{ wordBreak: "break-all" }}>{e.path}</code>
-                  {e.ack && e.ack.reason && (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      display="block"
-                    >
-                      {e.ack.reason}
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {ackable ? (
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => onAck(e.path)}
-                    >
-                      Acknowledge
-                    </Button>
-                  ) : (
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => onUnack(e.path)}
-                    >
-                      Un-ack
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Box>
+        {sorted.map((e) => (
+          <EntryRow
+            key={e.path}
+            entry={e}
+            onAck={onAck}
+            onUnack={onUnack}
+            ackable={ackable}
+          />
+        ))}
+      </Box>
     </Box>
   );
 };
