@@ -1,0 +1,31 @@
+# backup-coverage-audit.conf — neuromancer's coverage-audit settings.
+# Sourced by ~/containers/scripts/backup-coverage-audit.sh.
+# Copy this .example to backup-coverage-audit.conf before first run
+# (script bootstraps it automatically on first invocation).
+
+# Where the rendered JSON report lands. Web admin reads this file.
+REPORT_FILE="$HOME/logs/backup-coverage-audit.json"
+
+# Where user acknowledgements live. Web admin's "Acknowledge" button
+# appends here; the audit script reads it on each run to suppress
+# repeated nagging on paths the user has consciously decided to skip.
+ACK_FILE="$HOME/containers/scripts/backup-coverage-acks.json"
+
+# ── Candidate roots ──────────────────────────────────────────────
+# Each entry: <root_path>|<depth>
+#   root_path: top-level location to inspect
+#   depth: how deep to descend before deciding (1 = immediate children,
+#          2 = grandchildren). "Partial" entries auto-descend one more
+#          level beyond their depth so subdir drift is surfaced even at
+#          depth 1.
+#
+# /etc treated as a single entry (depth 0) — borg backs up the whole
+# tree, so we check coverage at that root level only.
+CANDIDATE_ROOTS=(
+    "/home|1"
+    "/mnt|2"
+    "/root|1"
+    "/opt|1"
+    "/srv|1"
+    "/etc|0"
+)
