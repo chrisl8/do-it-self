@@ -13,6 +13,22 @@
 */container-mounts/jellyfin/shows/
 */container-mounts/jellyfin/movies/
 
+# Per-location scratch zones. Foundation/ and Hyperion/ are both backed
+# up by default (they're personal-content directories that differ only
+# in speed: Hyperion is on the fast SSD, Foundation is on the big HDD).
+# Either can also hold throwaway scratch content — drop it into the
+# scratch/ subdir and it won't be archived. See the README.md inside
+# each scratch/ for the convention.
+*/Foundation/scratch/
+*/Hyperion/scratch/
+
+# Already-migrated photos. The directory name documents the intent: the
+# content is already in immich, which is itself backed up via
+# /mnt/2000/container-mounts/. Keeping the original location on /mnt/22TB
+# as a local copy (no harm) but excluding from the offsite archive
+# avoids paying for a redundant 153 GiB on the Pi.
+*/Foundation/DELETE-MIGRAGTED-JerushasPhotos/
+
 # Raw database data directories (already backed up via SQL/archive dumps)
 # PostgreSQL
 */container-mounts/immich/db/
