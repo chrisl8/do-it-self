@@ -110,16 +110,16 @@
 # Ephemeral/test data
 */voidship_ephemeral/
 
-# Downloads (transient)
-*/Downloads/
-
-# Default empty XDG dirs
-*/Desktop/
-*/Documents/
-*/Music/
-*/Pictures/
-*/Public/
-*/Templates/
+# NOTE: XDG default-dir patterns (*/Downloads/, */Desktop/, */Documents/,
+# */Music/, */Pictures/, */Public/, */Templates/) used to live here. They
+# were intended to skip the empty XDG defaults under /home/chrisl8/ but
+# the recursive `*/` glob silently dropped ~50 GiB of family Nextcloud
+# user data: Jerusha's Documents (40 GiB), Edan's Pictures (6.4 GiB) and
+# Documents (2.3 GiB), plus the caddy site Pictures and the jellyfin
+# music sounds dataset. The XDG dirs in /home/chrisl8/ are empty so
+# removing these patterns has zero cost there. If a specific empty XDG
+# dir ever becomes non-empty with content you DON'T want backed up, add
+# a full-path exclude below — never a `*/Name/` wildcard.
 
 # OS artifacts
 .Trash-*
