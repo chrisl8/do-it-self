@@ -6,7 +6,12 @@
 */container-mounts/recon/data/media/series/
 */container-mounts/recon/data/media/qbittorrent/
 */container-mounts/recon/data/media/sabnzbd/
-*/container-mounts/jellyfin/
+# jellyfin: only the re-acquirable subtrees are excluded.
+# home_videos/ and random/ stay in the backup — they're irreplaceable
+# family video history with no other copy. An earlier broader rule
+# (*/container-mounts/jellyfin/) silently dropped 92 GiB of those.
+*/container-mounts/jellyfin/shows/
+*/container-mounts/jellyfin/movies/
 
 # Raw database data directories (already backed up via SQL/archive dumps)
 # PostgreSQL
