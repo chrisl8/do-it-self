@@ -101,14 +101,18 @@
 */.nv/
 */.pki/
 */.gnupg/S.*
-*/venvs/
-*/pprof/
-*/game-test/
-*/network-testing/
-*/n/
-
-# Ephemeral/test data
-*/voidship_ephemeral/
+# Personal scratch/test dirs anchored to specific paths. Earlier these
+# used `*/<name>/` wildcards which is dangerous — `n` and `pprof` in
+# particular collide with legitimate names elsewhere (pprof is a Go
+# standard library subdir, n is an uncomfortably short name that could
+# match anything). Full paths so the exclude can never accidentally
+# match an unrelated directory of the same name.
+/home/chrisl8/venvs/
+/home/chrisl8/pprof/
+/home/chrisl8/game-test/
+/home/chrisl8/network-testing/
+/home/chrisl8/n/
+/home/chrisl8/voidship_ephemeral/
 
 # NOTE: XDG default-dir patterns (*/Downloads/, */Desktop/, */Documents/,
 # */Music/, */Pictures/, */Public/, */Templates/) used to live here. They
