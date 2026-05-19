@@ -113,6 +113,12 @@
 /home/chrisl8/network-testing/
 /home/chrisl8/n/
 /home/chrisl8/voidship_ephemeral/
+# /home/chrisl8/Downloads/ holds re-downloadable tooling installers
+# (.deb packages, etc.) that don't need to be in the offsite archive.
+# Anchored to this specific path — the previous `*/Downloads/` wildcard
+# also caught Nextcloud user content like Edan's "Witcher 2/Downloads"
+# folder (game saves) which is now correctly preserved in the backup.
+/home/chrisl8/Downloads/
 
 # NOTE: XDG default-dir patterns (*/Downloads/, */Desktop/, */Documents/,
 # */Music/, */Pictures/, */Public/, */Templates/) used to live here. They
