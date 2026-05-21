@@ -211,11 +211,61 @@ while IFS= read -r -d '' entry; do
     classify_path "$entry"
 done < <(find / -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
 
-# ── Read exclude patterns for the UI to display ──────────────────
+# ── Exclude patterns + per-pattern match data ────────────────────
+# Two pieces:
+#   1. The raw pattern list — cheap, refreshed every run.
+#   2. The per-pattern match counts/samples — ~4 min filesystem walk,
+#      gated to refresh at most once per EXCLUDE_MATCHES_MAX_AGE_HOURS.
+#
+# If the cache is fresh, we merge its match data onto the pattern list.
+# If it's stale or missing, we regenerate in foreground (cron run still
+# completes in <5 min). If regeneration fails, we emit patterns with no
+# match data so the rest of the audit still works.
 EXCLUDE_PATTERNS_JSON="[]"
 if [ -n "${BORG_EXCLUDE_FILE:-}" ] && [ -r "${BORG_EXCLUDE_FILE}" ]; then
-    EXCLUDE_PATTERNS_JSON=$(awk 'NF && !/^[[:space:]]*#/ {print}' "${BORG_EXCLUDE_FILE}" \
-        | jq -R -s 'split("\n") | map(select(length > 0))')
+    # Decide if the cache needs refreshing.
+    refresh_cache=true
+    if [ -f "${EXCLUDE_MATCHES_FILE:-}" ]; then
+        max_age_sec=$(( ${EXCLUDE_MATCHES_MAX_AGE_HOURS:-23} * 3600 ))
+        file_age=$(( $(date +%s) - $(stat -c %Y "${EXCLUDE_MATCHES_FILE}") ))
+        if [ "$file_age" -lt "$max_age_sec" ]; then
+            refresh_cache=false
+        fi
+        # Also refresh if the exclude file itself is newer than the cache,
+        # so edits surface within the hour even if the daily window hasn't
+        # elapsed yet.
+        if [ "${BORG_EXCLUDE_FILE}" -nt "${EXCLUDE_MATCHES_FILE}" ]; then
+            refresh_cache=true
+        fi
+    fi
+
+    if [ "$refresh_cache" = "true" ]; then
+        echo "[INFO] Refreshing exclude-match cache (full walk; expect ~5-15 min)..."
+        # Join backup paths with `:` for the helper. Empty/missing paths
+        # are filtered by the helper itself.
+        paths_arg=$(IFS=:; echo "${NORMALISED_BACKUP_PATHS[*]}")
+        tmp_matches=$(mktemp)
+        # Hard ceiling of 20 min so a pathological filesystem state can't
+        # wedge the audit indefinitely. Real walks are well under this.
+        if timeout 1200 python3 "${SCRIPT_DIR}/check-exclude-matches.py" \
+                "$paths_arg" "${BORG_EXCLUDE_FILE}" > "$tmp_matches"; then
+            mv "$tmp_matches" "${EXCLUDE_MATCHES_FILE}"
+            chmod 644 "${EXCLUDE_MATCHES_FILE}"
+            echo "[OK] Exclude-match cache refreshed at ${EXCLUDE_MATCHES_FILE}"
+        else
+            rm -f "$tmp_matches"
+            echo "[WARN] check-exclude-matches.py failed/timed out; keeping prior cache (if any)"
+        fi
+    fi
+
+    if [ -r "${EXCLUDE_MATCHES_FILE:-}" ]; then
+        # Helper produces objects with match_count/samples/status; use directly.
+        EXCLUDE_PATTERNS_JSON=$(jq '.exclude_patterns' "${EXCLUDE_MATCHES_FILE}")
+    else
+        # Fallback: bare pattern list (no per-pattern match info yet).
+        EXCLUDE_PATTERNS_JSON=$(awk 'NF && !/^[[:space:]]*#/ {print}' "${BORG_EXCLUDE_FILE}" \
+            | jq -R -s 'split("\n") | map(select(length > 0)) | map({pattern: ., match_count: null, samples: [], status: "unknown"})')
+    fi
 fi
 
 # ── Stitch it all into the report ────────────────────────────────
@@ -223,10 +273,16 @@ NEEDS_REVIEW_COUNT=$(jq '[.[] | select(.status == "uncovered" or .status == "par
 ACKED_COUNT=$(jq '[.[] | select(.ack != null)] | length' <<<"$ENTRIES_JSON")
 COVERED_COUNT=$(jq '[.[] | select(.status == "covered")] | length' <<<"$ENTRIES_JSON")
 
+EXCLUDE_MATCHES_AUDITED_AT=""
+if [ -r "${EXCLUDE_MATCHES_FILE:-}" ]; then
+    EXCLUDE_MATCHES_AUDITED_AT=$(date -u -d "@$(stat -c %Y "${EXCLUDE_MATCHES_FILE}")" +%Y-%m-%dT%H:%M:%SZ)
+fi
+
 TMP=$(mktemp)
 jq -n \
     --arg host "$(hostname)" \
     --arg audited_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg exclude_matches_audited_at "$EXCLUDE_MATCHES_AUDITED_AT" \
     --argjson entries "$ENTRIES_JSON" \
     --argjson exclude_patterns "$EXCLUDE_PATTERNS_JSON" \
     --argjson needs_review_count "$NEEDS_REVIEW_COUNT" \
@@ -235,6 +291,7 @@ jq -n \
     '{
         host: $host,
         audited_at: $audited_at,
+        exclude_matches_audited_at: (if $exclude_matches_audited_at == "" then null else $exclude_matches_audited_at end),
         summary: {
             needs_review: $needs_review_count,
             acknowledged: $acked_count,
