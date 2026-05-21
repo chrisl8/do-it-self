@@ -1,11 +1,12 @@
 # BorgBackup exclusion patterns
 # Used by borg-backup.sh during archive creation
 
-# Re-downloadable media (large, easily re-acquired)
-*/container-mounts/recon/data/media/movies/
-*/container-mounts/recon/data/media/series/
-*/container-mounts/recon/data/media/qbittorrent/
-*/container-mounts/recon/data/media/sabnzbd/
+# Re-downloadable media (large, easily re-acquired).
+# Note: recon/data/media/{movies,series,qbittorrent,sabnzbd} are NOT
+# listed here — recon's parent dir isn't in BORG_BACKUP_PATHS (only the
+# per-subdir comics/ebooks/manga/music are). If the recon parent is ever
+# added to backup_paths, add the corresponding excludes back here.
+#
 # jellyfin: only the re-acquirable subtrees are excluded.
 # home_videos/ and random/ stay in the backup — they're irreplaceable
 # family video history with no other copy. An earlier broader rule
@@ -45,8 +46,14 @@
 */container-mounts/your-spotify/db/
 # CouchDB — Obsidian LiveSync is a sync replica; authoritative data lives on devices/Obsidian Sync
 */container-mounts/obsidian-babel-livesync/data/
-# Uptime Kuma — backed up via SQLite dump for consistency; live file triggers rc 1 warning
-*/container-mounts/uptime/data/kuma.db
+# Uptime Kuma — exclude the live SQLite db AND its WAL/SHM companions.
+# A previous pattern matched only kuma.db, leaving -wal/-shm in the
+# archive, which would restore as orphan WAL with no main db (broken).
+# Note: there is NO separate kuma dump strategy yet — uptime-kuma ping
+# history is currently not preserved across host loss. If that matters,
+# add a sqlite3 .backup step to borg-backup.sh and capture the snapshot
+# via /mnt/22TB/borg-db-dumps/.
+*/container-mounts/uptime/data/kuma.db*
 # The Lounge IRC logs (1.3G SQLite + text logs, not worth backing up)
 */the-lounge/config/logs/
 
@@ -59,10 +66,11 @@
 # Tailscale state (regenerated on auth)
 */tailscale-state/
 
-# Embedded git repos (re-cloneable)
+# Embedded git repos (re-cloneable). dawarich/dawarich/ used to live here
+# from when dawarich was built from git; it's image-only now, so the
+# pattern was vestigial and was removed.
 */valheim-server-docker/
 */docker-minecraft-bedrock-server/
-*/dawarich/dawarich/
 */tsidp/headscale/
 
 # Build artifacts and dependencies
