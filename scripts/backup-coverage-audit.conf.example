@@ -11,6 +11,15 @@ REPORT_FILE="$HOME/logs/backup-coverage-audit.json"
 # repeated nagging on paths the user has consciously decided to skip.
 ACK_FILE="$HOME/containers/scripts/backup-coverage-acks.json"
 
+# Where the per-pattern exclude-match cache lives. Refreshed at most
+# once per EXCLUDE_MATCHES_MAX_AGE_HOURS — the underlying walk is a
+# ~4-minute filesystem traversal, far too heavy for the hourly cron.
+# Patterns change rarely, so daily-ish freshness is plenty to catch
+# the silent-overreach class of bug (jellyfin home_videos, Nextcloud
+# Documents — see scripts/check-exclude-matches.py docstring).
+EXCLUDE_MATCHES_FILE="$HOME/logs/backup-exclude-matches.json"
+EXCLUDE_MATCHES_MAX_AGE_HOURS=23
+
 # ── Candidate roots ──────────────────────────────────────────────
 # Each entry: <root_path>|<depth>
 #   root_path: top-level location to inspect
