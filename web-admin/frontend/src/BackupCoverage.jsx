@@ -11,7 +11,6 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
-import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
@@ -29,117 +28,307 @@ const formatRelativeAge = (iso) => {
   return `${Math.floor(ageSec / 86400)}d ago`;
 };
 
+// Effective status for chips/sort: an acknowledged uncovered/partial entry
+// is "acked" (the user has decided it's fine) rather than the underlying
+// problem class.
+const effectiveStatus = (entry) => (entry.ack != null ? "acked" : entry.status);
+
 const statusChipColor = (status) => {
   switch (status) {
     case "uncovered":
       return "warning";
     case "partial":
-      return "info";
+      return "warning";
     case "unreadable":
       return "error";
     case "covered":
       return "success";
+    case "acked":
+      return "default";
     default:
       return "default";
   }
 };
 
-// Entry layout: chip + size + mtime on the top row (allowed to wrap on
-// very narrow widths), action button right-aligned, path always on its
-// own line below so long paths never crush other columns. Same shape on
-// desktop and mobile — mobile-friendly without `useMediaQuery` branching.
-const EntryRow = ({ entry, onAck, onUnack, ackable }) => (
-  <Box
-    sx={{
-      py: 1.25,
-      borderBottom: 1,
-      borderColor: "divider",
-      "&:last-of-type": { borderBottom: 0 },
-    }}
-  >
-    <Stack
-      direction="row"
-      spacing={1.5}
-      alignItems="center"
-      flexWrap="wrap"
-      useFlexGap
-    >
-      <Chip
-        label={entry.status}
-        color={statusChipColor(entry.status)}
-        size="small"
-      />
-      <Typography variant="body2" component="code">
-        {entry.size_human || "?"}
-      </Typography>
-      <Tooltip title={entry.mtime_iso || ""}>
-        <Typography variant="body2" color="text.secondary">
-          {formatRelativeAge(entry.mtime_iso)}
-        </Typography>
-      </Tooltip>
-      <Box sx={{ flexGrow: 1 }} />
-      {ackable ? (
-        <Button size="small" variant="text" onClick={() => onAck(entry.path)}>
-          Acknowledge
-        </Button>
-      ) : (
-        <Button size="small" variant="text" onClick={() => onUnack(entry.path)}>
-          Un-ack
-        </Button>
-      )}
-    </Stack>
-    <Typography
-      variant="body2"
-      component="code"
+// Compact, single-line row. Wraps on narrow widths (Stack flexWrap).
+// Path is rendered relative to the group key so the eye scans by name,
+// not by repeated mount prefix. When `excludesUnder` is non-empty (an
+// array of {pattern, samplesUnder, totalCount}), shows an inline chip
+// + click-to-expand list so the user can see "this directory is covered
+// in principle, but here's what's silently excluded inside it" — which
+// is the only way to spot a regression like the original jellyfin one.
+const CompactRow = ({ entry, groupKey, excludesUnder, onAck, onUnack }) => {
+  const [excludesOpen, setExcludesOpen] = useState(false);
+  const eff = effectiveStatus(entry);
+  const ackable = entry.ack == null;
+  const hasExcludes = (excludesUnder?.length || 0) > 0;
+  // Strip the group prefix from the path for readability.
+  let displayPath = entry.path;
+  if (
+    groupKey &&
+    groupKey !== "Other" &&
+    entry.path.startsWith(groupKey + "/")
+  ) {
+    displayPath = entry.path.slice(groupKey.length + 1);
+  } else if (groupKey === entry.path) {
+    displayPath = "(this mount)";
+  }
+  return (
+    <Box
       sx={{
-        display: "block",
-        mt: 0.5,
-        wordBreak: "break-word",
-        overflowWrap: "anywhere",
+        py: 0.5,
+        px: 1,
+        borderBottom: 1,
+        borderColor: "divider",
+        "&:last-of-type": { borderBottom: 0 },
       }}
     >
-      {entry.path}
-    </Typography>
-    {entry.ack && entry.ack.reason && (
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ display: "block", mt: 0.25 }}
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
       >
-        {entry.ack.reason}
-      </Typography>
-    )}
-  </Box>
-);
+        <Chip
+          label={eff}
+          color={statusChipColor(eff)}
+          size="small"
+          variant={eff === "acked" ? "outlined" : "filled"}
+          sx={{ minWidth: 78 }}
+        />
+        <Typography
+          variant="body2"
+          component="code"
+          sx={{ flexGrow: 1, wordBreak: "break-word", minWidth: 0 }}
+        >
+          {displayPath}
+        </Typography>
+        {hasExcludes && (
+          <Chip
+            size="small"
+            color="info"
+            variant="outlined"
+            label={`↘ ${excludesUnder.length} excluded`}
+            onClick={() => setExcludesOpen((v) => !v)}
+            sx={{ cursor: "pointer" }}
+          />
+        )}
+        <Typography
+          variant="caption"
+          component="code"
+          color="text.secondary"
+          sx={{ minWidth: 50, textAlign: "right" }}
+        >
+          {entry.size_human || "?"}
+        </Typography>
+        <Tooltip title={entry.mtime_iso || ""}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ minWidth: 50, textAlign: "right" }}
+          >
+            {formatRelativeAge(entry.mtime_iso)}
+          </Typography>
+        </Tooltip>
+        {entry.ack?.reason && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            fontStyle="italic"
+            sx={{ flexBasis: "100%", pl: "94px", mt: -0.25 }}
+          >
+            {entry.ack.reason}
+          </Typography>
+        )}
+        {ackable ? (
+          <Button size="small" onClick={() => onAck(entry.path)}>
+            Ack
+          </Button>
+        ) : (
+          <Button size="small" onClick={() => onUnack(entry.path)}>
+            Un-ack
+          </Button>
+        )}
+      </Stack>
+      {hasExcludes && (
+        <Collapse in={excludesOpen}>
+          <Box
+            sx={{
+              mt: 0.5,
+              ml: "94px",
+              pl: 1,
+              borderLeft: 2,
+              borderColor: "info.light",
+              fontSize: "0.85em",
+            }}
+          >
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              component="div"
+              sx={{ mb: 0.25 }}
+            >
+              These excludes match content inside this entry — they are
+              <strong> intentionally not in the archive.</strong>
+            </Typography>
+            {excludesUnder.map((x) => (
+              <Box key={x.pattern} sx={{ mt: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  component="code"
+                  sx={{ fontWeight: "bold" }}
+                >
+                  {x.pattern}
+                </Typography>
+                <Box component="ul" sx={{ my: 0, pl: 3 }}>
+                  {x.samplesUnder.slice(0, 5).map((s) => (
+                    <Box
+                      key={s}
+                      component="li"
+                      sx={{ wordBreak: "break-word" }}
+                    >
+                      <Typography variant="caption" component="code">
+                        {s}
+                      </Typography>
+                    </Box>
+                  ))}
+                  {x.samplesUnder.length > 5 && (
+                    <Box component="li">
+                      <Typography variant="caption" fontStyle="italic">
+                        …and {x.samplesUnder.length - 5} more sample(s)
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Collapse>
+      )}
+    </Box>
+  );
+};
 
-const Section = ({ title, entries, onAck, onUnack, ackable }) => {
-  if (!entries || entries.length === 0) return null;
+// Map an entry path to a group key (the mount/disk it belongs to).
+// /mnt/2000/... → /mnt/2000   |   /home/... → /home   |   anything else → Other
+const groupKeyFor = (path) => {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length === 0) return "Other";
+  if (parts[0] === "mnt" && parts.length >= 2) return `/mnt/${parts[1]}`;
+  const known = new Set(["home", "etc", "opt", "srv", "root"]);
+  if (known.has(parts[0])) return `/${parts[0]}`;
+  return "Other";
+};
 
-  // Sort by mtime desc, then path. Newer entries (likely the user's recent
-  // activity) bubble up.
-  const sorted = [...entries].sort((a, b) => {
-    const at = a.mtime_iso ? Date.parse(a.mtime_iso) : 0;
-    const bt = b.mtime_iso ? Date.parse(b.mtime_iso) : 0;
-    if (bt !== at) return bt - at;
-    return a.path.localeCompare(b.path);
-  });
+// Stable display order: mounts (alpha), then standard FHS roots, then Other.
+const GROUP_ORDER = (a, b) => {
+  const score = (k) => {
+    if (k === "Other") return 99;
+    if (k.startsWith("/mnt/")) return 1;
+    return 2;
+  };
+  const sa = score(a);
+  const sb = score(b);
+  if (sa !== sb) return sa - sb;
+  return a.localeCompare(b);
+};
+
+const MountGroup = ({
+  groupKey,
+  entries,
+  excludesByPath,
+  defaultExpanded,
+  onAck,
+  onUnack,
+}) => {
+  const [open, setOpen] = useState(defaultExpanded);
+  const counts = useMemo(() => {
+    const c = { covered: 0, acked: 0, needsReview: 0 };
+    for (const e of entries) {
+      const s = effectiveStatus(e);
+      if (s === "acked") c.acked += 1;
+      else if (s === "covered") c.covered += 1;
+      else c.needsReview += 1;
+    }
+    return c;
+  }, [entries]);
+  // Within group: needs-review first, then partials/acked, then covered;
+  // alpha within each tier so the eye can find a known path quickly.
+  const sorted = useMemo(() => {
+    const tier = (e) => {
+      const s = effectiveStatus(e);
+      if (s === "uncovered" || s === "unreadable" || s === "partial") return 0;
+      if (s === "acked") return 1;
+      return 2;
+    };
+    return [...entries].sort((a, b) => {
+      const ta = tier(a);
+      const tb = tier(b);
+      if (ta !== tb) return ta - tb;
+      return a.path.localeCompare(b.path);
+    });
+  }, [entries]);
 
   return (
-    <Box mt={2}>
-      <Typography variant="subtitle1" gutterBottom>
-        {title} ({entries.length})
-      </Typography>
-      <Box>
-        {sorted.map((e) => (
-          <EntryRow
-            key={e.path}
-            entry={e}
-            onAck={onAck}
-            onUnack={onUnack}
-            ackable={ackable}
+    <Box sx={{ mt: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+        onClick={() => setOpen((v) => !v)}
+        sx={{
+          py: 0.75,
+          px: 1,
+          cursor: "pointer",
+          bgcolor: "action.hover",
+          borderRadius: 1,
+          userSelect: "none",
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontFamily: "monospace" }}>
+          {open ? "▼" : "▶"} {groupKey}
+        </Typography>
+        <Box sx={{ flexGrow: 1 }} />
+        {counts.needsReview > 0 && (
+          <Chip
+            size="small"
+            color="warning"
+            label={`${counts.needsReview} needs review`}
           />
-        ))}
-      </Box>
+        )}
+        {counts.acked > 0 && (
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`${counts.acked} acked`}
+          />
+        )}
+        {counts.covered > 0 && (
+          <Chip
+            size="small"
+            color="success"
+            variant="outlined"
+            label={`${counts.covered} covered`}
+          />
+        )}
+      </Stack>
+      <Collapse in={open}>
+        <Box>
+          {sorted.map((e) => (
+            <CompactRow
+              key={e.path}
+              entry={e}
+              groupKey={groupKey}
+              excludesUnder={excludesByPath?.get(e.path)}
+              onAck={onAck}
+              onUnack={onUnack}
+            />
+          ))}
+        </Box>
+      </Collapse>
     </Box>
   );
 };
@@ -159,18 +348,59 @@ const BackupCoverage = () => {
   const toggleSamples = (pattern) =>
     setExpandedSamples((prev) => ({ ...prev, [pattern]: !prev[pattern] }));
 
-  const partitioned = useMemo(() => {
+  const groups = useMemo(() => {
     const entries = Array.isArray(status?.entries) ? status.entries : [];
-    const needsReview = entries.filter(
-      (e) =>
-        (e.status === "uncovered" ||
-          e.status === "partial" ||
-          e.status === "unreadable") &&
-        e.ack == null,
-    );
-    const acknowledged = entries.filter((e) => e.ack != null);
-    const covered = entries.filter((e) => e.status === "covered");
-    return { needsReview, acknowledged, covered };
+    const byGroup = new Map();
+    for (const e of entries) {
+      const k = groupKeyFor(e.path);
+      if (!byGroup.has(k)) byGroup.set(k, []);
+      byGroup.get(k).push(e);
+    }
+    return [...byGroup.entries()]
+      .map(([groupKey, entries]) => ({ groupKey, entries }))
+      .sort((a, b) => GROUP_ORDER(a.groupKey, b.groupKey));
+  }, [status]);
+
+  // For each coverage entry, find which exclude-pattern *samples* land
+  // strictly inside it. This is the bridge between the two halves of the
+  // audit: an entry shows as "covered" but a pattern may be silently
+  // dropping content under it. Surfacing this inline is the whole point
+  // of this feature — without it the user would have to read the entire
+  // patterns list to verify nothing important is excluded.
+  //
+  // We use samples (not pattern text) so the answer is semantic: "this
+  // pattern actually hit something inside this entry," not "this pattern
+  // mentions a similar string". Note: samples cap at 20 per pattern, so
+  // for very broad patterns (__pycache__ at 360 matches) this may
+  // undercount inside any particular subtree — acceptable for the
+  // "does anything important live under this exclude?" question.
+  const excludesByPath = useMemo(() => {
+    const result = new Map();
+    const entries = Array.isArray(status?.entries) ? status.entries : [];
+    const patterns = Array.isArray(status?.exclude_patterns)
+      ? status.exclude_patterns
+      : [];
+    // Only object-shape patterns carry samples.
+    if (patterns.length === 0 || typeof patterns[0] !== "object") return result;
+    for (const entry of entries) {
+      const matched = [];
+      const prefix = entry.path === "/" ? "/" : entry.path + "/";
+      for (const p of patterns) {
+        if (!Array.isArray(p.samples) || p.samples.length === 0) continue;
+        const under = p.samples.filter(
+          (s) => s === entry.path || s.startsWith(prefix),
+        );
+        if (under.length > 0) {
+          matched.push({
+            pattern: p.pattern,
+            samplesUnder: under,
+            totalCount: p.match_count,
+          });
+        }
+      }
+      if (matched.length > 0) result.set(entry.path, matched);
+    }
+    return result;
   }, [status]);
 
   const openAckDialog = (path) =>
@@ -252,29 +482,29 @@ const BackupCoverage = () => {
             </Alert>
           )}
 
-          <Section
-            title="Needs review"
-            entries={partitioned.needsReview}
-            onAck={openAckDialog}
-            ackable={true}
-          />
-
-          <Divider sx={{ mt: 3 }} />
-
-          <Section
-            title="Acknowledged"
-            entries={partitioned.acknowledged}
-            onUnack={unacknowledge}
-            ackable={false}
-          />
-
-          <Divider sx={{ mt: 3 }} />
-
-          <Section
-            title="Covered (FYI)"
-            entries={partitioned.covered}
-            ackable={false}
-          />
+          <Box mt={2}>
+            {groups.map((g) => {
+              const hasNeedsReview = g.entries.some(
+                (e) => e.ack == null && e.status !== "covered",
+              );
+              return (
+                <MountGroup
+                  key={g.groupKey}
+                  groupKey={g.groupKey}
+                  entries={g.entries}
+                  excludesByPath={excludesByPath}
+                  defaultExpanded={hasNeedsReview}
+                  onAck={openAckDialog}
+                  onUnack={unacknowledge}
+                />
+              );
+            })}
+            {groups.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No entries yet — audit hasn't produced a report.
+              </Typography>
+            )}
+          </Box>
         </CardContent>
       </Card>
 
