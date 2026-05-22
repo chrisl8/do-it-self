@@ -240,6 +240,53 @@ dump_sqlite() {
     fi
 }
 
+# dump_sqlite_drop_tables: like dump_sqlite, but after the .backup snapshot
+# completes, DELETEs every row from a configured list of history-only
+# tables and VACUUMs to reclaim space. Schema is preserved so restore is
+# still a simple file-copy. Tables that don't exist in this kuma version
+# are silently skipped — the script is forward-compatible across uptime-
+# kuma upgrades.
+dump_sqlite_drop_tables() {
+    local label="$1"
+    local db_path="$2"
+    local dump_name="$3"
+    local drop_tables="$4"  # space-separated list
+
+    if [ ! -f "${db_path}" ]; then
+        echo "  Skipping ${label} (file not found)"
+        return
+    fi
+
+    echo "  Dumping SQLite: ${label} (config-only; history tables emptied)"
+    local backup_path="${SQLITE_DUMP_DIR}/${dump_name}"
+
+    if ! sqlite3 "${db_path}" ".backup '${backup_path}'" 2>/dev/null; then
+        local file_owner
+        file_owner=$(stat -c '%U' "${db_path}" 2>/dev/null)
+        if [ -n "${file_owner}" ] && [ "${file_owner}" != "root" ] \
+           && su "${file_owner}" -s /bin/bash -c "sqlite3 '${db_path}' \".backup '${backup_path}'\"" 2>/dev/null; then
+            :  # owner-as-user snapshot succeeded
+        else
+            echo "    FAILED (snapshot)"
+            DUMP_ERRORS=$((DUMP_ERRORS + 1))
+            return
+        fi
+    fi
+
+    local t exists
+    for t in ${drop_tables}; do
+        exists=$(sqlite3 "${backup_path}" "SELECT name FROM sqlite_master WHERE type='table' AND name='${t}';" 2>/dev/null)
+        if [ -n "${exists}" ]; then
+            sqlite3 "${backup_path}" "DELETE FROM ${t};" 2>/dev/null || true
+        fi
+    done
+    # VACUUM reclaims pages freed by the DELETEs. Without it, the file
+    # size stays at the pre-delete high-water mark and we'd ship the
+    # original 366MB into the archive every night.
+    sqlite3 "${backup_path}" "VACUUM;" 2>/dev/null || true
+    echo "    OK ($(du -h "${backup_path}" | cut -f1))"
+}
+
 echo "Dumping SQLite databases..."
 
 if [ ${#BORG_CONTAINER_MOUNT_DIRS[@]} -eq 0 ]; then
@@ -272,7 +319,14 @@ else
     dump_sqlite "1password" "$(find_container_file 1password data/1password.sqlite)"
     dump_sqlite "beszel" "$(find_container_file beszel data/data.db)" "beszel.db"
     dump_sqlite "speedtest" "$(find_container_file speedtest config/database.sqlite)" "speedtest.sqlite"
-    dump_sqlite "uptime" "$(find_container_file uptime data/kuma.db)"
+    # uptime-kuma: dump config only — heartbeat/stat_* hold the ping
+    # history (300+ MB, growing daily) which the user explicitly doesn't
+    # want preserved. Schema is kept intact; restore is a file copy and
+    # history just starts empty.
+    dump_sqlite_drop_tables "uptime" \
+        "$(find_container_file uptime data/kuma.db)" \
+        "kuma.db" \
+        "heartbeat stat_minutely stat_hourly stat_daily monitor_tls_info"
 fi
 
 echo ""

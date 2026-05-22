@@ -47,12 +47,10 @@
 # CouchDB — Obsidian LiveSync is a sync replica; authoritative data lives on devices/Obsidian Sync
 */container-mounts/obsidian-babel-livesync/data/
 # Uptime Kuma — exclude the live SQLite db AND its WAL/SHM companions.
-# A previous pattern matched only kuma.db, leaving -wal/-shm in the
-# archive, which would restore as orphan WAL with no main db (broken).
-# Note: there is NO separate kuma dump strategy yet — uptime-kuma ping
-# history is currently not preserved across host loss. If that matters,
-# add a sqlite3 .backup step to borg-backup.sh and capture the snapshot
-# via /mnt/22TB/borg-db-dumps/.
+# A consistent config-only snapshot is written by borg-db-dump.sh to
+# /mnt/22TB/borg-db-dumps/sqlite/kuma.db (heartbeat + tls_info rows are
+# dropped; monitors/settings/notifications/status pages preserved). Ping
+# history is intentionally not retained per user preference.
 */container-mounts/uptime/data/kuma.db*
 # The Lounge IRC logs (1.3G SQLite + text logs, not worth backing up)
 */the-lounge/config/logs/
