@@ -12,6 +12,8 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import Stack from "@mui/material/Stack";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
@@ -57,7 +59,14 @@ const statusChipColor = (status) => {
 // + click-to-expand list so the user can see "this directory is covered
 // in principle, but here's what's silently excluded inside it" — which
 // is the only way to spot a regression like the original jellyfin one.
-const CompactRow = ({ entry, groupKey, excludesUnder, onAck, onUnack }) => {
+const CompactRow = ({
+  entry,
+  groupKey,
+  excludesUnder,
+  isLocal,
+  onAck,
+  onUnack,
+}) => {
   const [excludesOpen, setExcludesOpen] = useState(false);
   const eff = effectiveStatus(entry);
   const ackable = entry.ack == null;
@@ -141,15 +150,17 @@ const CompactRow = ({ entry, groupKey, excludesUnder, onAck, onUnack }) => {
             {entry.ack.reason}
           </Typography>
         )}
-        {ackable ? (
-          <Button size="small" onClick={() => onAck(entry.path)}>
-            Ack
-          </Button>
-        ) : (
-          <Button size="small" onClick={() => onUnack(entry.path)}>
-            Un-ack
-          </Button>
-        )}
+        {isLocal ? (
+          ackable ? (
+            <Button size="small" onClick={() => onAck(entry.path)}>
+              Ack
+            </Button>
+          ) : (
+            <Button size="small" onClick={() => onUnack(entry.path)}>
+              Un-ack
+            </Button>
+          )
+        ) : null}
       </Stack>
       {hasExcludes && (
         <Collapse in={excludesOpen}>
@@ -239,6 +250,7 @@ const MountGroup = ({
   entries,
   excludesByPath,
   defaultExpanded,
+  isLocal,
   onAck,
   onUnack,
 }) => {
@@ -323,6 +335,7 @@ const MountGroup = ({
               entry={e}
               groupKey={groupKey}
               excludesUnder={excludesByPath?.get(e.path)}
+              isLocal={isLocal}
               onAck={onAck}
               onUnack={onUnack}
             />
@@ -344,12 +357,27 @@ const BackupCoverage = () => {
   });
   const [excludeOpen, setExcludeOpen] = useState(false);
   const [expandedSamples, setExpandedSamples] = useState({});
+  const [selectedHost, setSelectedHost] = useState(null);
 
   const toggleSamples = (pattern) =>
     setExpandedSamples((prev) => ({ ...prev, [pattern]: !prev[pattern] }));
 
+  // The backend now sends {localHost, hosts: [...], byHost: {host -> report}}.
+  // Pick which host's report to render: user-selected, else the local host
+  // (i.e. neuromancer), else first available.
+  const hosts = status?.hosts || [];
+  const byHost = status?.byHost || {};
+  const localHost = status?.localHost || null;
+  const activeHost =
+    (selectedHost && byHost[selectedHost] && selectedHost) ||
+    (localHost && byHost[localHost] && localHost) ||
+    hosts[0] ||
+    null;
+  const report = activeHost ? byHost[activeHost] : null;
+  const isLocal = activeHost === localHost;
+
   const groups = useMemo(() => {
-    const entries = Array.isArray(status?.entries) ? status.entries : [];
+    const entries = Array.isArray(report?.entries) ? report.entries : [];
     const byGroup = new Map();
     for (const e of entries) {
       const k = groupKeyFor(e.path);
@@ -359,7 +387,7 @@ const BackupCoverage = () => {
     return [...byGroup.entries()]
       .map(([groupKey, entries]) => ({ groupKey, entries }))
       .sort((a, b) => GROUP_ORDER(a.groupKey, b.groupKey));
-  }, [status]);
+  }, [report]);
 
   // For each coverage entry, find which exclude-pattern *samples* land
   // strictly inside it. This is the bridge between the two halves of the
@@ -376,9 +404,9 @@ const BackupCoverage = () => {
   // "does anything important live under this exclude?" question.
   const excludesByPath = useMemo(() => {
     const result = new Map();
-    const entries = Array.isArray(status?.entries) ? status.entries : [];
-    const patterns = Array.isArray(status?.exclude_patterns)
-      ? status.exclude_patterns
+    const entries = Array.isArray(report?.entries) ? report.entries : [];
+    const patterns = Array.isArray(report?.exclude_patterns)
+      ? report.exclude_patterns
       : [];
     // Only object-shape patterns carry samples.
     if (patterns.length === 0 || typeof patterns[0] !== "object") return result;
@@ -409,9 +437,10 @@ const BackupCoverage = () => {
     setAckDialog({ open: false, path: "", reason: "" });
 
   const confirmAck = () => {
-    acknowledge(ackDialog.path, ackDialog.reason);
+    acknowledge(activeHost, ackDialog.path, ackDialog.reason);
     closeAckDialog();
   };
+  const handleUnack = (path) => unacknowledge(activeHost, path);
 
   if (!status) {
     return (
@@ -421,13 +450,17 @@ const BackupCoverage = () => {
     );
   }
 
-  if (status.error) {
+  if (hosts.length === 0) {
     return (
       <Box sx={{ p: 2 }}>
         <Typography variant="h5" gutterBottom>
           Backup Coverage
         </Typography>
-        <Alert severity="info">{status.error}</Alert>
+        <Alert severity="info">
+          No coverage reports yet. Run{" "}
+          <code>scripts/backup-coverage-audit.sh</code> on a host to populate{" "}
+          <code>~/logs/coverage-reports/&lt;hostname&gt;.json</code>.
+        </Alert>
       </Box>
     );
   }
@@ -436,77 +469,129 @@ const BackupCoverage = () => {
     <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="h5">Backup Coverage</Typography>
 
-      <Card>
-        <CardContent>
-          <Stack
-            direction="row"
-            spacing={2}
-            alignItems="center"
-            flexWrap="wrap"
-          >
-            <Typography variant="h6">
-              {status.host || "(unknown host)"}
-            </Typography>
-            <Chip
-              label={`Needs review: ${status.summary?.needs_review ?? 0}`}
-              color={
-                (status.summary?.needs_review ?? 0) > 0 ? "warning" : "success"
-              }
-              size="small"
-            />
-            <Chip
-              label={`Acknowledged: ${status.summary?.acknowledged ?? 0}`}
-              size="small"
-            />
-            <Chip
-              label={`Covered: ${status.summary?.covered ?? 0}`}
-              color="success"
-              variant="outlined"
-              size="small"
-            />
-            <Typography variant="caption" color="text.secondary">
-              Audited: {formatRelativeAge(status.audited_at)}
-              {status.audited_at ? ` (${status.audited_at})` : ""}
-            </Typography>
-          </Stack>
+      {hosts.length > 1 && (
+        <Tabs
+          value={activeHost}
+          onChange={(_e, v) => setSelectedHost(v)}
+          sx={{ minHeight: 36 }}
+        >
+          {hosts.map((h) => {
+            const r = byHost[h];
+            const needs = r?.summary?.needs_review ?? 0;
+            return (
+              <Tab
+                key={h}
+                value={h}
+                sx={{ minHeight: 36 }}
+                label={
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    useFlexGap
+                  >
+                    <span>{h}</span>
+                    {h === localHost && (
+                      <Chip label="local" size="small" variant="outlined" />
+                    )}
+                    {needs > 0 && (
+                      <Chip label={needs} size="small" color="warning" />
+                    )}
+                  </Stack>
+                }
+              />
+            );
+          })}
+        </Tabs>
+      )}
 
-          {lastAckResult && (
-            <Alert
-              severity={lastAckResult.ok ? "success" : "error"}
-              sx={{ mt: 2 }}
-              onClose={clearAckResult}
-            >
-              {lastAckResult.ok
-                ? `Acknowledgement updated for ${lastAckResult.path}.`
-                : `Failed: ${lastAckResult.error}`}
-            </Alert>
-          )}
-
-          <Box mt={2}>
-            {groups.map((g) => {
-              const hasNeedsReview = g.entries.some(
-                (e) => e.ack == null && e.status !== "covered",
-              );
-              return (
-                <MountGroup
-                  key={g.groupKey}
-                  groupKey={g.groupKey}
-                  entries={g.entries}
-                  excludesByPath={excludesByPath}
-                  defaultExpanded={hasNeedsReview}
-                  onAck={openAckDialog}
-                  onUnack={unacknowledge}
+      {report?.error ? (
+        <Alert severity="info">
+          {activeHost}: {report.error}
+        </Alert>
+      ) : (
+        <>
+          <Card>
+            <CardContent>
+              <Stack
+                direction="row"
+                spacing={2}
+                alignItems="center"
+                flexWrap="wrap"
+              >
+                <Typography variant="h6">
+                  {report?.host || activeHost || "(unknown host)"}
+                </Typography>
+                {!isLocal && (
+                  <Chip
+                    label="read-only (remote host)"
+                    size="small"
+                    variant="outlined"
+                  />
+                )}
+                <Chip
+                  label={`Needs review: ${report?.summary?.needs_review ?? 0}`}
+                  color={
+                    (report?.summary?.needs_review ?? 0) > 0
+                      ? "warning"
+                      : "success"
+                  }
+                  size="small"
                 />
-              );
-            })}
-            {groups.length === 0 && (
-              <Typography variant="body2" color="text.secondary">
-                No entries yet — audit hasn't produced a report.
-              </Typography>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
+                <Chip
+                  label={`Acknowledged: ${report?.summary?.acknowledged ?? 0}`}
+                  size="small"
+                />
+                <Chip
+                  label={`Covered: ${report?.summary?.covered ?? 0}`}
+                  color="success"
+                  variant="outlined"
+                  size="small"
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Audited: {formatRelativeAge(report?.audited_at)}
+                  {report?.audited_at ? ` (${report.audited_at})` : ""}
+                </Typography>
+              </Stack>
+
+              {lastAckResult && (
+                <Alert
+                  severity={lastAckResult.ok ? "success" : "error"}
+                  sx={{ mt: 2 }}
+                  onClose={clearAckResult}
+                >
+                  {lastAckResult.ok
+                    ? `Acknowledgement updated for ${lastAckResult.path}.`
+                    : `Failed: ${lastAckResult.error}`}
+                </Alert>
+              )}
+
+              <Box mt={2}>
+                {groups.map((g) => {
+                  const hasNeedsReview = g.entries.some(
+                    (e) => e.ack == null && e.status !== "covered",
+                  );
+                  return (
+                    <MountGroup
+                      key={g.groupKey}
+                      groupKey={g.groupKey}
+                      entries={g.entries}
+                      excludesByPath={excludesByPath}
+                      defaultExpanded={hasNeedsReview}
+                      isLocal={isLocal}
+                      onAck={openAckDialog}
+                      onUnack={handleUnack}
+                    />
+                  );
+                })}
+                {groups.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    No entries yet — audit hasn't produced a report.
+                  </Typography>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
 
       <Card>
         <CardContent>
@@ -516,7 +601,7 @@ const BackupCoverage = () => {
             justifyContent="space-between"
           >
             <Typography variant="h6">
-              Exclude patterns ({(status.exclude_patterns || []).length})
+              Exclude patterns ({(report.exclude_patterns || []).length})
             </Typography>
             <Button onClick={() => setExcludeOpen((v) => !v)}>
               {excludeOpen ? "Hide" : "Show"}
@@ -530,7 +615,7 @@ const BackupCoverage = () => {
             obsolete, or guarding against something not yet present). Click a
             pattern to see what it matches.
           </Typography>
-          {status.exclude_matches_audited_at && (
+          {report.exclude_matches_audited_at && (
             <Typography
               variant="caption"
               color="text.secondary"
@@ -538,14 +623,14 @@ const BackupCoverage = () => {
               sx={{ mt: 0.5 }}
             >
               Per-pattern matches re-scanned{" "}
-              {formatRelativeAge(status.exclude_matches_audited_at)} (refreshed
+              {formatRelativeAge(report.exclude_matches_audited_at)} (refreshed
               ~daily; ~4 min walk).
             </Typography>
           )}
           <Collapse in={excludeOpen}>
             <Box sx={{ mt: 1 }}>
               {(() => {
-                const patterns = status.exclude_patterns || [];
+                const patterns = report.exclude_patterns || [];
                 // Detect new rich object shape vs. legacy bare-string shape.
                 const isRich =
                   patterns.length > 0 && typeof patterns[0] === "object";
@@ -697,6 +782,8 @@ const BackupCoverage = () => {
           </Collapse>
         </CardContent>
       </Card>
+        </>
+      )}
 
       <Dialog
         open={ackDialog.open}

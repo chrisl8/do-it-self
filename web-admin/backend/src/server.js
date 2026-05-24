@@ -2380,10 +2380,11 @@ async function webserver() {
       } else if (message.type === "backupCoverageAcknowledge") {
         // Append/replace an entry in the audit's ack file. The in-memory
         // report is updated immediately; the next hourly audit picks the
-        // ack up naturally.
+        // ack up naturally. Acks only writable for the local host's report.
+        const host = message.payload?.host;
         const path = message.payload?.path;
         const reason = message.payload?.reason || "";
-        ackBackupCoveragePath(path, reason)
+        ackBackupCoveragePath(host, path, reason)
           .then((result) => {
             ws.send(
               JSON.stringify({
@@ -2405,8 +2406,9 @@ async function webserver() {
             );
           });
       } else if (message.type === "backupCoverageUnacknowledge") {
+        const host = message.payload?.host;
         const path = message.payload?.path;
-        unackBackupCoveragePath(path)
+        unackBackupCoveragePath(host, path)
           .then((result) => {
             ws.send(
               JSON.stringify({

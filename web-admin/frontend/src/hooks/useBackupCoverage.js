@@ -10,7 +10,7 @@ const useBackupCoverage = () => {
 
   const clearAckResult = useCallback(() => setLastAckResult(null), []);
 
-  const acknowledge = useCallback((path, reason) => {
+  const acknowledge = useCallback((host, path, reason) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       setLastAckResult({ path, ok: false, error: "WebSocket not connected" });
       return;
@@ -18,12 +18,12 @@ const useBackupCoverage = () => {
     wsRef.current.send(
       JSON.stringify({
         type: "backupCoverageAcknowledge",
-        payload: { path, reason: reason || "" },
+        payload: { host, path, reason: reason || "" },
       }),
     );
   }, []);
 
-  const unacknowledge = useCallback((path) => {
+  const unacknowledge = useCallback((host, path) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       setLastAckResult({ path, ok: false, error: "WebSocket not connected" });
       return;
@@ -31,7 +31,7 @@ const useBackupCoverage = () => {
     wsRef.current.send(
       JSON.stringify({
         type: "backupCoverageUnacknowledge",
-        payload: { path },
+        payload: { host, path },
       }),
     );
   }, []);
