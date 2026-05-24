@@ -3,8 +3,27 @@
 # Copy this .example to backup-coverage-audit.conf before first run
 # (script bootstraps it automatically on first invocation).
 
-# Where the rendered JSON report lands. Web admin reads this file.
-REPORT_FILE="$HOME/logs/backup-coverage-audit.json"
+# Where the borg config lives. On neuromancer this is the bash-sourced
+# borg-backup.conf that borg-backup.sh also uses; on wintermute set this
+# to scripts/borgmatic-config-adapter.sh which translates borgmatic's
+# YAML config into the same shell variables (BORG_BACKUP_PATHS array +
+# BORG_EXCLUDE_FILE). Leaving this unset defaults to the neuromancer
+# path for backwards compatibility.
+# BORG_CONFIG_SOURCE="$HOME/containers/scripts/borg-backup.conf"
+
+# Where the rendered JSON report lands. The web admin watches the
+# parent directory for one report per host: <hostname>.json. Each host
+# (neuromancer locally, wintermute via push) writes its own file; the
+# multi-host UI discovers them all.
+REPORT_FILE="$HOME/logs/coverage-reports/$(hostname).json"
+
+# Optional: push the report to a central web-admin host after generating
+# it. Set this on remote hosts (e.g. wintermute) to ship the report to
+# neuromancer's coverage-reports dir so it appears in the web admin's
+# host tabs. Format: rsync destination spec.
+#   COVERAGE_REPORT_PUSH_DEST="chrisl8@neuromancer:/home/chrisl8/logs/coverage-reports/$(hostname).json"
+#   COVERAGE_REPORT_PUSH_KEY="$HOME/.ssh/coverage-push"
+# See docs/WINTERMUTE_COVERAGE_SETUP.md for the SSH key bootstrap.
 
 # Where user acknowledgements live. Web admin's "Acknowledge" button
 # appends here; the audit script reads it on each run to suppress

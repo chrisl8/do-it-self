@@ -36,10 +36,21 @@ fi
 # shellcheck source=backup-coverage-audit.conf.example
 . "${SCRIPT_DIR}/backup-coverage-audit.conf"
 
-# Pull BORG_BACKUP_PATHS + BORG_EXCLUDE_FILE from the borg-backup conf so we
-# stay in sync with what borg-backup.sh actually does.
+# Source the borg config — neuromancer's bash-sourced borg-backup.conf, or
+# wintermute's borgmatic-config-adapter.sh that translates YAML. The .conf
+# above sets BORG_CONFIG_SOURCE; we default to neuromancer's behavior for
+# backwards compatibility.
+BORG_CONFIG_SOURCE="${BORG_CONFIG_SOURCE:-${SCRIPT_DIR}/borg-backup.conf}"
+if [ ! -r "${BORG_CONFIG_SOURCE}" ]; then
+    echo "[ERROR] BORG_CONFIG_SOURCE not readable: ${BORG_CONFIG_SOURCE}" >&2
+    exit 1
+fi
 # shellcheck source=borg-backup.conf
-. "${SCRIPT_DIR}/borg-backup.conf"
+. "${BORG_CONFIG_SOURCE}"
+if [ -z "${BORG_BACKUP_PATHS+x}" ] || [ -z "${BORG_EXCLUDE_FILE+x}" ]; then
+    echo "[ERROR] After sourcing ${BORG_CONFIG_SOURCE}, BORG_BACKUP_PATHS or BORG_EXCLUDE_FILE is unset" >&2
+    exit 1
+fi
 
 mkdir -p "$(dirname "${REPORT_FILE}")"
 touch "${ACK_FILE}" 2>/dev/null || true
@@ -301,8 +312,29 @@ jq -n \
         exclude_patterns: $exclude_patterns
     }' > "$TMP"
 
+mkdir -p "$(dirname "${REPORT_FILE}")"
 mv "$TMP" "${REPORT_FILE}"
 chmod 644 "${REPORT_FILE}"
 
 echo "[OK] Report written to ${REPORT_FILE}"
 echo "    needs_review=${NEEDS_REVIEW_COUNT}  acknowledged=${ACKED_COUNT}  covered=${COVERED_COUNT}"
+
+# Optional: push the report to a central web-admin host (e.g. wintermute
+# pushes to neuromancer). Set COVERAGE_REPORT_PUSH_DEST in the .conf to
+# enable; format is rsync's standard `user@host:/path/to/file.json`.
+# COVERAGE_REPORT_PUSH_KEY (optional) is the private key for the ssh
+# connection. Failures here are non-fatal — the local report is still
+# valid; only the central dashboard misses an update.
+if [ -n "${COVERAGE_REPORT_PUSH_DEST:-}" ]; then
+    rsync_ssh_cmd="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+    if [ -n "${COVERAGE_REPORT_PUSH_KEY:-}" ]; then
+        rsync_ssh_cmd="${rsync_ssh_cmd} -i ${COVERAGE_REPORT_PUSH_KEY}"
+    fi
+    echo "[INFO] Pushing report to ${COVERAGE_REPORT_PUSH_DEST}"
+    if rsync -az -e "${rsync_ssh_cmd}" \
+            "${REPORT_FILE}" "${COVERAGE_REPORT_PUSH_DEST}"; then
+        echo "[OK] Report pushed"
+    else
+        echo "[WARN] Report push failed (rc=$?) — central dashboard may be stale"
+    fi
+fi
