@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -349,6 +350,11 @@ const MountGroup = ({
 const BackupCoverage = () => {
   const { status, acknowledge, unacknowledge, lastAckResult, clearAckResult } =
     useBackupCoverage();
+  // URL-driven host selection: /backup-coverage/<host>. Lets refresh +
+  // back/forward + bookmarking keep you on the host you were looking at,
+  // instead of always snapping back to the local host's tab.
+  const { host: urlHost } = useParams();
+  const navigate = useNavigate();
 
   const [ackDialog, setAckDialog] = useState({
     open: false,
@@ -357,22 +363,35 @@ const BackupCoverage = () => {
   });
   const [excludeOpen, setExcludeOpen] = useState(false);
   const [expandedSamples, setExpandedSamples] = useState({});
-  const [selectedHost, setSelectedHost] = useState(null);
 
   const toggleSamples = (pattern) =>
     setExpandedSamples((prev) => ({ ...prev, [pattern]: !prev[pattern] }));
 
   // The backend now sends {localHost, hosts: [...], byHost: {host -> report}}.
-  // Pick which host's report to render: user-selected, else the local host
-  // (i.e. neuromancer), else first available.
+  // Pick which host's report to render: URL param wins, else local host
+  // (neuromancer), else first available.
   const hosts = status?.hosts || [];
   const byHost = status?.byHost || {};
   const localHost = status?.localHost || null;
   const activeHost =
-    (selectedHost && byHost[selectedHost] && selectedHost) ||
+    (urlHost && byHost[urlHost] && urlHost) ||
     (localHost && byHost[localHost] && localHost) ||
     hosts[0] ||
     null;
+
+  // If the URL referenced a host we don't actually have (stale bookmark
+  // for a host whose report was removed, typo, etc.), rewrite the URL to
+  // the one we fell back to so the address bar stays truthful.
+  useEffect(() => {
+    if (!activeHost) return;
+    if (urlHost && urlHost !== activeHost) {
+      navigate(`/backup-coverage/${activeHost}`, { replace: true });
+    }
+  }, [urlHost, activeHost, navigate]);
+
+  const setSelectedHost = (h) => {
+    if (h) navigate(`/backup-coverage/${h}`);
+  };
   const report = activeHost ? byHost[activeHost] : null;
   const isLocal = activeHost === localHost;
 
