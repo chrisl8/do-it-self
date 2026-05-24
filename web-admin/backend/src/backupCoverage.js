@@ -1,45 +1,112 @@
 // Backup Coverage monitor + acknowledgement writer.
 //
-// Reads the JSON report produced by scripts/backup-coverage-audit.sh
-// (hourly cron on neuromancer) and broadcasts it via statusEmitter so the
-// frontend's Backup Coverage page can render it. Handles the
-// "Acknowledge" button by appending to the ack JSON file the audit script
-// reads on its next run.
+// Reads JSON reports produced by scripts/backup-coverage-audit.sh — one
+// per host. Neuromancer writes its report locally; remote hosts (e.g.
+// wintermute) push their reports here via rsync. The web admin watches
+// REPORTS_DIR for *.json files, builds a {host -> report} map, and
+// broadcasts via statusEmitter so the frontend's Backup Coverage page
+// can render any host.
 //
-// File polling: the report changes hourly. We poll mtime every 30s and
-// re-read on change. Cheap; avoids fs.watch portability headaches.
+// Acknowledgements are local-only: we can write the ack file for the
+// host the web admin runs on (matches os.hostname()), but not remote
+// hosts. Remote ack edits would require SSH back to the source host;
+// out of scope for now.
+//
+// Polling: every 30s walks REPORTS_DIR, re-reads any file whose mtime
+// has changed. Cheap; portable.
 
-import { readFile, writeFile, stat } from "fs/promises";
+import { readFile, writeFile, stat, readdir, mkdir } from "fs/promises";
+import { hostname } from "os";
+import path from "path";
 import { updateStatus, getStatus } from "./statusEmitter.js";
 
-const REPORT_PATH =
-  process.env.BACKUP_COVERAGE_REPORT_PATH ||
-  "/home/chrisl8/logs/backup-coverage-audit.json";
+const REPORTS_DIR =
+  process.env.BACKUP_COVERAGE_REPORTS_DIR ||
+  "/home/chrisl8/logs/coverage-reports";
 const ACK_PATH =
   process.env.BACKUP_COVERAGE_ACK_PATH ||
   "/home/chrisl8/containers/scripts/backup-coverage-acks.json";
 
 const POLL_INTERVAL_MS = 30 * 1000;
+const LOCAL_HOST = hostname();
 
 let pollTimer = null;
-let lastMtimeMs = 0;
+const lastMtimeMs = new Map(); // host -> mtimeMs
 
-async function loadReport() {
+async function ensureReportsDir() {
   try {
-    const raw = await readFile(REPORT_PATH, "utf8");
+    await mkdir(REPORTS_DIR, { recursive: true });
+  } catch {
+    // ignore; we'll fail on read with a meaningful error if perms are wrong
+  }
+}
+
+async function loadOneReport(filePath) {
+  try {
+    const raw = await readFile(filePath, "utf8");
     return JSON.parse(raw);
   } catch (err) {
-    return {
-      host: null,
-      audited_at: null,
-      summary: { needs_review: 0, acknowledged: 0, covered: 0 },
-      entries: [],
-      exclude_patterns: [],
-      error:
-        err.code === "ENOENT"
-          ? "Coverage report not generated yet — run scripts/backup-coverage-audit.sh."
-          : err.message,
-    };
+    return { error: err.code === "ENOENT" ? "report missing" : err.message };
+  }
+}
+
+async function discoverReports() {
+  let files;
+  try {
+    files = await readdir(REPORTS_DIR);
+  } catch (err) {
+    if (err.code === "ENOENT") return [];
+    throw err;
+  }
+  return files
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => ({ host: f.replace(/\.json$/, ""), file: path.join(REPORTS_DIR, f) }));
+}
+
+// publishAll: full rebuild of the {hosts, byHost} map and broadcast.
+async function publishAll() {
+  const discovered = await discoverReports();
+  const byHost = {};
+  for (const { host, file } of discovered) {
+    const report = await loadOneReport(file);
+    byHost[host] = report;
+  }
+  // Stable host order: local first, then alpha.
+  const hosts = Object.keys(byHost).sort((a, b) => {
+    if (a === LOCAL_HOST) return -1;
+    if (b === LOCAL_HOST) return 1;
+    return a.localeCompare(b);
+  });
+  updateStatus("backupCoverage", { localHost: LOCAL_HOST, hosts, byHost });
+}
+
+async function tick() {
+  try {
+    const discovered = await discoverReports();
+    let changed = false;
+    const seenHosts = new Set();
+    for (const { host, file } of discovered) {
+      seenHosts.add(host);
+      try {
+        const st = await stat(file);
+        if (lastMtimeMs.get(host) !== st.mtimeMs) {
+          lastMtimeMs.set(host, st.mtimeMs);
+          changed = true;
+        }
+      } catch {
+        // file vanished mid-tick; let next tick handle it
+      }
+    }
+    // Detect deletions too: if a host we used to see is gone, re-publish.
+    for (const host of lastMtimeMs.keys()) {
+      if (!seenHosts.has(host)) {
+        lastMtimeMs.delete(host);
+        changed = true;
+      }
+    }
+    if (changed) await publishAll();
+  } catch {
+    // ignore poll errors; keep ticking
   }
 }
 
@@ -53,79 +120,46 @@ async function loadAcks() {
   }
 }
 
-async function publishReport() {
-  const report = await loadReport();
-  updateStatus("backupCoverage", report);
-}
-
-async function tick() {
-  try {
-    const st = await stat(REPORT_PATH);
-    const mtimeMs = st.mtimeMs;
-    if (mtimeMs > lastMtimeMs) {
-      lastMtimeMs = mtimeMs;
-      await publishReport();
-    }
-  } catch {
-    // File doesn't exist yet — publish the empty/error state once, then
-    // sit quietly until the cron fires.
-    if (lastMtimeMs === 0) {
-      lastMtimeMs = -1;
-      await publishReport();
-    }
-  }
-}
-
-// Re-render the in-memory report immediately after an ack, so the UI
-// reflects the change without waiting for the next hourly audit. The
-// next audit will produce a freshly-classified copy on its own.
-function markAckedInMemory(path, ack) {
+// Locally apply an ack/unack to the in-memory state for instant UI feedback.
+// On the next audit cycle the disk-persisted ack file is what wins.
+function patchEntryAck(host, path, ack) {
   const current = getStatus()?.backupCoverage;
-  if (!current || !Array.isArray(current.entries)) return;
-  const updatedEntries = current.entries.map((e) =>
+  if (!current?.byHost?.[host]?.entries) return;
+  const report = current.byHost[host];
+  const entries = report.entries.map((e) =>
     e.path === path ? { ...e, ack } : e,
   );
-  const needs_review = updatedEntries.filter(
+  const needs_review = entries.filter(
     (e) =>
       (e.status === "uncovered" ||
         e.status === "partial" ||
         e.status === "unreadable") &&
       e.ack == null,
   ).length;
-  const acknowledged = updatedEntries.filter((e) => e.ack != null).length;
-  const covered = updatedEntries.filter((e) => e.status === "covered").length;
-  updateStatus("backupCoverage", {
-    ...current,
-    entries: updatedEntries,
-    summary: { needs_review, acknowledged, covered },
-  });
+  const acknowledged = entries.filter((e) => e.ack != null).length;
+  const covered = entries.filter((e) => e.status === "covered").length;
+  const newByHost = {
+    ...current.byHost,
+    [host]: {
+      ...report,
+      entries,
+      summary: { needs_review, acknowledged, covered },
+    },
+  };
+  updateStatus("backupCoverage", { ...current, byHost: newByHost });
 }
 
-function markUnackedInMemory(path) {
-  const current = getStatus()?.backupCoverage;
-  if (!current || !Array.isArray(current.entries)) return;
-  const updatedEntries = current.entries.map((e) =>
-    e.path === path ? { ...e, ack: null } : e,
-  );
-  const needs_review = updatedEntries.filter(
-    (e) =>
-      (e.status === "uncovered" ||
-        e.status === "partial" ||
-        e.status === "unreadable") &&
-      e.ack == null,
-  ).length;
-  const acknowledged = updatedEntries.filter((e) => e.ack != null).length;
-  const covered = updatedEntries.filter((e) => e.status === "covered").length;
-  updateStatus("backupCoverage", {
-    ...current,
-    entries: updatedEntries,
-    summary: { needs_review, acknowledged, covered },
-  });
-}
-
-export async function acknowledgePath(path, reason) {
+export async function acknowledgePath(host, path, reason) {
   if (typeof path !== "string" || !path) {
     return { ok: false, error: "path is required" };
+  }
+  // Acks are only writable for the LOCAL host's report. Remote acks
+  // would require SSH back to the source host.
+  if (host && host !== LOCAL_HOST) {
+    return {
+      ok: false,
+      error: `Acknowledgements for ${host} must be set on that host directly (this web admin only manages ${LOCAL_HOST}).`,
+    };
   }
   const acks = await loadAcks();
   const filtered = acks.filter((a) => a?.path !== path);
@@ -140,13 +174,19 @@ export async function acknowledgePath(path, reason) {
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };
   }
-  markAckedInMemory(path, ack);
+  patchEntryAck(LOCAL_HOST, path, ack);
   return { ok: true, ack };
 }
 
-export async function unacknowledgePath(path) {
+export async function unacknowledgePath(host, path) {
   if (typeof path !== "string" || !path) {
     return { ok: false, error: "path is required" };
+  }
+  if (host && host !== LOCAL_HOST) {
+    return {
+      ok: false,
+      error: `Acknowledgements for ${host} must be unset on that host directly.`,
+    };
   }
   const acks = await loadAcks();
   const filtered = acks.filter((a) => a?.path !== path);
@@ -155,18 +195,18 @@ export async function unacknowledgePath(path) {
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };
   }
-  markUnackedInMemory(path);
+  patchEntryAck(LOCAL_HOST, path, null);
   return { ok: true };
 }
 
 async function start() {
-  // Initial publish, then poll for mtime changes.
-  await tick();
+  await ensureReportsDir();
+  await publishAll();
   pollTimer = setInterval(() => {
     tick().catch(() => {});
   }, POLL_INTERVAL_MS);
   console.log(
-    `[backup-coverage] poller started (${POLL_INTERVAL_MS / 1000}s)`,
+    `[backup-coverage] poller started (${POLL_INTERVAL_MS / 1000}s) reports_dir=${REPORTS_DIR} local_host=${LOCAL_HOST}`,
   );
 }
 
