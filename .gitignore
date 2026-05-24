@@ -61,6 +61,7 @@ installed-modules.yaml
 user-config.yaml
 scripts/backup-coverage-audit.conf
 scripts/backup-coverage-acks.json
+scripts/backup-coverage-acks/
 
 # Python bytecode
 __pycache__/

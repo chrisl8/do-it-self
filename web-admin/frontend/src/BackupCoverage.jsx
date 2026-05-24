@@ -60,14 +60,7 @@ const statusChipColor = (status) => {
 // + click-to-expand list so the user can see "this directory is covered
 // in principle, but here's what's silently excluded inside it" — which
 // is the only way to spot a regression like the original jellyfin one.
-const CompactRow = ({
-  entry,
-  groupKey,
-  excludesUnder,
-  isLocal,
-  onAck,
-  onUnack,
-}) => {
+const CompactRow = ({ entry, groupKey, excludesUnder, onAck, onUnack }) => {
   const [excludesOpen, setExcludesOpen] = useState(false);
   const eff = effectiveStatus(entry);
   const ackable = entry.ack == null;
@@ -151,17 +144,15 @@ const CompactRow = ({
             {entry.ack.reason}
           </Typography>
         )}
-        {isLocal ? (
-          ackable ? (
-            <Button size="small" onClick={() => onAck(entry.path)}>
-              Ack
-            </Button>
-          ) : (
-            <Button size="small" onClick={() => onUnack(entry.path)}>
-              Un-ack
-            </Button>
-          )
-        ) : null}
+        {ackable ? (
+          <Button size="small" onClick={() => onAck(entry.path)}>
+            Ack
+          </Button>
+        ) : (
+          <Button size="small" onClick={() => onUnack(entry.path)}>
+            Un-ack
+          </Button>
+        )}
       </Stack>
       {hasExcludes && (
         <Collapse in={excludesOpen}>
@@ -251,7 +242,6 @@ const MountGroup = ({
   entries,
   excludesByPath,
   defaultExpanded,
-  isLocal,
   onAck,
   onUnack,
 }) => {
@@ -336,7 +326,6 @@ const MountGroup = ({
               entry={e}
               groupKey={groupKey}
               excludesUnder={excludesByPath?.get(e.path)}
-              isLocal={isLocal}
               onAck={onAck}
               onUnack={onUnack}
             />
@@ -393,7 +382,6 @@ const BackupCoverage = () => {
     if (h) navigate(`/backup-coverage/${h}`);
   };
   const report = activeHost ? byHost[activeHost] : null;
-  const isLocal = activeHost === localHost;
 
   const groups = useMemo(() => {
     const entries = Array.isArray(report?.entries) ? report.entries : [];
@@ -541,13 +529,6 @@ const BackupCoverage = () => {
                 <Typography variant="h6">
                   {report?.host || activeHost || "(unknown host)"}
                 </Typography>
-                {!isLocal && (
-                  <Chip
-                    label="read-only (remote host)"
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
                 <Chip
                   label={`Needs review: ${report?.summary?.needs_review ?? 0}`}
                   color={
@@ -597,7 +578,6 @@ const BackupCoverage = () => {
                       entries={g.entries}
                       excludesByPath={excludesByPath}
                       defaultExpanded={hasNeedsReview}
-                      isLocal={isLocal}
                       onAck={openAckDialog}
                       onUnack={handleUnack}
                     />

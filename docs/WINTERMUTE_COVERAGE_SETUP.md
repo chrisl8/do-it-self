@@ -112,14 +112,25 @@ processes either way).
 
 ## Ack-write behavior
 
-Acknowledgements work only for the host the web admin runs on
-(neuromancer). For wintermute entries, the Ack/Un-ack buttons are
-hidden — the audit is read-only from the web admin. If you need to
-ack something on wintermute, edit
-`~/containers/scripts/backup-coverage-acks.json` on wintermute
-directly (same JSON shape as on neuromancer); the next audit run will
-honor it and the new state will surface in the web admin after the
-next push.
+Acknowledgements are stored **centrally** on neuromancer, one file
+per host under `~/containers/scripts/backup-coverage-acks/<host>.json`.
+The web admin writes the appropriate file based on which host's tab is
+active, so you can ack entries on any host directly from the UI — no
+SSH-back required.
+
+When neuromancer's backend loads a remote host's report, it **overlays**
+the central ack file onto the report's entries before broadcasting.
+That means the UI always reflects the current ack state even if the
+remote audit hasn't yet re-classified entries with the new acks.
+
+The audit on wintermute still reads its own local ack file
+(`~/containers/scripts/backup-coverage-acks.json` on wintermute) when
+classifying — that's the legacy single-file path the audit was built
+with. It's no longer the source of truth, so its contents drift from
+central over time. The overlay corrects this for the UI; the audit
+log on wintermute itself can be ignored. If for some reason you want
+wintermute's audit log to reflect the central state, manually `scp`
+the file across; not required for normal operation.
 
 ## Troubleshooting
 
