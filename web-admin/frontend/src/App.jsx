@@ -156,6 +156,7 @@ const App = () => {
         <Route path="/backup-status" element={<BackupStatus />} />
         <Route path="/backup-pi" element={<BackupPi />} />
         <Route path="/backup-coverage" element={<BackupCoverage />} />
+        <Route path="/backup-coverage/:host" element={<BackupCoverage />} />
       </Routes>
     </BrowserRouter>
   );
