@@ -63,7 +63,9 @@ const statusChipColor = (status) => {
 const CompactRow = ({ entry, groupKey, excludesUnder, onAck, onUnack }) => {
   const [excludesOpen, setExcludesOpen] = useState(false);
   const eff = effectiveStatus(entry);
-  const ackable = entry.ack == null;
+  const acked = entry.ack != null;
+  // Covered rows are already in the backup — there's nothing to ack.
+  const ackable = !acked && entry.status !== "covered";
   const hasExcludes = (excludesUnder?.length || 0) > 0;
   // Strip the group prefix from the path for readability.
   let displayPath = entry.path;
@@ -144,11 +146,12 @@ const CompactRow = ({ entry, groupKey, excludesUnder, onAck, onUnack }) => {
             {entry.ack.reason}
           </Typography>
         )}
-        {ackable ? (
+        {ackable && (
           <Button size="small" onClick={() => onAck(entry.path)}>
             Ack
           </Button>
-        ) : (
+        )}
+        {acked && (
           <Button size="small" onClick={() => onUnack(entry.path)}>
             Un-ack
           </Button>
