@@ -12,6 +12,9 @@
 #   freshness     check newest-archive age per client; ping HC.io accordingly
 #   restore-test  extract a known file from each client's latest archive,
 #                 verify content, ping HC.io accordingly
+#   break-lock    release a stale repo lock left by a killed borg process
+#                 (e.g. the Pi was powered off mid-push). Manual recovery
+#                 only — run when you know no backup is actually in flight.
 #   all           prune + freshness (typical daily cron)
 #
 # Cron pattern (under chrisl8's user crontab, `crontab -e`):
@@ -252,6 +255,25 @@ cmd_restore_test_one() {
     return 1
 }
 
+cmd_break_lock_one() {
+    local pass
+    pass=$(load_secret "$C_INF_KEY") || {
+        echo "[ERROR] $C_NAME: could not load $C_INF_KEY from Infisical"
+        hc_fail "$HC_URL" "$C_NAME: Infisical fetch failed for $C_INF_KEY"
+        return 1
+    }
+    echo ""
+    echo "── break-lock $C_NAME ──"
+    if pi_borg "$pass" "break-lock $C_NAME"; then
+        echo "[OK] $C_NAME: break-lock succeeded (stale lock released, if any)"
+    else
+        echo "[ERROR] $C_NAME: break-lock FAILED"
+        hc_fail "$HC_URL" "$C_NAME: borg break-lock failed"
+        return 1
+    fi
+    return 0
+}
+
 run_for_all_clients() {
     local fn="$1"
     local rc=0
@@ -286,6 +308,7 @@ case "$CMD" in
     check)         run_command cmd_check_one "check" ;;
     freshness)     run_command cmd_freshness_one "freshness" ;;
     restore-test)  run_command cmd_restore_test_one "restore-test" ;;
+    break-lock)    run_command cmd_break_lock_one "break-lock" ;;
     all)
         # Daily cron path. Prune failures are noisy but acceptable as long
         # as freshness is OK; treat freshness as the authoritative deadman
@@ -294,12 +317,12 @@ case "$CMD" in
         run_command cmd_freshness_one "freshness"
         ;;
     "")
-        echo "Usage: $0 {prune|check|freshness|restore-test|all}"
+        echo "Usage: $0 {prune|check|freshness|restore-test|break-lock|all}"
         exit 2
         ;;
     *)
         echo "[ERROR] unknown subcommand: $CMD"
-        echo "Usage: $0 {prune|check|freshness|restore-test|all}"
+        echo "Usage: $0 {prune|check|freshness|restore-test|break-lock|all}"
         exit 2
         ;;
 esac
