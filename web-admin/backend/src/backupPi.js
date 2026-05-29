@@ -38,6 +38,7 @@ const MGMT_VERBS = new Set([
   "list",
   "list-last",
   "info",
+  "break-lock",
 ]);
 
 let tickTimer = null;

@@ -349,7 +349,7 @@ A generated `/etc/backup-pi.clients.env` (mode 644, no secrets) is the runtime s
    ```
    command="/usr/local/bin/borg-manage.sh",restrict <MANAGER_SSH_PUBKEY>
    ```
-   `borg-manage.sh` parses `<verb> <client> [args...]` from `$SSH_ORIGINAL_COMMAND`, validates both against the allowlist, reads `BORG_PASSPHRASE` from the SSH env (forwarded via the manager's `SendEnv BORG_PASSPHRASE`), and runs `borg <verb>` with hardcoded args. Allowed verbs: `prune` (hardcoded `--keep-daily 14 --keep-weekly 4`, no `--prefix`), `compact`, `check`, `list`, `list-last`, `info`, `extract <archive> <path>` (path validated, no `..` allowed). Anything else is rejected and logged via `logger -t borg-manage`.
+   `borg-manage.sh` parses `<verb> <client> [args...]` from `$SSH_ORIGINAL_COMMAND`, validates both against the allowlist, reads `BORG_PASSPHRASE` from the SSH env (forwarded via the manager's `SendEnv BORG_PASSPHRASE`), and runs `borg <verb>` with hardcoded args. Allowed verbs: `prune` (hardcoded `--keep-daily 14 --keep-weekly 4`, no `--prefix`), `compact`, `check`, `list`, `list-last`, `info`, `extract <archive> <path>` (path validated, no `..` allowed), `break-lock` (release a stale repo lock; removes only the lock file, never archive data). Anything else is rejected and logged via `logger -t borg-manage`.
 
 ### Why two paths
 
@@ -381,6 +381,7 @@ Subcommands:
 | `check`        | `borg check` for every client (slow; bandwidth-heavy)             | Weekly           |
 | `freshness`    | `list-last` per client; ping per-client HC.io URL accordingly     | Daily            |
 | `restore-test` | Extract a known file from each latest archive; verify content     | Weekly           |
+| `break-lock`   | Release a stale repo lock from a killed borg process              | Manual recovery  |
 | `all`          | `prune` + `freshness` (typical daily cron)                        | Daily            |
 
 Recommended chrisl8 user crontab on neuromancer:

@@ -743,6 +743,16 @@ case "$VERB" in
         logger -t borg-manage "check $CLIENT_NAME ($REPO_PATH)"
         exec borg check --show-rc "$REPO_PATH"
         ;;
+    break-lock)
+        # Release a stale repository lock left behind when a borg process was
+        # killed mid-operation (e.g. the Pi was powered off during a push).
+        # break-lock only removes the lock file; it never deletes or mutates
+        # archive data, so it is safe to expose to the manager key. Only run
+        # this when you are certain no borg process is actually operating on
+        # the repo, otherwise you can corrupt a concurrent transaction.
+        logger -t borg-manage "break-lock $CLIENT_NAME ($REPO_PATH)"
+        exec borg break-lock --show-rc "$REPO_PATH"
+        ;;
     list)
         logger -t borg-manage "list $CLIENT_NAME ($REPO_PATH)"
         exec borg list --short "$REPO_PATH"
