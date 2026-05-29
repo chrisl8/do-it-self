@@ -383,11 +383,15 @@ app.get("/api/borg-status", async (req, res) => {
 });
 
 // Drives the borg-backup banner on the dashboard. Returns a derived
-// state so the frontend can render one of three nudges:
-//   - "none"        : conf missing OR no successful backup in recent
-//                     memory — the strong "set up backups" nudge
+// state so the frontend can render one of these nudges:
+//   - "none"        : conf missing OR backup has never run — the strong
+//                     "set up backups" nudge. Reserved for genuinely
+//                     unconfigured hosts; a configured-but-broken backup
+//                     uses "failing" instead.
 //   - "local_only"  : local is current but remote is failing/missing
 //   - "remote_only" : remote is current but local is failing
+//   - "failing"     : configured and has run, but the latest run did not
+//                     complete successfully (or is stale on both sides)
 //   - "ok"          : both sides healthy (or remote intentionally off)
 // A successful backup that's older than STALE_MS is treated the same as
 // "never ran" for that side — daily cron plus slack.
@@ -465,7 +469,15 @@ app.get("/api/system/backup-status", async (req, res) => {
   };
 
   if (statusJson) {
-    const localSide = sideState(statusJson.status, statusJson.last_backup, now);
+    // The top-level `status` is the OVERALL result. "partial" specifically
+    // means the local backup succeeded but the remote push failed
+    // (borg-backup.sh promotes success→partial in that case). For the LOCAL
+    // side, "partial" is a success — otherwise a remote-only failure would
+    // make the local side read as failed too, which is the bug that mislabeled
+    // a working local backup as "not configured".
+    const localStatus =
+      statusJson.status === "partial" ? "success" : statusJson.status;
+    const localSide = sideState(localStatus, statusJson.last_backup, now);
     local.last_status = localSide.last_status;
 
     const remoteStatus = statusJson.remote?.status;
@@ -481,6 +493,7 @@ app.get("/api/system/backup-status", async (req, res) => {
 
   let state;
   if (!confPresent || !statusJson) {
+    // Genuinely not set up: no borg-backup.conf, or it has never run.
     state = "none";
   } else {
     const localOk = local.last_status === "success";
@@ -492,7 +505,10 @@ app.get("/api/system/backup-status", async (req, res) => {
     } else if (!localOk && remote.last_status === "success") {
       state = "remote_only";
     } else {
-      state = "none";
+      // Configured and has run, but neither side is currently healthy.
+      // This is a FAILURE, not an "unconfigured" host — don't tell the user
+      // to set up backups they already have.
+      state = "failing";
     }
   }
 

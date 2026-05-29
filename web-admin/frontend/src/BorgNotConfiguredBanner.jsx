@@ -32,6 +32,16 @@ const MESSAGES = {
       </>
     ),
   },
+  failing: {
+    title: "Borg backup is failing",
+    body: (
+      <>
+        Borg backup is configured, but its most recent run did not complete
+        successfully (or hasn't run recently). See the Backups page for
+        details.
+      </>
+    ),
+  },
 };
 
 const BorgNotConfiguredBanner = () => {
