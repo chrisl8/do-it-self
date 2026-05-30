@@ -758,8 +758,11 @@ case "$VERB" in
         exec borg list --short "$REPO_PATH"
         ;;
     list-last)
+        # {start} with an explicit ISO strftime — borg 1.4 removed the bare
+        # {isoformat} key (KeyError), and the neuromancer-side freshness parser
+        # does `date -d` on this field, so it must be ISO-parseable.
         logger -t borg-manage "list-last $CLIENT_NAME ($REPO_PATH)"
-        exec borg list --last 1 --format '{isoformat}|{archive}' "$REPO_PATH"
+        exec borg list --last 1 --format '{start:%Y-%m-%dT%H:%M:%S}|{archive}' "$REPO_PATH"
         ;;
     info)
         logger -t borg-manage "info $CLIENT_NAME ($REPO_PATH)"
@@ -1039,8 +1042,10 @@ for name in $CLIENTS; do
         # SendEnv. Replaces last_iso with the actual archive timestamp and
         # gives us archive_count + last_archive_name.
         if $has_passphrase; then
+            # {start} with explicit ISO strftime — borg 1.4 removed the bare
+            # {isoformat} key. parseBorgArchiveTimestamp() (web admin) accepts ISO.
             borg_line=$(sudo -u borg BORG_PASSPHRASE="${!pass_var}" \
-                borg list --last 1 --format '{isoformat}|{archive}' "$repo_path" 2>/dev/null | head -1 || true)
+                borg list --last 1 --format '{start:%Y-%m-%dT%H:%M:%S}|{archive}' "$repo_path" 2>/dev/null | head -1 || true)
             if [[ -n "$borg_line" ]]; then
                 last_iso="${borg_line%%|*}"
                 last_name="${borg_line#*|}"
