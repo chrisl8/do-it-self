@@ -210,6 +210,23 @@ containers:
         host_subpath: container-mounts/code/home
         container_path: /home/coder
     default_disabled: true
+  collabora:
+    description: Collabora Online (CODE) document editor for Nextcloud
+    homepage_group: Productivity
+    tags: []
+    uses_tailscale: true
+    start_order: "013"
+    default_disabled: true
+    variables:
+      COLLABORA_USERNAME:
+        type: string
+        required: false
+        description: Collabora admin-console username
+      COLLABORA_PASSWORD:
+        type: secret
+        required: false
+        description: Collabora admin-console password
+        auto_generate: true
   crater-manipulator:
     description: Crater Manipulator game server component
     homepage_group: Personal Projects
