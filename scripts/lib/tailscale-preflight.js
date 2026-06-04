@@ -274,7 +274,7 @@ async function checkHttpsRoundTrip(domain) {
     let u;
     try {
       u = new URL(url);
-    } catch (err) {
+    } catch {
       resolve({
         name: "HTTPS round-trip",
         ok: false,

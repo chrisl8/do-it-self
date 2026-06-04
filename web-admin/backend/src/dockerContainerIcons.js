@@ -1,9 +1,6 @@
 import { readdirSync, readFileSync, existsSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { join } from "path";
 import os from "os";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const CONTAINERS_DIR = join(os.homedir(), "containers");
 const BASE_ICON_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");

@@ -381,7 +381,6 @@ export async function getConfigStatus() {
   // so this /shared merge is the only path the TS_AUTHKEY check below can
   // learn about shared variable values. The /<container> merges that follow
   // are the equivalent path for per-container secrets. Do not remove.
-  let infisicalMerged = false;
   try {
     const { isAvailable, listSecrets } = await import("./infisicalClient.js");
     if (await isAvailable()) {
@@ -402,7 +401,6 @@ export async function getConfigStatus() {
           }
         }
       }
-      infisicalMerged = true;
     }
   } catch {
     // Infisical not available, validate with what we have

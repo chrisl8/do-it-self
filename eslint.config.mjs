@@ -30,7 +30,14 @@ export default [
       globals: { ...globals.node },
     },
     rules: {
-      "no-unused-vars": "warn",
+      "no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
       "no-prototype-builtins": "off",
     },
   },
@@ -48,7 +55,14 @@ export default [
     rules: {
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
-      "no-unused-vars": "warn",
+      "no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
       "react/react-in-jsx-scope": "off",
       "react/prop-types": "off",
       // Escaping apostrophes/quotes in JSX text is pedantic noise, not a bug.

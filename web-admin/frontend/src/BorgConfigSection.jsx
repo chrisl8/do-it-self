@@ -5,7 +5,6 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
-import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import Collapse from "@mui/material/Collapse";
 import Dialog from "@mui/material/Dialog";
@@ -497,7 +496,7 @@ const InitOutputDialog = ({ open, onClose, output, loading, exitCode }) => (
 );
 
 const SshPublicKeyRow = () => {
-  const [pubkey, setPubkey] = useState(null);
+  const [, setPubkey] = useState(null);
 
   useEffect(() => {
     // The backend doesn't expose ~/.ssh/id_ed25519.pub yet, so for v1
