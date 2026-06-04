@@ -439,7 +439,7 @@ const BackupCoverage = () => {
       if (matched.length > 0) result.set(entry.path, matched);
     }
     return result;
-  }, [status]);
+  }, [report]);
 
   const openAckDialog = (path) =>
     setAckDialog({ open: true, path, reason: "" });
