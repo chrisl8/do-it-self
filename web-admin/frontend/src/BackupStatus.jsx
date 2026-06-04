@@ -78,8 +78,10 @@ const ThresholdReadout = ({ thresholdHours, ageHoursList, sx }) => {
   return (
     <Typography variant="caption" color="text.secondary" sx={sx}>
       {fresh.length} of {ageHoursList.length} fresh
-      {oldestFresh !== null && ` · oldest fresh: ${formatDuration(oldestFresh)}`}
-      {youngestStale !== null && ` · youngest stale: ${formatDuration(youngestStale)}`}
+      {oldestFresh !== null &&
+        ` · oldest fresh: ${formatDuration(oldestFresh)}`}
+      {youngestStale !== null &&
+        ` · youngest stale: ${formatDuration(youngestStale)}`}
     </Typography>
   );
 };
@@ -92,9 +94,21 @@ const ThresholdSlider = ({ value, onChange, onCommit, disabled, label }) => {
     label: isNarrow ? undefined : m.label,
   }));
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 }, minWidth: { xs: 0, sm: 200 }, flex: 1 }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: { xs: 1, sm: 2 },
+        minWidth: { xs: 0, sm: 200 },
+        flex: 1,
+      }}
+    >
       {label && (
-        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ whiteSpace: "nowrap" }}
+        >
           {label}
         </Typography>
       )}
@@ -112,7 +126,10 @@ const ThresholdSlider = ({ value, onChange, onCommit, disabled, label }) => {
         size="small"
         sx={{ flex: 1 }}
       />
-      <Typography variant="body2" sx={{ minWidth: "3.5em", textAlign: "right", whiteSpace: "nowrap" }}>
+      <Typography
+        variant="body2"
+        sx={{ minWidth: "3.5em", textAlign: "right", whiteSpace: "nowrap" }}
+      >
         {formatDuration(value)}
       </Typography>
     </Box>
@@ -238,7 +255,11 @@ const HealthcheckUrlField = ({ label, value, onSave }) => {
           disabled={saving}
           error={!!error}
           helperText={error || " "}
-          slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: "0.8rem" } } }}
+          slotProps={{
+            htmlInput: {
+              style: { fontFamily: "monospace", fontSize: "0.8rem" },
+            },
+          }}
         />
         {saving && <Spinner size={16} />}
       </Box>
@@ -250,19 +271,21 @@ const LogDialog = ({ open, onClose, title, log }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
   return (
-  <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={fullScreen}>
-    <DialogTitle>{title}</DialogTitle>
-    <DialogContent>
-      {log ? (
-        <LogOutput value={log.join("\n")} />
-      ) : (
-        <Spinner />
-      )}
-    </DialogContent>
-    <DialogActions>
-      <Button onClick={onClose}>Close</Button>
-    </DialogActions>
-  </Dialog>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      fullScreen={fullScreen}
+    >
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        {log ? <LogOutput value={log.join("\n")} /> : <Spinner />}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 
@@ -415,11 +438,15 @@ const BackupStatus = () => {
           </Box>
           <Card sx={{ mb: 3 }}>
             <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1.5 }}
+              >
                 Borg backup has not been set up on this host. See{" "}
                 <code>borgbackup/SETUP.md</code> for setup instructions, then
-                run <code>scripts/setup-borg-backup.sh</code> to configure
-                local and (optionally) remote backups.
+                run <code>scripts/setup-borg-backup.sh</code> to configure local
+                and (optionally) remote backups.
               </Typography>
               <Box
                 sx={{
@@ -435,7 +462,9 @@ const BackupStatus = () => {
                     <Switch
                       checked={!borgBannerDismissed}
                       onChange={(e) => {
-                        saveBorgBannerDismissed(!e.target.checked).catch(() => {});
+                        saveBorgBannerDismissed(!e.target.checked).catch(
+                          () => {},
+                        );
                       }}
                       size="small"
                     />
@@ -491,14 +520,19 @@ const BackupStatus = () => {
                   </Typography>
                 </Box>
                 <Box>
-                  <Tooltip title="Wall-clock time for the whole run: DB dumps, local archive + prune + compact, and the remote push." arrow>
-                    <Typography variant="caption" color="text.secondary" sx={{ borderBottom: "1px dotted", cursor: "help" }}>
+                  <Tooltip
+                    title="Wall-clock time for the whole run: DB dumps, local archive + prune + compact, and the remote push."
+                    arrow
+                  >
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ borderBottom: "1px dotted", cursor: "help" }}
+                    >
                       Total Duration
                     </Typography>
                   </Tooltip>
-                  <Typography variant="body2">
-                    {borgStatus.duration}
-                  </Typography>
+                  <Typography variant="body2">{borgStatus.duration}</Typography>
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -539,19 +573,26 @@ const BackupStatus = () => {
                   borderColor: "divider",
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ minWidth: "4.5em" }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ minWidth: "4.5em" }}
+                >
                   Local:
                 </Typography>
                 <Chip
                   label={
                     borgStatus.status === "failed"
                       ? "failed"
-                      : borgStatus.status === "success" || borgStatus.status === "partial"
-                      ? "success"
-                      : borgStatus.status
+                      : borgStatus.status === "success" ||
+                          borgStatus.status === "partial"
+                        ? "success"
+                        : borgStatus.status
                   }
                   color={getStatusColor(
-                    borgStatus.status === "partial" ? "success" : borgStatus.status,
+                    borgStatus.status === "partial"
+                      ? "success"
+                      : borgStatus.status,
                   )}
                   size="small"
                 />
@@ -567,7 +608,11 @@ const BackupStatus = () => {
                     pt: 1,
                   }}
                 >
-                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: "4.5em" }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ minWidth: "4.5em" }}
+                  >
                     Remote:
                   </Typography>
                   <Chip
@@ -614,7 +659,8 @@ const BackupStatus = () => {
                   </>
                 ) : (
                   <Alert severity="info" sx={{ flex: 1 }}>
-                    Infisical not reachable — healthcheck URLs cannot be managed here right now.
+                    Infisical not reachable — healthcheck URLs cannot be managed
+                    here right now.
                   </Alert>
                 )}
               </Box>
@@ -639,7 +685,9 @@ const BackupStatus = () => {
                     <Switch
                       checked={!borgBannerDismissed}
                       onChange={(e) => {
-                        saveBorgBannerDismissed(!e.target.checked).catch(() => {});
+                        saveBorgBannerDismissed(!e.target.checked).catch(
+                          () => {},
+                        );
                       }}
                       size="small"
                     />
@@ -731,7 +779,9 @@ const BackupStatus = () => {
                     disabled={thresholdSaving}
                   />
                   <ThresholdReadout
-                    thresholdHours={globalThresholdLocal ?? kopiaStatus.threshold_hours}
+                    thresholdHours={
+                      globalThresholdLocal ?? kopiaStatus.threshold_hours
+                    }
                     ageHoursList={(kopiaStatus.sources ?? [])
                       .filter((s) => s.status !== "ignored")
                       .map((s) => s.ageHours ?? 0)}
@@ -764,7 +814,9 @@ const BackupStatus = () => {
                       onDelete={async () => {
                         setIgnoreSaving(true);
                         try {
-                          await saveIgnoreHosts(ignoreHosts.filter((h) => h !== host));
+                          await saveIgnoreHosts(
+                            ignoreHosts.filter((h) => h !== host),
+                          );
                         } catch {
                           // ignore
                         } finally {
@@ -775,7 +827,11 @@ const BackupStatus = () => {
                     />
                   ))}
                   {ignoreHosts.length === 0 && (
-                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontStyle: "italic" }}
+                    >
                       none
                     </Typography>
                   )}
@@ -788,7 +844,10 @@ const BackupStatus = () => {
                       if (e.key === "Enter" && newIgnoreHost.trim()) {
                         setIgnoreSaving(true);
                         try {
-                          await saveIgnoreHosts([...ignoreHosts, newIgnoreHost.trim()]);
+                          await saveIgnoreHosts([
+                            ...ignoreHosts,
+                            newIgnoreHost.trim(),
+                          ]);
                           setNewIgnoreHost("");
                         } catch {
                           // ignore
@@ -798,7 +857,11 @@ const BackupStatus = () => {
                       }
                     }}
                     disabled={ignoreSaving}
-                    slotProps={{ htmlInput: { style: { padding: "2px 6px", width: "10ch" } } }}
+                    slotProps={{
+                      htmlInput: {
+                        style: { padding: "2px 6px", width: "10ch" },
+                      },
+                    }}
                     sx={{ "& .MuiOutlinedInput-root": { height: 24 } }}
                   />
                 </Box>
@@ -821,7 +884,8 @@ const BackupStatus = () => {
                   />
                 ) : (
                   <Alert severity="info" sx={{ flex: 1 }}>
-                    Infisical not reachable — healthcheck URL cannot be managed here right now.
+                    Infisical not reachable — healthcheck URL cannot be managed
+                    here right now.
                   </Alert>
                 )}
               </Box>
@@ -842,7 +906,9 @@ const BackupStatus = () => {
               localHostThresholds[host] ??
               hostThresholds[host] ??
               kopiaStatus.threshold_hours;
-            const maxAgeHours = Math.max(...sources.map((s) => s.ageHours ?? 0));
+            const maxAgeHours = Math.max(
+              ...sources.map((s) => s.ageHours ?? 0),
+            );
             const hostAgeHoursList = sources.map((s) => s.ageHours ?? 0);
 
             return (
@@ -858,7 +924,9 @@ const BackupStatus = () => {
                     }}
                     onClick={() => toggleHost(host)}
                   >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                    >
                       <IconButton size="small">
                         {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
@@ -879,19 +947,33 @@ const BackupStatus = () => {
                       color={getStatusColor(hostStatus)}
                       size="small"
                     />
-                    <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ ml: 0.5 }}
+                    >
                       {sources.length === 1 ? "" : "oldest: "}
                       {formatDuration(maxAgeHours)} ago
                     </Typography>
                   </Box>
                   <Box
-                    sx={{ ml: { xs: 1, sm: 5 }, mr: 1, mt: 0.5, display: "flex", alignItems: "center", gap: 0.5 }}
+                    sx={{
+                      ml: { xs: 1, sm: 5 },
+                      mr: 1,
+                      mt: 0.5,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                    }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ThresholdSlider
                       value={effectiveThreshold}
                       onChange={(hours) =>
-                        setLocalHostThresholds((prev) => ({ ...prev, [host]: hours }))
+                        setLocalHostThresholds((prev) => ({
+                          ...prev,
+                          [host]: hours,
+                        }))
                       }
                       onCommit={async (hours) => {
                         const updated = { ...hostThresholds, [host]: hours };
@@ -946,7 +1028,8 @@ const BackupStatus = () => {
                             e.userName === source.userName &&
                             e.path === source.path,
                         );
-                        const showToggle = isIgnored || source.status === "stale";
+                        const showToggle =
+                          isIgnored || source.status === "stale";
                         return (
                           <Box
                             key={`${source.userName}:${source.path}`}

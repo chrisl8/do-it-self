@@ -59,9 +59,16 @@ const BackupPathRow = ({ row, onChange, onDelete }) => {
         fullWidth
         value={row.path}
         onChange={(e) => onChange({ ...row, path: e.target.value })}
-        slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
+        slotProps={{
+          htmlInput: {
+            style: { fontFamily: "monospace", fontSize: "0.85rem" },
+          },
+        }}
       />
-      <PathSizeChip path={row.path} enabled={row.enabled && Boolean(row.path)} />
+      <PathSizeChip
+        path={row.path}
+        enabled={row.enabled && Boolean(row.path)}
+      />
       <IconButton size="small" onClick={onDelete} aria-label="remove path">
         <DeleteIcon fontSize="small" />
       </IconButton>
@@ -69,7 +76,13 @@ const BackupPathRow = ({ row, onChange, onDelete }) => {
   );
 };
 
-const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, onConfirm }) => {
+const GeneratePassphraseDialog = ({
+  open,
+  onClose,
+  passphraseKey,
+  onGenerate,
+  onConfirm,
+}) => {
   const [value, setValue] = useState("");
   const [error, setError] = useState(null);
   const [confirmArmed, setConfirmArmed] = useState(false);
@@ -137,14 +150,16 @@ const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, on
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        {passphraseKey === "remotePassphrase" ? "Remote" : "Local"} borg passphrase
+        {passphraseKey === "remotePassphrase" ? "Remote" : "Local"} borg
+        passphrase
       </DialogTitle>
       <DialogContent>
         <Alert severity="error" sx={{ mb: 2 }}>
           <AlertTitle>Save this passphrase off-box now</AlertTitle>
-          This is the <b>only</b> time you can see this passphrase. If you lose it and also
-          lose this host, your borg archives are <b>unrecoverable</b>. Save it in a password
-          manager <b>and</b> somewhere else before continuing.
+          This is the <b>only</b> time you can see this passphrase. If you lose
+          it and also lose this host, your borg archives are{" "}
+          <b>unrecoverable</b>. Save it in a password manager <b>and</b>{" "}
+          somewhere else before continuing.
         </Alert>
         <Box
           sx={{
@@ -165,7 +180,12 @@ const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, on
           }}
         >
           <Box sx={{ flex: 1 }}>{value || <Spinner size={16} />}</Box>
-          <IconButton size="small" onClick={copy} disabled={!value} aria-label="copy">
+          <IconButton
+            size="small"
+            onClick={copy}
+            disabled={!value}
+            aria-label="copy"
+          >
             <ContentCopyIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -175,11 +195,12 @@ const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, on
           </Alert>
         )}
         <DialogContentText sx={{ fontSize: "0.85rem" }}>
-          When you click <b>I've saved it — write to Infisical</b>, this passphrase
-          is stored in Infisical at <code>/borgbackup</code>. The web admin masks it
-          in normal display, but you can reveal it again later from this page while
-          Infisical is running. Save it off-box anyway — if this host is lost before
-          you copy the passphrase elsewhere, the archives it encrypts cannot be read.
+          When you click <b>I've saved it — write to Infisical</b>, this
+          passphrase is stored in Infisical at <code>/borgbackup</code>. The web
+          admin masks it in normal display, but you can reveal it again later
+          from this page while Infisical is running. Save it off-box anyway — if
+          this host is lost before you copy the passphrase elsewhere, the
+          archives it encrypts cannot be read.
         </DialogContentText>
       </DialogContent>
       <DialogActions>
@@ -194,7 +215,13 @@ const GeneratePassphraseDialog = ({ open, onClose, passphraseKey, onGenerate, on
           onClick={confirm}
           disabled={!value || !confirmArmed || saving}
         >
-          {saving ? <Spinner size={16} /> : confirmArmed ? "I've saved it — write to Infisical" : "Read the warning above…"}
+          {saving ? (
+            <Spinner size={16} />
+          ) : confirmArmed ? (
+            "I've saved it — write to Infisical"
+          ) : (
+            "Read the warning above…"
+          )}
         </Button>
       </DialogActions>
     </Dialog>
@@ -231,7 +258,8 @@ const RevealPassphraseDialog = ({ open, onClose, passphraseKey, onReveal }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        {passphraseKey === "remotePassphrase" ? "Remote" : "Local"} borg passphrase
+        {passphraseKey === "remotePassphrase" ? "Remote" : "Local"} borg
+        passphrase
       </DialogTitle>
       <DialogContent>
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -264,8 +292,15 @@ const RevealPassphraseDialog = ({ open, onClose, passphraseKey, onReveal }) => {
             wordBreak: "break-all",
           }}
         >
-          <Box sx={{ flex: 1 }}>{value || (error ? "" : <Spinner size={16} />)}</Box>
-          <IconButton size="small" onClick={copy} disabled={!value} aria-label="copy">
+          <Box sx={{ flex: 1 }}>
+            {value || (error ? "" : <Spinner size={16} />)}
+          </Box>
+          <IconButton
+            size="small"
+            onClick={copy}
+            disabled={!value}
+            aria-label="copy"
+          >
             <ContentCopyIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -275,9 +310,10 @@ const RevealPassphraseDialog = ({ open, onClose, passphraseKey, onReveal }) => {
           </Alert>
         )}
         <DialogContentText sx={{ fontSize: "0.85rem" }}>
-          This value was pulled from Infisical at <code>/borgbackup</code>. You can
-          reveal it again from this page as long as the host and Infisical are
-          running — but that convenience vanishes the moment the host is lost.
+          This value was pulled from Infisical at <code>/borgbackup</code>. You
+          can reveal it again from this page as long as the host and Infisical
+          are running — but that convenience vanishes the moment the host is
+          lost.
         </DialogContentText>
       </DialogContent>
       <DialogActions>
@@ -289,7 +325,14 @@ const RevealPassphraseDialog = ({ open, onClose, passphraseKey, onReveal }) => {
   );
 };
 
-const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onReveal, onSave }) => {
+const PassphraseField = ({
+  label,
+  passphraseKey,
+  isSet,
+  onGenerate,
+  onReveal,
+  onSave,
+}) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
   const [manualMode, setManualMode] = useState(false);
@@ -341,7 +384,11 @@ const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onReveal, on
       )}
       {!isSet && !manualMode && (
         <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
-          <Button variant="contained" size="small" onClick={() => setDialogOpen(true)}>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => setDialogOpen(true)}
+          >
             Generate strong passphrase
           </Button>
           <Button size="small" onClick={() => setManualMode(true)}>
@@ -350,7 +397,9 @@ const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onReveal, on
         </Box>
       )}
       {manualMode && (
-        <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", mt: 0.5 }}>
+        <Box
+          sx={{ display: "flex", gap: 1, alignItems: "flex-start", mt: 0.5 }}
+        >
           <TextField
             size="small"
             type="password"
@@ -360,7 +409,10 @@ const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onReveal, on
             onChange={(e) => setManualValue(e.target.value)}
             disabled={saving}
             error={Boolean(manualError)}
-            helperText={manualError || (isSet ? "Replaces the passphrase currently in Infisical" : " ")}
+            helperText={
+              manualError ||
+              (isSet ? "Replaces the passphrase currently in Infisical" : " ")
+            }
           />
           <Button
             variant="contained"
@@ -370,17 +422,28 @@ const PassphraseField = ({ label, passphraseKey, isSet, onGenerate, onReveal, on
           >
             {saving ? <Spinner size={16} /> : "Save"}
           </Button>
-          <Button size="small" onClick={() => { setManualMode(false); setManualValue(""); setManualError(null); }}>
+          <Button
+            size="small"
+            onClick={() => {
+              setManualMode(false);
+              setManualValue("");
+              setManualError(null);
+            }}
+          >
             Cancel
           </Button>
         </Box>
       )}
       {isSet && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-          While this host and Infisical are running, click <b>Reveal</b> to retrieve the
-          passphrase and save it off-box. If the host is lost <b>and</b> you don't have the
-          passphrase saved somewhere else, archives encrypted with it become permanently
-          unreadable.
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mt: 0.5 }}
+        >
+          While this host and Infisical are running, click <b>Reveal</b> to
+          retrieve the passphrase and save it off-box. If the host is lost{" "}
+          <b>and</b> you don't have the passphrase saved somewhere else,
+          archives encrypted with it become permanently unreadable.
         </Typography>
       )}
       <GeneratePassphraseDialog
@@ -417,7 +480,9 @@ const InitOutputDialog = ({ open, onClose, output, loading, exitCode }) => (
       {loading ? (
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Spinner size={20} />
-          <Typography>Running <code>scripts/setup-borg-backup.sh</code>…</Typography>
+          <Typography>
+            Running <code>scripts/setup-borg-backup.sh</code>…
+          </Typography>
         </Box>
       ) : (
         <LogOutput value={output} placeholder="(no output)" />
@@ -447,8 +512,8 @@ const SshPublicKeyRow = () => {
         SSH public key for backup-pi authorized_keys
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-        For a fresh Pi, run <code>setup-backup-pi.sh</code> on it. For an existing
-        Pi, on this host run{" "}
+        For a fresh Pi, run <code>setup-backup-pi.sh</code> on it. For an
+        existing Pi, on this host run{" "}
         <Box
           component="code"
           sx={{
@@ -461,7 +526,8 @@ const SshPublicKeyRow = () => {
           cat ~/.ssh/id_ed25519.pub
         </Box>{" "}
         and add the output to the Pi's <code>borg</code> user's{" "}
-        <code>~/.ssh/authorized_keys</code>. Then click Initialize repositories below.
+        <code>~/.ssh/authorized_keys</code>. Then click Initialize repositories
+        below.
       </Typography>
     </Box>
   );
@@ -567,8 +633,9 @@ const BorgConfigSection = () => {
         </Typography>
         <Alert severity="warning">
           <AlertTitle>Infisical is required</AlertTitle>
-          Borg backup stores its passphrases in Infisical. Enable and start the Infisical
-          container on the Containers page, then refresh this page to continue.
+          Borg backup stores its passphrases in Infisical. Enable and start the
+          Infisical container on the Containers page, then refresh this page to
+          continue.
         </Alert>
       </Box>
     );
@@ -592,8 +659,11 @@ const BorgConfigSection = () => {
     });
   };
 
-  const repoIsReady = Boolean(draft.repo_path) && data.passphrase_set.passphrase;
-  const backupCanRun = data.passphrase_set.passphrase && draft.backup_paths.some((p) => p.enabled && p.path);
+  const repoIsReady =
+    Boolean(draft.repo_path) && data.passphrase_set.passphrase;
+  const backupCanRun =
+    data.passphrase_set.passphrase &&
+    draft.backup_paths.some((p) => p.enabled && p.path);
 
   return (
     <Box sx={{ mb: 3 }}>
@@ -602,7 +672,11 @@ const BorgConfigSection = () => {
           Borg Backup Configuration
         </Typography>
         {!data.persisted && (
-          <Chip label="Not yet saved — showing live conf" size="small" color="warning" />
+          <Chip
+            label="Not yet saved — showing live conf"
+            size="small"
+            color="warning"
+          />
         )}
       </Box>
 
@@ -695,9 +769,10 @@ const BorgConfigSection = () => {
                   color="text.secondary"
                   sx={{ display: "block", mt: 1 }}
                 >
-                  The encrypted repository and its database dump directory live on the
-                  same drive, in sibling folders. To use a different drive, add it on
-                  the Configuration page under Storage Mounts, then return here.
+                  The encrypted repository and its database dump directory live
+                  on the same drive, in sibling folders. To use a different
+                  drive, add it on the Configuration page under Storage Mounts,
+                  then return here.
                 </Typography>
               </Box>
             );
@@ -735,8 +810,9 @@ const BorgConfigSection = () => {
                   ))}
                 </Box>
                 <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
-                  Nothing under these mounts is included in the backup. If these mounts
-                  hold data you need to recover after host loss, add an enabled path.
+                  Nothing under these mounts is included in the backup. If these
+                  mounts hold data you need to recover after host loss, add an
+                  enabled path.
                 </Typography>
               </Alert>
             )}
@@ -753,7 +829,14 @@ const BorgConfigSection = () => {
           />
 
           {/* Remote subsection */}
-          <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+          <Box
+            sx={{
+              mt: 2,
+              pt: 2,
+              borderTop: "1px solid",
+              borderColor: "divider",
+            }}
+          >
             <Box
               sx={{ display: "flex", alignItems: "center", cursor: "pointer" }}
               onClick={() => setRemoteOpen((s) => !s)}
@@ -774,10 +857,15 @@ const BorgConfigSection = () => {
             </Box>
             <Collapse in={remoteOpen}>
               <Box sx={{ mt: 1.5 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  A separate server (typically a backup-pi on your tailnet) that holds a
-                  second copy of your archives in append-only mode, resilient to ransomware
-                  and local drive failure. Leave the URL empty to disable.
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1.5 }}
+                >
+                  A separate server (typically a backup-pi on your tailnet) that
+                  holds a second copy of your archives in append-only mode,
+                  resilient to ransomware and local drive failure. Leave the URL
+                  empty to disable.
                 </Typography>
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="caption" color="text.secondary">
@@ -789,8 +877,14 @@ const BorgConfigSection = () => {
                     sx={{ mt: 0.5 }}
                     placeholder={BACKUP_PI_PLACEHOLDER}
                     value={draft.remote_repo}
-                    onChange={(e) => setDraft({ ...draft, remote_repo: e.target.value })}
-                    slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: "0.85rem" } } }}
+                    onChange={(e) =>
+                      setDraft({ ...draft, remote_repo: e.target.value })
+                    }
+                    slotProps={{
+                      htmlInput: {
+                        style: { fontFamily: "monospace", fontSize: "0.85rem" },
+                      },
+                    }}
                   />
                 </Box>
                 <SshPublicKeyRow />
@@ -812,7 +906,10 @@ const BorgConfigSection = () => {
                     sx={{ mt: 0.5, width: 160 }}
                     value={draft.remote_ratelimit_kbps}
                     onChange={(e) =>
-                      setDraft({ ...draft, remote_ratelimit_kbps: Number(e.target.value) || 0 })
+                      setDraft({
+                        ...draft,
+                        remote_ratelimit_kbps: Number(e.target.value) || 0,
+                      })
                     }
                   />
                 </Box>
@@ -843,11 +940,13 @@ const BorgConfigSection = () => {
               onClick={doSave}
               disabled={saving || (!dirty && data.persisted)}
             >
-              {saving
-                ? <Spinner size={16} />
-                : !data.persisted
-                ? "Save configuration (migrate)"
-                : "Save configuration"}
+              {saving ? (
+                <Spinner size={16} />
+              ) : !data.persisted ? (
+                "Save configuration (migrate)"
+              ) : (
+                "Save configuration"
+              )}
             </Button>
             <Tooltip
               title={
@@ -886,10 +985,18 @@ const BorgConfigSection = () => {
               </span>
             </Tooltip>
             {runStarted && (
-              <Chip label="Backup started in background" color="success" size="small" />
+              <Chip
+                label="Backup started in background"
+                color="success"
+                size="small"
+              />
             )}
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mt: 1 }}
+          >
             See <code>borgbackup/SETUP.md</code> for the walkthrough.
           </Typography>
         </CardContent>

@@ -11,7 +11,8 @@ function useDockerStatus() {
   const [restartStatus, setRestartStatus] = useState({});
   const [updateAllStatus, setUpdateAllStatus] = useState(null);
   const [startAllStatus, setStartAllStatus] = useState(null);
-  const [tailscalePreflightStatus, setTailscalePreflightStatus] = useState(null);
+  const [tailscalePreflightStatus, setTailscalePreflightStatus] =
+    useState(null);
   const [releaseNotes, setReleaseNotes] = useState(null);
   const [releaseNotesLoading, setReleaseNotesLoading] = useState(false);
   const socketRef = useRef(null);
@@ -226,9 +227,7 @@ function useDockerStatus() {
   const runTailscalePreflight = useCallback(() => {
     setTailscalePreflightStatus({ status: "running", checks: [] });
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(
-        JSON.stringify({ type: "runTailscalePreflight" }),
-      );
+      socketRef.current.send(JSON.stringify({ type: "runTailscalePreflight" }));
     }
   }, []);
 

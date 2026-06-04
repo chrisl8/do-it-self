@@ -167,16 +167,12 @@ export async function setSecret(key, value, folderPath = "/") {
 
 export async function deleteSecret(key, folderPath = "/") {
   const creds = await loadCredentials();
-  await apiRequest(
-    "DELETE",
-    `/api/v3/secrets/raw/${encodeURIComponent(key)}`,
-    {
-      workspaceId: creds.INFISICAL_PROJECT_ID,
-      environment: "prod",
-      secretPath: folderPath,
-      type: "shared",
-    },
-  );
+  await apiRequest("DELETE", `/api/v3/secrets/raw/${encodeURIComponent(key)}`, {
+    workspaceId: creds.INFISICAL_PROJECT_ID,
+    environment: "prod",
+    secretPath: folderPath,
+    type: "shared",
+  });
 }
 
 export async function createFolder(name, parentPath = "/") {

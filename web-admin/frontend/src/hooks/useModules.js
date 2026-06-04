@@ -72,12 +72,18 @@ function useModules() {
   );
 
   const removeSource = useCallback(
-    (name) => wrap(() => deleteJson(`/api/modules/sources/${encodeURIComponent(name)}`)),
+    (name) =>
+      wrap(() =>
+        deleteJson(`/api/modules/sources/${encodeURIComponent(name)}`),
+      ),
     [wrap],
   );
 
   const updateSource = useCallback(
-    (name) => wrap(() => postJson(`/api/modules/sources/${encodeURIComponent(name)}/update`)),
+    (name) =>
+      wrap(() =>
+        postJson(`/api/modules/sources/${encodeURIComponent(name)}/update`),
+      ),
     [wrap],
   );
 
@@ -94,15 +100,21 @@ function useModules() {
   const installContainer = useCallback(
     (moduleName, containerName) =>
       wrap(() =>
-        postJson(`/api/modules/containers/${encodeURIComponent(containerName)}/install`, {
-          module: moduleName,
-        }),
+        postJson(
+          `/api/modules/containers/${encodeURIComponent(containerName)}/install`,
+          {
+            module: moduleName,
+          },
+        ),
       ),
     [wrap],
   );
 
   const uninstallContainer = useCallback(
-    (name) => wrap(() => deleteJson(`/api/modules/containers/${encodeURIComponent(name)}`)),
+    (name) =>
+      wrap(() =>
+        deleteJson(`/api/modules/containers/${encodeURIComponent(name)}`),
+      ),
     [wrap],
   );
 

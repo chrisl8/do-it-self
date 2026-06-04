@@ -1,4 +1,11 @@
-import { readFile, writeFile, appendFile, access, mkdir, rename } from "fs/promises";
+import {
+  readFile,
+  writeFile,
+  appendFile,
+  access,
+  mkdir,
+  rename,
+} from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -25,7 +32,10 @@ export async function getRegistry() {
 
 export async function getUserConfig() {
   if (!(await fileExists(USER_CONFIG_PATH))) {
-    return { mounts: [{ path: DEFAULT_MOUNT_PATH, label: "Default" }], containers: {} };
+    return {
+      mounts: [{ path: DEFAULT_MOUNT_PATH, label: "Default" }],
+      containers: {},
+    };
   }
   const content = await readFile(USER_CONFIG_PATH, "utf8");
   const config = parseYaml(content) || {};
@@ -79,7 +89,9 @@ export function buildEnvForContainer(registry, userConfig, containerName) {
   const errors = [];
   const warnings = [];
   const env = {};
-  const mounts = userConfig.mounts || [{ path: DEFAULT_MOUNT_PATH, label: "Default" }];
+  const mounts = userConfig.mounts || [
+    { path: DEFAULT_MOUNT_PATH, label: "Default" },
+  ];
   const containerConfig = userConfig.containers?.[containerName] || {};
   const volumeMounts = containerConfig.volume_mounts || {};
 
@@ -143,20 +155,32 @@ function formatEnvFile(env) {
 // and must be appended to .env after generation, or Infisical will refuse to boot.
 async function appendInfisicalBootstrapSecrets(envPath, containerName) {
   if (containerName !== "infisical") return;
-  const secretsPath = join(CONTAINERS_DIR, "infisical", "infisical-secrets.env");
+  const secretsPath = join(
+    CONTAINERS_DIR,
+    "infisical",
+    "infisical-secrets.env",
+  );
   if (!(await fileExists(secretsPath))) return;
   const raw = await readFile(secretsPath, "utf8");
   const lines = raw
     .split("\n")
     .filter((line) => line.trim() && !line.trim().startsWith("#"));
   if (lines.length === 0) return;
-  await appendFile(envPath, `\n# Infisical internal secrets\n${lines.join("\n")}\n`, "utf8");
+  await appendFile(
+    envPath,
+    `\n# Infisical internal secrets\n${lines.join("\n")}\n`,
+    "utf8",
+  );
 }
 
 export async function writeContainerEnv(containerName) {
   const registry = await getRegistry();
   const userConfig = await getUserConfig();
-  const { env, errors } = buildEnvForContainer(registry, userConfig, containerName);
+  const { env, errors } = buildEnvForContainer(
+    registry,
+    userConfig,
+    containerName,
+  );
 
   const envPath = join(CONTAINERS_DIR, containerName, ".env");
   const content = formatEnvFile(env);
@@ -371,7 +395,8 @@ export async function getConfigStatus() {
         if (containerSecrets.length > 0) {
           if (!userConfig.containers) userConfig.containers = {};
           if (!userConfig.containers[name]) userConfig.containers[name] = {};
-          if (!userConfig.containers[name].variables) userConfig.containers[name].variables = {};
+          if (!userConfig.containers[name].variables)
+            userConfig.containers[name].variables = {};
           for (const s of containerSecrets) {
             userConfig.containers[name].variables[s.key] = s.value;
           }
@@ -387,7 +412,9 @@ export async function getConfigStatus() {
 
   for (const [name, def] of Object.entries(registry.containers || {})) {
     const containerConfig = userConfig.containers?.[name];
-    const enabled = def.system_service ? true : isContainerEnabled(def, containerConfig);
+    const enabled = def.system_service
+      ? true
+      : isContainerEnabled(def, containerConfig);
     const { errors } = buildEnvForContainer(registry, userConfig, name);
 
     if (def.uses_tailscale && !userConfig.shared?.TS_AUTHKEY) {
@@ -419,11 +446,17 @@ export function maskSecrets(registry, userConfig) {
   }
 
   if (masked.containers) {
-    for (const [containerName, containerConfig] of Object.entries(masked.containers)) {
+    for (const [containerName, containerConfig] of Object.entries(
+      masked.containers,
+    )) {
       const containerDef = registry.containers?.[containerName];
       if (!containerDef?.variables || !containerConfig?.variables) continue;
       for (const [varName, def] of Object.entries(containerDef.variables)) {
-        if (def && def.type === "secret" && containerConfig.variables[varName]) {
+        if (
+          def &&
+          def.type === "secret" &&
+          containerConfig.variables[varName]
+        ) {
           containerConfig.variables[varName] = "••••••••";
         }
       }
@@ -491,23 +524,34 @@ export function getBorgConfig(userConfig) {
   const borg = userConfig?.borg || {};
   const mounts = userConfig?.mounts || [];
   const repoPath = borg.repo_path || "";
-  const dumpDir = borg.dump_dir || (repoPath ? defaultDumpDirFor(repoPath) : "");
-  const backupPaths = Array.isArray(borg.backup_paths) && borg.backup_paths.length > 0
-    ? borg.backup_paths
-    : autoSeededBackupPaths(mounts, dumpDir);
+  const dumpDir =
+    borg.dump_dir || (repoPath ? defaultDumpDirFor(repoPath) : "");
+  const backupPaths =
+    Array.isArray(borg.backup_paths) && borg.backup_paths.length > 0
+      ? borg.backup_paths
+      : autoSeededBackupPaths(mounts, dumpDir);
   return {
     repo_path: repoPath,
     dump_dir: dumpDir,
     backup_paths: backupPaths,
     remote_repo: borg.remote_repo || "",
-    remote_ratelimit_kbps: borg.remote_ratelimit_kbps ?? BORG_DEFAULTS.remote_ratelimit_kbps,
+    remote_ratelimit_kbps:
+      borg.remote_ratelimit_kbps ?? BORG_DEFAULTS.remote_ratelimit_kbps,
     compression: borg.compression || BORG_DEFAULTS.compression,
-    remote_compression: borg.remote_compression || BORG_DEFAULTS.remote_compression,
+    remote_compression:
+      borg.remote_compression || BORG_DEFAULTS.remote_compression,
     retention: {
-      local: { ...BORG_DEFAULTS.retention.local, ...(borg.retention?.local || {}) },
-      remote: { ...BORG_DEFAULTS.retention.remote, ...(borg.retention?.remote || {}) },
+      local: {
+        ...BORG_DEFAULTS.retention.local,
+        ...(borg.retention?.local || {}),
+      },
+      remote: {
+        ...BORG_DEFAULTS.retention.remote,
+        ...(borg.retention?.remote || {}),
+      },
     },
-    restore_test_sample_path: borg.restore_test_sample_path || BORG_DEFAULTS.restore_test_sample_path,
+    restore_test_sample_path:
+      borg.restore_test_sample_path || BORG_DEFAULTS.restore_test_sample_path,
     rsh: borg.rsh || BORG_DEFAULTS.rsh,
   };
 }
@@ -523,7 +567,9 @@ export function mountsNotInBackup(userConfig) {
   const uncovered = [];
   for (const m of userConfig?.mounts || []) {
     const mp = resolveHomePath(m.path).replace(/\/+$/, "");
-    const hit = enabled.some((ep) => ep.startsWith(mp + "/") || ep === mp || ep === mp + "/");
+    const hit = enabled.some(
+      (ep) => ep.startsWith(mp + "/") || ep === mp || ep === mp + "/",
+    );
     if (!hit) uncovered.push(m.path);
   }
   return uncovered;
@@ -551,8 +597,8 @@ export function renderBorgConf(userConfig) {
   const enabledPaths = (cfg.backup_paths || [])
     .filter((p) => p.enabled && p.path)
     .map((p) => p.path);
-  const containerMountDirs = mounts.map((m) =>
-    `${resolveHomePath(m.path).replace(/\/+$/, "")}/container-mounts`,
+  const containerMountDirs = mounts.map(
+    (m) => `${resolveHomePath(m.path).replace(/\/+$/, "")}/container-mounts`,
   );
 
   const lines = [
@@ -594,7 +640,10 @@ export function renderBorgConf(userConfig) {
     formatBorgArray("BORG_CONTAINER_MOUNT_DIRS", containerMountDirs),
     "",
     "# ── Restore test ───────────────────────────────────────────────",
-    formatBorgBashLine("BORG_RESTORE_TEST_SAMPLE_PATH", cfg.restore_test_sample_path),
+    formatBorgBashLine(
+      "BORG_RESTORE_TEST_SAMPLE_PATH",
+      cfg.restore_test_sample_path,
+    ),
     "",
     "# ── Remote (offsite) backup ────────────────────────────────────",
     "# Leave BORG_REMOTE_REPO empty to disable remote backup.",
@@ -602,7 +651,10 @@ export function renderBorgConf(userConfig) {
     "",
     formatBorgBashLine("BORG_REMOTE_KEEP_DAILY", cfg.retention.remote.daily),
     formatBorgBashLine("BORG_REMOTE_KEEP_WEEKLY", cfg.retention.remote.weekly),
-    formatBorgBashLine("BORG_REMOTE_KEEP_MONTHLY", cfg.retention.remote.monthly),
+    formatBorgBashLine(
+      "BORG_REMOTE_KEEP_MONTHLY",
+      cfg.retention.remote.monthly,
+    ),
     formatBorgBashLine("BORG_REMOTE_KEEP_YEARLY", cfg.retention.remote.yearly),
     "",
     formatBorgBashLine("BORG_REMOTE_RATELIMIT", cfg.remote_ratelimit_kbps),

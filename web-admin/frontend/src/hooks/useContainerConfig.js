@@ -38,62 +38,71 @@ function useContainerConfig() {
     fetchConfig();
   }, [fetchConfig]);
 
-  const updateSharedVars = useCallback(async (vars) => {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/config/shared`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(vars),
-      });
-      if (!res.ok) throw new Error("Failed to save shared config");
-      await fetchConfig();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }, [fetchConfig]);
+  const updateSharedVars = useCallback(
+    async (vars) => {
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/config/shared`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vars),
+        });
+        if (!res.ok) throw new Error("Failed to save shared config");
+        await fetchConfig();
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [fetchConfig],
+  );
 
-  const updateContainer = useCallback(async (name, config) => {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/config/container/${name}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      if (!res.ok) throw new Error("Failed to save container config");
-      const result = await res.json();
-      await fetchConfig();
-      return result;
-    } catch (err) {
-      setError(err.message);
-      return null;
-    } finally {
-      setSaving(false);
-    }
-  }, [fetchConfig]);
+  const updateContainer = useCallback(
+    async (name, config) => {
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/config/container/${name}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(config),
+        });
+        if (!res.ok) throw new Error("Failed to save container config");
+        const result = await res.json();
+        await fetchConfig();
+        return result;
+      } catch (err) {
+        setError(err.message);
+        return null;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [fetchConfig],
+  );
 
-  const updateMounts = useCallback(async (mounts) => {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/config/mounts`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mounts }),
-      });
-      if (!res.ok) throw new Error("Failed to save mounts");
-      await fetchConfig();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }, [fetchConfig]);
+  const updateMounts = useCallback(
+    async (mounts) => {
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/config/mounts`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mounts }),
+        });
+        if (!res.ok) throw new Error("Failed to save mounts");
+        await fetchConfig();
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [fetchConfig],
+  );
 
   return {
     registry,

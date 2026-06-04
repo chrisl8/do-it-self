@@ -40,7 +40,11 @@ function InstalledSourceRow({ name, entry, onRemove, busy }) {
       <CardContent sx={{ pb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="h6">{name}</Typography>
-          <Chip size="small" label={entry.commit_short || "?"} variant="outlined" />
+          <Chip
+            size="small"
+            label={entry.commit_short || "?"}
+            variant="outlined"
+          />
         </Box>
         {entry.url && (
           <Typography variant="body2" color="text.secondary">
@@ -49,14 +53,21 @@ function InstalledSourceRow({ name, entry, onRemove, busy }) {
             </Link>
           </Typography>
         )}
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-          Last updated: {formatDate(entry.updated)} • {installedCount} installed container
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mt: 0.5 }}
+        >
+          Last updated: {formatDate(entry.updated)} • {installedCount} installed
+          container
           {installedCount === 1 ? "" : "s"}
         </Typography>
       </CardContent>
       <CardActions sx={{ px: 2, pb: 1.5, gap: 1 }}>
         <Tooltip
-          title={canRemove ? "" : "Uninstall all containers from this source first"}
+          title={
+            canRemove ? "" : "Uninstall all containers from this source first"
+          }
         >
           <span>
             <Button
@@ -117,7 +128,11 @@ function DirtyRepoEntry({ repo, onDevSync, busy }) {
     <Box sx={{ mb: 1 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <IconButton size="small" onClick={() => setExpanded(!expanded)}>
-          {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          {expanded ? (
+            <ExpandLessIcon fontSize="small" />
+          ) : (
+            <ExpandMoreIcon fontSize="small" />
+          )}
         </IconButton>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
           {repo.label || repo.name}
@@ -128,7 +143,12 @@ function DirtyRepoEntry({ repo, onDevSync, busy }) {
           variant="outlined"
         />
         {repo.isModule && (
-          <Button size="small" variant="outlined" disabled={busy} onClick={() => onDevSync(repo.name)}>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={busy}
+            onClick={() => onDevSync(repo.name)}
+          >
             Dev-sync
           </Button>
         )}
@@ -146,7 +166,9 @@ function DirtyRepoEntry({ repo, onDevSync, busy }) {
             color: "text.secondary",
           }}
         >
-          {changes.map((c) => `${(c.status || "?").padEnd(3)}${c.file}`).join("\n")}
+          {changes
+            .map((c) => `${(c.status || "?").padEnd(3)}${c.file}`)
+            .join("\n")}
           {repo.truncated ? `\n... and ${repo.truncated} more` : ""}
         </Box>
       </Collapse>
@@ -176,7 +198,12 @@ function Sources() {
     updateEverything,
   } = useGitStatus();
 
-  const [dialog, setDialog] = useState({ open: false, title: "", running: false, result: null });
+  const [dialog, setDialog] = useState({
+    open: false,
+    title: "",
+    running: false,
+    result: null,
+  });
   const [customUrl, setCustomUrl] = useState("");
   const [customName, setCustomName] = useState("");
   const [preBackup, setPreBackup] = useState(false);
@@ -187,13 +214,16 @@ function Sources() {
     const result = await op();
     setDialog({
       open: true,
-      title: result.success ? title.replace(/\.\.\.$/, " — done") : title.replace(/\.\.\.$/, " — failed"),
+      title: result.success
+        ? title.replace(/\.\.\.$/, " — done")
+        : title.replace(/\.\.\.$/, " — failed"),
       running: false,
       result,
     });
   };
 
-  const closeDialog = () => setDialog({ open: false, title: "", running: false, result: null });
+  const closeDialog = () =>
+    setDialog({ open: false, title: "", running: false, result: null });
 
   const handleAddCatalog = (url, name) =>
     run(`Adding source ${name}...`, () => addSource(url, name));
@@ -201,22 +231,36 @@ function Sources() {
   const handleAddCustom = () => {
     if (!customUrl.trim()) return;
     const name = customName.trim() || undefined;
-    run(`Adding source ${name || customUrl}...`, () => addSource(customUrl.trim(), name)).then(() => {
+    run(`Adding source ${name || customUrl}...`, () =>
+      addSource(customUrl.trim(), name),
+    ).then(() => {
       setCustomUrl("");
       setCustomName("");
     });
   };
 
   const handleRemove = (name) => {
-    if (!window.confirm(`Remove module source "${name}"? The clone at .modules/${name}/ will be deleted.`)) return;
+    if (
+      !window.confirm(
+        `Remove module source "${name}"? The clone at .modules/${name}/ will be deleted.`,
+      )
+    )
+      return;
     run(`Removing ${name}...`, () => removeSource(name));
   };
   const handleRegenerate = () => {
-    if (!window.confirm("Regenerate container-registry.yaml from installed modules? Non-module entries are preserved.")) return;
+    if (
+      !window.confirm(
+        "Regenerate container-registry.yaml from installed modules? Non-module entries are preserved.",
+      )
+    )
+      return;
     run("Regenerating registry...", () => regenerateRegistry());
   };
   const handleDevSync = (moduleName) =>
-    run(`Dev-syncing ${moduleName}...`, () => devSync(moduleName)).then(() => refreshGit());
+    run(`Dev-syncing ${moduleName}...`, () => devSync(moduleName)).then(() =>
+      refreshGit(),
+    );
 
   const handleCheckPlatformUpdates = async () => {
     setFetchingUpstream(true);
@@ -261,12 +305,18 @@ function Sources() {
   };
 
   const installedEntries = useMemo(
-    () => Object.entries(installed?.modules || {}).sort(([a], [b]) => a.localeCompare(b)),
+    () =>
+      Object.entries(installed?.modules || {}).sort(([a], [b]) =>
+        a.localeCompare(b),
+      ),
     [installed],
   );
 
   const catalogEntries = useMemo(
-    () => Object.entries(catalog?.catalogs || {}).sort(([a], [b]) => a.localeCompare(b)),
+    () =>
+      Object.entries(catalog?.catalogs || {}).sort(([a], [b]) =>
+        a.localeCompare(b),
+      ),
     [catalog],
   );
 
@@ -334,9 +384,17 @@ function Sources() {
       )}
 
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>Installed Sources</Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-          Update status is shown in the System Updates panel above. Removing a source here deletes its clone under .modules/; installed containers from it must be uninstalled first.
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Installed Sources
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mb: 1 }}
+        >
+          Update status is shown in the System Updates panel above. Removing a
+          source here deletes its clone under .modules/; installed containers
+          from it must be uninstalled first.
         </Typography>
         <Divider sx={{ mb: 1.5 }} />
         {installedEntries.length === 0 ? (
@@ -382,7 +440,14 @@ function Sources() {
           Add Custom URL
         </Typography>
         <Divider sx={{ mb: 1.5 }} />
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, maxWidth: { xs: "100%", sm: 600 } }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 1.5,
+            maxWidth: { xs: "100%", sm: 600 },
+          }}
+        >
           <TextField
             size="small"
             label="Git URL"
@@ -412,7 +477,11 @@ function Sources() {
       </Box>
 
       <Box sx={{ mt: 4, pt: 2, borderTop: 1, borderColor: "divider" }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mb: 1 }}
+        >
           Advanced: rebuild container-registry.yaml from installed modules if
           state has become inconsistent.
         </Typography>

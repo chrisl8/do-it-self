@@ -9,12 +9,7 @@ function getPendingUpdatesFilePath() {
   // Resolve the diun script volume path from its generated .env file.
   // The diun compose.yaml uses ${VOL_DIUN_SCRIPT}/container-mounts/diun/script:/script,
   // and VOL_DIUN_SCRIPT is set by scripts/generate-env.js based on container-registry.yaml.
-  const envFilePath = path.join(
-    process.env.HOME,
-    "containers",
-    "diun",
-    ".env",
-  );
+  const envFilePath = path.join(process.env.HOME, "containers", "diun", ".env");
 
   if (!fs.existsSync(envFilePath)) {
     console.error("DIUN .env file not found:", envFilePath);
@@ -31,7 +26,10 @@ function getPendingUpdatesFilePath() {
   }
 
   const base = volDiunScript || path.join(process.env.HOME, "container-data");
-  return path.join(base, "container-mounts/diun/script/pendingContainerUpdates.txt");
+  return path.join(
+    base,
+    "container-mounts/diun/script/pendingContainerUpdates.txt",
+  );
 }
 
 function getPendingUpdates() {

@@ -14,7 +14,9 @@ import { createRequire } from "node:module";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
 const require = createRequire(import.meta.url);
-const YAML = require(join(CONTAINERS_DIR, "web-admin/backend/node_modules/yaml"));
+const YAML = require(
+  join(CONTAINERS_DIR, "web-admin/backend/node_modules/yaml"),
+);
 
 const REGISTRY_PATH = join(CONTAINERS_DIR, "container-registry.yaml");
 const VOLUMES_PATH = "/tmp/registry-volumes.json";

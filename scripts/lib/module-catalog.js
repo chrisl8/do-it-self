@@ -31,8 +31,14 @@ export function readCatalog(catalogPath) {
 // Read installed-modules.yaml. Returns { modules: {...} } or an empty object
 // if the file doesn't exist yet.
 export function readInstalled(installedPath) {
-  if (!existsSync(installedPath)) return { modules: {}, personal_containers: [] };
-  return YAML.parse(readFileSync(installedPath, "utf8")) || { modules: {}, personal_containers: [] };
+  if (!existsSync(installedPath))
+    return { modules: {}, personal_containers: [] };
+  return (
+    YAML.parse(readFileSync(installedPath, "utf8")) || {
+      modules: {},
+      personal_containers: [],
+    }
+  );
 }
 
 // Return the remote URL currently configured for a cloned module, or null.

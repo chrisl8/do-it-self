@@ -1,6 +1,6 @@
-import Docker from 'dockerode';
-import getFormattedDockerContainers from './dockerStatus.js';
-import { updateStatus } from './statusEmitter.js';
+import Docker from "dockerode";
+import getFormattedDockerContainers from "./dockerStatus.js";
+import { updateStatus } from "./statusEmitter.js";
 
 const docker = new Docker();
 let eventStream = null;
@@ -14,18 +14,18 @@ const DELAYED_REFRESH_DELAY = 2500;
 let periodicRefreshInterval = null;
 const PERIODIC_REFRESH_INTERVAL = 60000;
 
-let eventStreamBuffer = '';
+let eventStreamBuffer = "";
 
 const IMMEDIATE_ONLY_EVENTS = [
-  'stop',
-  'die',
-  'kill',
-  'pause',
-  'unpause',
-  'destroy',
+  "stop",
+  "die",
+  "kill",
+  "pause",
+  "unpause",
+  "destroy",
 ];
 
-const DELAYED_REFRESH_EVENTS = ['start', 'create', 'restart'];
+const DELAYED_REFRESH_EVENTS = ["start", "create", "restart"];
 
 const RELEVANT_EVENTS = [...IMMEDIATE_ONLY_EVENTS, ...DELAYED_REFRESH_EVENTS];
 
@@ -33,10 +33,10 @@ async function refreshDockerStatus() {
   try {
     const dockerData = await getFormattedDockerContainers();
     dockerData.lastUpdated = new Date().toISOString();
-    updateStatus('docker', dockerData);
+    updateStatus("docker", dockerData);
   } catch (error) {
-    console.error('Error refreshing Docker status:', error);
-    updateStatus('docker', {
+    console.error("Error refreshing Docker status:", error);
+    updateStatus("docker", {
       error: error.message,
       lastUpdated: new Date().toISOString(),
     });
@@ -71,7 +71,7 @@ function scheduleDelayedRefresh() {
   clearDelayedRefresh();
   delayedRefreshTimeout = setTimeout(() => {
     console.log(
-      'Docker delayed refresh: Checking container states after startup',
+      "Docker delayed refresh: Checking container states after startup",
     );
     refreshDockerStatus();
     delayedRefreshTimeout = null;
@@ -94,27 +94,27 @@ function stopPeriodicRefresh() {
 
 async function startWatching() {
   try {
-    console.log('Docker event watcher: Starting...');
+    console.log("Docker event watcher: Starting...");
 
     await refreshDockerStatus();
 
-    const filters = { type: ['container'] };
+    const filters = { type: ["container"] };
     eventStream = await docker.getEvents({ filters });
 
-    console.log('Docker event watcher: Subscribed to container events');
+    console.log("Docker event watcher: Subscribed to container events");
     resetReconnectAttempts();
 
     startPeriodicRefresh();
 
-    eventStream.on('data', (chunk) => {
+    eventStream.on("data", (chunk) => {
       try {
         const str = eventStreamBuffer + chunk.toString();
-        const lines = str.split('\n');
+        const lines = str.split("\n");
 
-        if (str.endsWith('\n')) {
-          eventStreamBuffer = '';
+        if (str.endsWith("\n")) {
+          eventStreamBuffer = "";
         } else {
-          eventStreamBuffer = lines.pop() || '';
+          eventStreamBuffer = lines.pop() || "";
         }
 
         lines.forEach((line) => {
@@ -124,7 +124,7 @@ async function startWatching() {
             const event = JSON.parse(line);
 
             if (
-              event.Type === 'container' &&
+              event.Type === "container" &&
               event.status &&
               RELEVANT_EVENTS.includes(event.status)
             ) {
@@ -143,22 +143,22 @@ async function startWatching() {
             }
           } catch (parseError) {
             console.error(
-              'Failed to parse Docker event line:',
+              "Failed to parse Docker event line:",
               parseError.message,
             );
           }
         });
       } catch (error) {
-        console.error('Error processing Docker event stream data:', error);
+        console.error("Error processing Docker event stream data:", error);
       }
     });
 
-    eventStream.on('error', (error) => {
-      console.error('Docker event stream error:', error.message);
+    eventStream.on("error", (error) => {
+      console.error("Docker event stream error:", error.message);
 
       clearDelayedRefresh();
       stopPeriodicRefresh();
-      eventStreamBuffer = '';
+      eventStreamBuffer = "";
 
       if (eventStream) {
         eventStream.removeAllListeners();
@@ -175,12 +175,12 @@ async function startWatching() {
       }, delay);
     });
 
-    eventStream.on('end', () => {
-      console.log('Docker event stream ended');
+    eventStream.on("end", () => {
+      console.log("Docker event stream ended");
 
       clearDelayedRefresh();
       stopPeriodicRefresh();
-      eventStreamBuffer = '';
+      eventStreamBuffer = "";
 
       if (eventStream) {
         eventStream.removeAllListeners();
@@ -195,11 +195,11 @@ async function startWatching() {
       }, delay);
     });
   } catch (error) {
-    console.error('Failed to start Docker event watcher:', error.message);
+    console.error("Failed to start Docker event watcher:", error.message);
 
     clearDelayedRefresh();
     stopPeriodicRefresh();
-    eventStreamBuffer = '';
+    eventStreamBuffer = "";
 
     const delay = calculateReconnectDelay();
     console.log(
@@ -210,7 +210,7 @@ async function startWatching() {
       startWatching();
     }, delay);
 
-    updateStatus('docker', {
+    updateStatus("docker", {
       error: `Failed to connect: ${error.message}`,
       lastUpdated: new Date().toISOString(),
     });
@@ -218,12 +218,12 @@ async function startWatching() {
 }
 
 async function stopWatching() {
-  console.log('Docker event watcher: Stopping...');
+  console.log("Docker event watcher: Stopping...");
 
   resetReconnectAttempts();
   clearDelayedRefresh();
   stopPeriodicRefresh();
-  eventStreamBuffer = '';
+  eventStreamBuffer = "";
 
   if (eventStream) {
     eventStream.removeAllListeners();
@@ -231,7 +231,7 @@ async function stopWatching() {
     eventStream = null;
   }
 
-  console.log('Docker event watcher: Stopped');
+  console.log("Docker event watcher: Stopped");
 }
 
 async function start() {

@@ -1,4 +1,4 @@
-import { init, downloadBudget, runBankSync, shutdown } from '@actual-app/api';
+import { init, downloadBudget, runBankSync, shutdown } from "@actual-app/api";
 
 (async () => {
   await init({

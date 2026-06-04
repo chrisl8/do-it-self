@@ -191,7 +191,9 @@ async function main() {
       await listManaged();
       break;
     default:
-      console.error("Usage: manage-cron-jobs.js <sync|remove|list> [container]");
+      console.error(
+        "Usage: manage-cron-jobs.js <sync|remove|list> [container]",
+      );
       process.exit(1);
   }
 }

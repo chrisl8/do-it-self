@@ -19,7 +19,8 @@ const useBackupStatus = () => {
       ]);
       if (kopiaRes.ok) setKopiaStatus(await kopiaRes.json());
       if (borgRes.ok) setBorgStatus(await borgRes.json());
-      if (!kopiaRes.ok && !borgRes.ok) throw new Error("Failed to fetch backup status");
+      if (!kopiaRes.ok && !borgRes.ok)
+        throw new Error("Failed to fetch backup status");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -78,7 +79,8 @@ const useBackupStatus = () => {
       body: JSON.stringify({ dismissed }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Failed to save banner preference");
+    if (!res.ok)
+      throw new Error(data.error || "Failed to save banner preference");
     setBorgBannerDismissed(dismissed);
   }, []);
 
@@ -107,7 +109,8 @@ const useBackupStatus = () => {
       body: JSON.stringify(partial),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Failed to save healthcheck URL");
+    if (!res.ok)
+      throw new Error(data.error || "Failed to save healthcheck URL");
     setHealthcheckUrls((prev) => ({ ...prev, ...partial }));
   }, []);
 
@@ -141,7 +144,8 @@ const useBackupStatus = () => {
       body: JSON.stringify({ thresholds }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to save host thresholds");
+    if (!res.ok)
+      throw new Error(data.error || "Failed to save host thresholds");
     setHostThresholds(thresholds);
     return data;
   }, []);
@@ -177,7 +181,8 @@ const useBackupStatus = () => {
       body: JSON.stringify({ sources }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to save ignored sources");
+    if (!res.ok)
+      throw new Error(data.error || "Failed to save ignored sources");
     setIgnoredSources(data.sources ?? sources);
     // Optimistically update kopiaStatus.sources statuses so the UI flips
     // immediately without re-running the backup check.
@@ -186,9 +191,7 @@ const useBackupStatus = () => {
       const matches = (s) =>
         sources.some(
           (e) =>
-            e.host === s.host &&
-            e.userName === s.userName &&
-            e.path === s.path,
+            e.host === s.host && e.userName === s.userName && e.path === s.path,
         );
       let staleDelta = 0;
       const nextSources = prev.sources.map((s) => {
@@ -197,18 +200,30 @@ const useBackupStatus = () => {
           staleDelta -= 1;
           return { ...s, status: "ignored" };
         }
-        if (!shouldBeIgnored && s.status === "ignored" && (s.ageHours ?? 0) > (s.effectiveThreshold ?? 0)) {
+        if (
+          !shouldBeIgnored &&
+          s.status === "ignored" &&
+          (s.ageHours ?? 0) > (s.effectiveThreshold ?? 0)
+        ) {
           staleDelta += 1;
           return { ...s, status: "stale" };
         }
         return s;
       });
-      const nextStaleCount = Math.max(0, (prev.stale_sources ?? 0) + staleDelta);
+      const nextStaleCount = Math.max(
+        0,
+        (prev.stale_sources ?? 0) + staleDelta,
+      );
       return {
         ...prev,
         sources: nextSources,
         stale_sources: nextStaleCount,
-        status: nextStaleCount > 0 ? "stale" : prev.status === "error" ? "error" : "success",
+        status:
+          nextStaleCount > 0
+            ? "stale"
+            : prev.status === "error"
+              ? "error"
+              : "success",
       };
     });
     return data;
@@ -251,7 +266,14 @@ const useBackupStatus = () => {
     fetchHostThresholds();
     fetchHealthcheckUrls();
     fetchBorgBannerDismissed();
-  }, [fetchStatus, fetchIgnoreHosts, fetchIgnoredSources, fetchHostThresholds, fetchHealthcheckUrls, fetchBorgBannerDismissed]);
+  }, [
+    fetchStatus,
+    fetchIgnoreHosts,
+    fetchIgnoredSources,
+    fetchHostThresholds,
+    fetchHealthcheckUrls,
+    fetchBorgBannerDismissed,
+  ]);
 
   return {
     kopiaStatus,

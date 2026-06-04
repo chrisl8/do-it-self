@@ -12,7 +12,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
 
 async function fileExists(path) {
-  try { await access(path); return true; } catch { return false; }
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function toVarName(containerName, volumeName) {
@@ -37,7 +42,10 @@ function deriveVolumeName(hostSubpath, containerName) {
         containerName.replace(/-/g, ""),
         // Handle cases like "actual-api" for "actual-budget-api"
       ];
-      if (containerVariants.includes(first) || first === containerName.split("-").pop()) {
+      if (
+        containerVariants.includes(first) ||
+        first === containerName.split("-").pop()
+      ) {
         afterCm.shift();
       }
     }
@@ -86,7 +94,12 @@ async function main() {
       const volumeName = deriveVolumeName(m.hostSubpath, entry.name);
       if (volumeName === null) {
         // Monitoring mount - mark for special handling
-        allLines.push({ ...m, isMonitoring: true, volumeName: null, newVar: null });
+        allLines.push({
+          ...m,
+          isMonitoring: true,
+          volumeName: null,
+          newVar: null,
+        });
         continue;
       }
 
@@ -124,12 +137,12 @@ async function main() {
       line.newVar = vol.newVar;
     }
 
-    const isMonitorContainer = allLines.some(l => l.isMonitoring);
+    const isMonitorContainer = allLines.some((l) => l.isMonitoring);
 
     results[entry.name] = {
       monitorAllMounts: isMonitorContainer,
       volumes: [...uniqueVolumes.values()],
-      lines: allLines.map(l => ({
+      lines: allLines.map((l) => ({
         fullMatch: l.fullMatch,
         newVar: l.newVar,
         isMonitoring: l.isMonitoring,
@@ -144,4 +157,7 @@ async function main() {
   console.log(JSON.stringify(results, null, 2));
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

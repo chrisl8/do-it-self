@@ -47,7 +47,10 @@ function parseYaml(text) {
           const pairs = val.match(/(\w+):\s*"?([^",]*)"?/g) || [];
           for (const pair of pairs) {
             const [k, ...v] = pair.split(": ");
-            obj[k.trim()] = v.join(": ").trim().replace(/^["']|["']$/g, "");
+            obj[k.trim()] = v
+              .join(": ")
+              .trim()
+              .replace(/^["']|["']$/g, "");
           }
           parent.push(obj);
         } else {
@@ -126,18 +129,16 @@ async function main() {
   const args = process.argv.slice(2);
   const allFlag = args.includes("--all");
   const containerIdx = args.indexOf("--container");
-  const singleContainer =
-    containerIdx !== -1 ? args[containerIdx + 1] : null;
+  const singleContainer = containerIdx !== -1 ? args[containerIdx + 1] : null;
 
   if (!(await fileExists(REGISTRY_PATH))) return;
   const registry = parseYaml(await readFile(REGISTRY_PATH, "utf8"));
 
   let userConfig = { containers: {} };
   if (await fileExists(USER_CONFIG_PATH)) {
-    userConfig =
-      parseYaml(await readFile(USER_CONFIG_PATH, "utf8")) || {
-        containers: {},
-      };
+    userConfig = parseYaml(await readFile(USER_CONFIG_PATH, "utf8")) || {
+      containers: {},
+    };
   }
 
   const containers = registry.containers || {};
@@ -145,7 +146,12 @@ async function main() {
 
   for (const name of Object.keys(containers).sort()) {
     if (singleContainer && name !== singleContainer) continue;
-    if (!allFlag && !singleContainer && !isEnabled(containers[name], userContainers, name)) continue;
+    if (
+      !allFlag &&
+      !singleContainer &&
+      !isEnabled(containers[name], userContainers, name)
+    )
+      continue;
 
     const def = containers[name];
     const repos = def.git_repos;

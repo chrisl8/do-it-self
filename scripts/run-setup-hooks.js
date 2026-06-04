@@ -76,7 +76,9 @@ async function main() {
     try {
       await access(hookPath, constants.X_OK);
     } catch {
-      console.warn(`  warning: setup hook not found or not executable: ${hookPath}`);
+      console.warn(
+        `  warning: setup hook not found or not executable: ${hookPath}`,
+      );
       continue;
     }
 

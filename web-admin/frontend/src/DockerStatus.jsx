@@ -310,9 +310,7 @@ const DockerStatus = ({
   ).length;
   const startableCount = unifiedStacks.filter(
     (stack) =>
-      !stack.isDisabled &&
-      !stack.isRunning &&
-      stack.configReady !== false,
+      !stack.isDisabled && !stack.isRunning && stack.configReady !== false,
   ).length;
 
   // A batch update is "active" while running or paused-on-failure. This is the
@@ -325,7 +323,9 @@ const DockerStatus = ({
   // Selected stacks that still actually have a pending update (selection can go
   // stale as updates complete). Drives the button count and the payload.
   const selectedPendingNames = unifiedStacks
-    .filter((stack) => stack.hasPendingUpdates && selectedForUpdate.has(stack.name))
+    .filter(
+      (stack) => stack.hasPendingUpdates && selectedForUpdate.has(stack.name),
+    )
     .map((stack) => stack.name);
 
   const hasData = dockerStatus.running || dockerStatus.stacks;
@@ -510,11 +510,7 @@ const DockerStatus = ({
               {c.fixUrl && (
                 <>
                   {" — "}
-                  <a
-                    href={c.fixUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                  <a href={c.fixUrl} target="_blank" rel="noopener noreferrer">
                     Renew key
                   </a>
                 </>
@@ -638,9 +634,7 @@ const DockerStatus = ({
                 mb: updateAllStatus.status === "paused" ? 1.5 : 0,
               }}
             >
-              {updateAllStatus.status === "running" && (
-                <Spinner size={24} />
-              )}
+              {updateAllStatus.status === "running" && <Spinner size={24} />}
               {updateAllStatus.status === "completed" && (
                 <CheckCircleIcon color="success" />
               )}
@@ -698,56 +692,50 @@ const DockerStatus = ({
                 </Button>
               )}
             </Box>
-            {updateAllStatus.status === "paused" &&
-              updateAllStatus.failed && (
-                <Box>
-                  <Typography
-                    variant="body2"
-                    color="error"
-                    sx={{ mb: 1 }}
+            {updateAllStatus.status === "paused" && updateAllStatus.failed && (
+              <Box>
+                <Typography variant="body2" color="error" sx={{ mb: 1 }}>
+                  {updateAllStatus.failed.error}
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={() => updateAllAction("skip")}
                   >
-                    {updateAllStatus.failed.error}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={() => updateAllAction("skip")}
-                    >
-                      Skip & Continue
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => updateAllAction("retry")}
-                    >
-                      Retry
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="small"
-                      onClick={() => updateAllAction("cancel")}
-                    >
-                      Cancel Remaining
-                    </Button>
-                    <Button
-                      variant="text"
-                      size="small"
-                      onClick={() =>
-                        setOutputDialog({
-                          open: true,
-                          stackName: updateAllStatus.failed.stackName,
-                          output:
-                            updateAllStatus.failed.output || "No output",
-                        })
-                      }
-                    >
-                      View Output
-                    </Button>
-                  </Box>
+                    Skip & Continue
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => updateAllAction("retry")}
+                  >
+                    Retry
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={() => updateAllAction("cancel")}
+                  >
+                    Cancel Remaining
+                  </Button>
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() =>
+                      setOutputDialog({
+                        open: true,
+                        stackName: updateAllStatus.failed.stackName,
+                        output: updateAllStatus.failed.output || "No output",
+                      })
+                    }
+                  >
+                    View Output
+                  </Button>
                 </Box>
-              )}
+              </Box>
+            )}
           </CardContent>
         </Card>
       )}
@@ -852,8 +840,13 @@ const DockerStatus = ({
             {startAllStatus.status === "completed" &&
               (startAllStatus.failed?.length || 0) > 0 && (
                 <Box>
-                  <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
-                    Failed: {startAllStatus.failed.map((f) => f.stackName).join(", ")}
+                  <Typography
+                    variant="body2"
+                    color="warning.main"
+                    sx={{ mb: 1 }}
+                  >
+                    Failed:{" "}
+                    {startAllStatus.failed.map((f) => f.stackName).join(", ")}
                   </Typography>
                   <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                     {startAllStatus.failed.map((f) => (
@@ -1064,15 +1057,20 @@ const DockerStatus = ({
                       const restartCompleted =
                         stackRestartStatus?.status === "completed" ||
                         stackRestartStatus?.status === "failed";
-                      const isQueuedForBatch =
-                        updateAllStatus?.queue?.includes(stack.name);
+                      const isQueuedForBatch = updateAllStatus?.queue?.includes(
+                        stack.name,
+                      );
                       const isBatchRunning =
                         updateAllStatus?.status === "running" ||
                         updateAllStatus?.status === "paused";
 
                       if (isQueuedForBatch) {
                         return (
-                          <Chip label="Queued" size="small" variant="outlined" />
+                          <Chip
+                            label="Queued"
+                            size="small"
+                            variant="outlined"
+                          />
                         );
                       }
 
@@ -1285,7 +1283,10 @@ const DockerStatus = ({
                                 <Box
                                   sx={{
                                     display: "grid",
-                                    gridTemplateColumns: { xs: "1fr", sm: "auto 1fr" },
+                                    gridTemplateColumns: {
+                                      xs: "1fr",
+                                      sm: "auto 1fr",
+                                    },
                                     gap: { xs: 0.5, sm: 1 },
                                     alignItems: "start",
                                   }}
@@ -1437,9 +1438,7 @@ const DockerStatus = ({
                     "& li": { my: 0.5 },
                     "& code": {
                       backgroundColor: (theme) =>
-                        theme.palette.mode === "dark"
-                          ? "grey.800"
-                          : "grey.900",
+                        theme.palette.mode === "dark" ? "grey.800" : "grey.900",
                       color: "grey.100",
                       px: 0.5,
                       borderRadius: 0.5,
@@ -1448,9 +1447,7 @@ const DockerStatus = ({
                     },
                     "& pre": {
                       backgroundColor: (theme) =>
-                        theme.palette.mode === "dark"
-                          ? "grey.800"
-                          : "grey.900",
+                        theme.palette.mode === "dark" ? "grey.800" : "grey.900",
                       color: "grey.100",
                       p: 2,
                       borderRadius: 1,
@@ -1461,7 +1458,9 @@ const DockerStatus = ({
                     "& a": { color: "primary.main" },
                     "& img": { maxWidth: "100%" },
                   }}
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(release.bodyHtml) }}
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(release.bodyHtml),
+                  }}
                 />
               ) : (
                 <Box

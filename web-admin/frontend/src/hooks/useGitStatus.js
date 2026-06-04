@@ -21,12 +21,18 @@ const useGitStatus = () => {
     }
   }, []);
 
-  const refreshWithFetch = useCallback(() => fetchGitStatus({ fetch: true }), [fetchGitStatus]);
+  const refreshWithFetch = useCallback(
+    () => fetchGitStatus({ fetch: true }),
+    [fetchGitStatus],
+  );
 
   const devSync = useCallback(async (moduleName) => {
-    const res = await fetch(`/api/modules/dev-sync/${encodeURIComponent(moduleName)}`, {
-      method: "POST",
-    });
+    const res = await fetch(
+      `/api/modules/dev-sync/${encodeURIComponent(moduleName)}`,
+      {
+        method: "POST",
+      },
+    );
     return await res.json();
   }, []);
 
@@ -81,7 +87,9 @@ const useGitStatus = () => {
         if (closed) return;
         reconnectTimer = setTimeout(connect, 5000);
       };
-      ws.onerror = () => { ws.close(); };
+      ws.onerror = () => {
+        ws.close();
+      };
     };
     connect();
     return () => {

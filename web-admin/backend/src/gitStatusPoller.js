@@ -56,13 +56,19 @@ async function tick() {
     // Fetch in parallel -- per-repo timeouts bound the worst case.
     await Promise.all([
       bestEffortFetch(CONTAINERS_DIR, "platform"),
-      ...moduleNames.map((name) => bestEffortFetch(join(MODULES_DIR, name), name)),
+      ...moduleNames.map((name) =>
+        bestEffortFetch(join(MODULES_DIR, name), name),
+      ),
     ]);
 
     const repos = [];
-    repos.push(await buildRepoEntry("platform", "Platform", CONTAINERS_DIR, false));
+    repos.push(
+      await buildRepoEntry("platform", "Platform", CONTAINERS_DIR, false),
+    );
     for (const name of moduleNames) {
-      repos.push(await buildRepoEntry(name, name, join(MODULES_DIR, name), true));
+      repos.push(
+        await buildRepoEntry(name, name, join(MODULES_DIR, name), true),
+      );
     }
 
     updateStatus("gitStatus", {

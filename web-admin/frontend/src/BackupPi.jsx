@@ -93,7 +93,8 @@ const parseBorgArchiveTimestamp = (s) => {
   if (!s) return NaN;
   let t = Date.parse(s);
   if (!Number.isNaN(t)) return t;
-  const m = /^(?:[A-Za-z]{3},\s+)?(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})/.exec(s);
+  const m =
+    /^(?:[A-Za-z]{3},\s+)?(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})/.exec(s);
   if (m) {
     t = Date.parse(`${m[1]}T${m[2]}`);
     if (!Number.isNaN(t)) return t;
@@ -124,8 +125,8 @@ const StatusCard = ({ status, onSetPassphrase }) => {
         Backup Pi is not configured. Add a <code>backuppi:</code> section to{" "}
         <code>~/containers/user-config.yaml</code> with{" "}
         <code>enabled: true</code>, <code>host</code>, <code>ssh_user</code>,
-        and <code>ssh_key_path</code>. See{" "}
-        <code>docs/SETUP-BACKUP-PI.md</code> for the full setup.
+        and <code>ssh_key_path</code>. See <code>docs/SETUP-BACKUP-PI.md</code>{" "}
+        for the full setup.
       </Alert>
     );
   }
@@ -151,10 +152,20 @@ const StatusCard = ({ status, onSetPassphrase }) => {
   return (
     <Card>
       <CardContent>
-        <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap">
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={2}
+          mb={2}
+          flexWrap="wrap"
+        >
           <Typography variant="h6">{status.hostname || "backup-pi"}</Typography>
           <Chip
-            label={tsConnected ? "Tailscale up" : `Tailscale: ${status.tailscale?.backend_state || "?"}`}
+            label={
+              tsConnected
+                ? "Tailscale up"
+                : `Tailscale: ${status.tailscale?.backend_state || "?"}`
+            }
             color={tsConnected ? "success" : "error"}
             size="small"
           />
@@ -335,7 +346,8 @@ const BackupPi = () => {
   const piDisabled = !status || !status.enabled || !status.reachable;
   const buttonsDisabled = piDisabled || !!actionInFlight;
   const clientNames = useMemo(
-    () => (Array.isArray(status?.clients) ? status.clients.map((c) => c.name) : []),
+    () =>
+      Array.isArray(status?.clients) ? status.clients.map((c) => c.name) : [],
     [status],
   );
 
@@ -377,7 +389,13 @@ const BackupPi = () => {
           <Typography variant="h6" gutterBottom>
             Actions
           </Typography>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            flexWrap="wrap"
+            useFlexGap
+            alignItems="center"
+          >
             {ACTIONS.map((a) => {
               const selected = actionClient[a.name] || "";
               return (
@@ -400,7 +418,9 @@ const BackupPi = () => {
                   </Button>
                   {a.perClient && clientNames.length > 0 && (
                     <FormControl size="small" sx={{ minWidth: 140 }}>
-                      <InputLabel id={`client-${a.name}-label`}>Client</InputLabel>
+                      <InputLabel id={`client-${a.name}-label`}>
+                        Client
+                      </InputLabel>
                       <Select
                         labelId={`client-${a.name}-label`}
                         label="Client"
@@ -463,14 +483,15 @@ const BackupPi = () => {
         </Card>
       )}
 
-      <Dialog
-        open={!!confirmAction}
-        onClose={() => setConfirmAction(null)}
-      >
+      <Dialog open={!!confirmAction} onClose={() => setConfirmAction(null)}>
         <DialogTitle>
           {confirmAction?.label}
           {confirmAction?.perClient && (
-            <Typography variant="caption" component="div" color="text.secondary">
+            <Typography
+              variant="caption"
+              component="div"
+              color="text.secondary"
+            >
               Target: {actionClient[confirmAction.name] || "all clients"}
             </Typography>
           )}
@@ -505,9 +526,9 @@ const BackupPi = () => {
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
             Writes the passphrase to Infisical under the path / key configured
-            for this client in <code>backuppi.clients</code>. The Pi never
-            sees this value at rest — it's fetched on demand and forwarded
-            over SSH only for each operation that needs it.
+            for this client in <code>backuppi.clients</code>. The Pi never sees
+            this value at rest — it's fetched on demand and forwarded over SSH
+            only for each operation that needs it.
           </DialogContentText>
           <TextField
             label="Passphrase"

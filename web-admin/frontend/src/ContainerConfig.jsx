@@ -144,7 +144,14 @@ function MountsSection({
 
   return (
     <Box sx={{ mb: 3 }}>
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 1,
+        }}
+      >
         <Typography variant="h6">Storage Mounts</Typography>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button size="small" startIcon={<AddIcon />} onClick={handleAdd}>
@@ -162,8 +169,8 @@ function MountsSection({
         </Box>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Define where container data is stored. Each volume in each container
-        can be assigned to any mount. The first mount is the default.
+        Define where container data is stored. Each volume in each container can
+        be assigned to any mount. The first mount is the default.
       </Typography>
       {monitorMountContainers && monitorMountContainers.length > 0 && (
         <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
@@ -186,7 +193,9 @@ function MountsSection({
                 color="inherit"
                 size="small"
                 disabled={restartInFlight}
-                startIcon={restartInFlight ? <CircularProgress size={16} /> : null}
+                startIcon={
+                  restartInFlight ? <CircularProgress size={16} /> : null
+                }
                 onClick={handleRestart}
               >
                 {restartInFlight ? "Restarting..." : "Restart them now"}
@@ -207,8 +216,16 @@ function MountsSection({
         </Alert>
       )}
       {localMounts.map((mount, i) => (
-        <Box key={i} sx={{ display: "flex", gap: 1, mb: 1, alignItems: "center" }}>
-          <Chip label={i} size="small" variant="outlined" sx={{ minWidth: 32 }} />
+        <Box
+          key={i}
+          sx={{ display: "flex", gap: 1, mb: 1, alignItems: "center" }}
+        >
+          <Chip
+            label={i}
+            size="small"
+            variant="outlined"
+            sx={{ minWidth: 32 }}
+          />
           <TextField
             size="small"
             label="Label"
@@ -255,7 +272,14 @@ function SharedVarsSection({ registry, userConfig, onSave, saving }) {
 
   return (
     <Box sx={{ mb: 3 }}>
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 1,
+        }}
+      >
         <Typography variant="h6">Global Settings</Typography>
         <Button
           variant="contained"
@@ -267,7 +291,13 @@ function SharedVarsSection({ registry, userConfig, onSave, saving }) {
           Save
         </Button>
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+          gap: 2,
+        }}
+      >
         {Object.entries(sharedDefs).map(([name, def]) => {
           if (def.type === "secret") {
             return (
@@ -301,12 +331,33 @@ function SharedVarsSection({ registry, userConfig, onSave, saving }) {
 function ReadinessBadge({ status }) {
   if (!status) return null;
   if (!status.enabled) {
-    return <Chip icon={<RemoveCircleOutlineIcon />} label="Disabled" size="small" color="default" />;
+    return (
+      <Chip
+        icon={<RemoveCircleOutlineIcon />}
+        label="Disabled"
+        size="small"
+        color="default"
+      />
+    );
   }
   if (status.ready) {
-    return <Chip icon={<CheckCircleIcon />} label="Ready" size="small" color="success" />;
+    return (
+      <Chip
+        icon={<CheckCircleIcon />}
+        label="Ready"
+        size="small"
+        color="success"
+      />
+    );
   }
-  return <Chip icon={<ErrorIcon />} label={`Missing ${status.missing.length}`} size="small" color="warning" />;
+  return (
+    <Chip
+      icon={<ErrorIcon />}
+      label={`Missing ${status.missing.length}`}
+      size="small"
+      color="warning"
+    />
+  );
 }
 
 function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
@@ -314,12 +365,25 @@ function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
 
   return (
     <Box sx={{ mt: 1 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ mb: 1, fontWeight: 500 }}
+      >
         Storage assignments
       </Typography>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+          gap: 1,
+        }}
+      >
         {Object.entries(volumes).map(([volName, volDef]) => (
-          <Box key={volName} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            key={volName}
+            sx={{ display: "flex", alignItems: "center", gap: 1 }}
+          >
             <FormControl size="small" sx={{ minWidth: 100 }}>
               <InputLabel>{volName}</InputLabel>
               <Select
@@ -334,7 +398,11 @@ function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
                 ))}
               </Select>
             </FormControl>
-            <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ flex: 1 }}
+            >
               {volDef.host_subpath}
             </Typography>
           </Box>
@@ -344,9 +412,22 @@ function VolumeMountSelector({ volumes, volumeMounts, mounts, onChange }) {
   );
 }
 
-function ContainerCard({ name, def, source, containerConfig, validation, mounts, onUpdate, onUninstall, saving, moduleBusy }) {
+function ContainerCard({
+  name,
+  def,
+  source,
+  containerConfig,
+  validation,
+  mounts,
+  onUpdate,
+  onUninstall,
+  saving,
+  moduleBusy,
+}) {
   const [vars, setVars] = useState(containerConfig?.variables || {});
-  const [volMounts, setVolMounts] = useState(containerConfig?.volume_mounts || {});
+  const [volMounts, setVolMounts] = useState(
+    containerConfig?.volume_mounts || {},
+  );
   const [enabled, setEnabled] = useState(() => {
     if (containerConfig?.enabled !== undefined) return containerConfig.enabled;
     if (def.default_disabled) return false;
@@ -367,7 +448,11 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
   const handleToggle = () => {
     const next = !enabled;
     setEnabled(next);
-    onUpdate(name, { enabled: next, variables: vars, volume_mounts: volMounts });
+    onUpdate(name, {
+      enabled: next,
+      variables: vars,
+      volume_mounts: volMounts,
+    });
   };
 
   const handleSave = () => {
@@ -390,13 +475,31 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
   return (
     <Accordion slotProps={{ transition: { unmountOnExit: true } }}>
       <AccordionSummary expandIcon={hasDetails ? <ExpandMoreIcon /> : null}>
-        <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1, flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            width: "100%",
+            gap: 1,
+            flexWrap: "wrap",
+          }}
+        >
           {def.protected ? (
             <Tooltip title="Platform-critical container; cannot be disabled or uninstalled.">
-              <Chip label="Protected" size="small" color="warning" sx={{ minWidth: 62 }} />
+              <Chip
+                label="Protected"
+                size="small"
+                color="warning"
+                sx={{ minWidth: 62 }}
+              />
             </Tooltip>
           ) : def.system_service ? (
-            <Chip label="System" size="small" color="info" sx={{ minWidth: 62 }} />
+            <Chip
+              label="System"
+              size="small"
+              color="info"
+              sx={{ minWidth: 62 }}
+            />
           ) : (
             <Switch
               size="small"
@@ -405,7 +508,9 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
               onClick={(e) => e.stopPropagation()}
             />
           )}
-          <Typography sx={{ fontWeight: 500, minWidth: { xs: 0, sm: 180 } }}>{name}</Typography>
+          <Typography sx={{ fontWeight: 500, minWidth: { xs: 0, sm: 180 } }}>
+            {name}
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
             {def.description}
           </Typography>
@@ -413,22 +518,25 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
             <Chip key={f} label={f} size="small" variant="outlined" />
           ))}
           <ReadinessBadge status={validation} />
-          {source && source !== "personal" && source !== "platform" && !def.protected && (
-            <Tooltip title="Uninstall container">
-              <span>
-                <IconButton
-                  size="small"
-                  disabled={moduleBusy}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUninstall(name);
-                  }}
-                >
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
+          {source &&
+            source !== "personal" &&
+            source !== "platform" &&
+            !def.protected && (
+              <Tooltip title="Uninstall container">
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled={moduleBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUninstall(name);
+                    }}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
         </Box>
       </AccordionSummary>
       {hasDetails && (
@@ -444,29 +552,42 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
           {hasVars && hasVolumes && <Divider sx={{ my: 2 }} />}
           {hasVars && (
             <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 500 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1, fontWeight: 500 }}
+              >
                 Variables
               </Typography>
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                  gap: 2,
+                }}
+              >
                 {Object.entries(varDefs).map(([varName, varDef]) => {
                   const account = findAccountForVar(def, varName);
-                  const field = varDef.type === "secret" ? (
-                    <SecretField
-                      label={`${varName}${varDef.required ? " *" : ""}`}
-                      description={varDef.description}
-                      value={vars[varName]}
-                      onChange={(val) => handleVarChange(varName, val)}
-                    />
-                  ) : (
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label={`${varName}${varDef.required ? " *" : ""}`}
-                      helperText={varDef.description}
-                      value={vars[varName] || ""}
-                      onChange={(e) => handleVarChange(varName, e.target.value)}
-                    />
-                  );
+                  const field =
+                    varDef.type === "secret" ? (
+                      <SecretField
+                        label={`${varName}${varDef.required ? " *" : ""}`}
+                        description={varDef.description}
+                        value={vars[varName]}
+                        onChange={(val) => handleVarChange(varName, val)}
+                      />
+                    ) : (
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={`${varName}${varDef.required ? " *" : ""}`}
+                        helperText={varDef.description}
+                        value={vars[varName] || ""}
+                        onChange={(e) =>
+                          handleVarChange(varName, e.target.value)
+                        }
+                      />
+                    );
                   return (
                     <Box key={varName}>
                       {field}
@@ -494,7 +615,11 @@ function ContainerCard({ name, def, source, containerConfig, validation, mounts,
   );
 }
 
-function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, restartDockerStack }) {
+function ContainerConfig({
+  tailscalePreflightStatus,
+  runTailscalePreflight,
+  restartDockerStack,
+}) {
   const {
     registry,
     userConfig,
@@ -536,7 +661,9 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
     const result = await uninstallContainer(name);
     setModuleDialog({
       open: true,
-      title: result.success ? `Uninstalled ${name}` : `Failed to uninstall ${name}`,
+      title: result.success
+        ? `Uninstalled ${name}`
+        : `Failed to uninstall ${name}`,
       running: false,
       result,
     });
@@ -576,7 +703,9 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
     // — the Browse page handles available-but-not-installed.
     for (const [name, def] of Object.entries(registry.containers)) {
       if (!registry.sources[name]) continue;
-      const group = def.protected ? "Platform" : def.homepage_group || "Uncategorized";
+      const group = def.protected
+        ? "Platform"
+        : def.homepage_group || "Uncategorized";
       if (!grouped[group]) grouped[group] = [];
       grouped[group].push({ name, def });
     }
@@ -588,12 +717,18 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
 
   const handleSaveMounts = async (newMounts) => {
     await updateMounts(newMounts);
-    setSnackbar({ open: true, message: "Storage mounts saved and all .env files updated" });
+    setSnackbar({
+      open: true,
+      message: "Storage mounts saved and all .env files updated",
+    });
   };
 
   const handleSaveShared = async (vars) => {
     await updateSharedVars(vars);
-    setSnackbar({ open: true, message: "Global settings saved and all .env files updated" });
+    setSnackbar({
+      open: true,
+      message: "Global settings saved and all .env files updated",
+    });
   };
 
   const handleUpdateContainer = async (name, config) => {
@@ -634,12 +769,12 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
       </Typography>
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        <strong>How this works:</strong> First, define your storage mounts (one per
-        disk or directory). Then set Tailscale credentials in Global Settings.
-        Finally, enable containers and assign their volumes to your mounts.
-        Each Save updates the container's .env file automatically. Then head
-        to the <strong>Dashboard</strong> and click <strong>Start All Enabled</strong>
-        {" "}to bring everything up.
+        <strong>How this works:</strong> First, define your storage mounts (one
+        per disk or directory). Then set Tailscale credentials in Global
+        Settings. Finally, enable containers and assign their volumes to your
+        mounts. Each Save updates the container's .env file automatically. Then
+        head to the <strong>Dashboard</strong> and click{" "}
+        <strong>Start All Enabled</strong> to bring everything up.
       </Alert>
 
       <MountsSection
@@ -658,7 +793,14 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
       />
 
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 1,
+          }}
+        >
           <Typography variant="h6">Tailscale Preflight</Typography>
           <Button
             variant="outlined"
@@ -764,7 +906,10 @@ function ContainerConfig({ tailscalePreflightStatus, runTailscalePreflight, rest
 
       {sortedGroups.map((group) => (
         <Box key={group} sx={{ mb: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "text.secondary" }}>
+          <Typography
+            variant="subtitle1"
+            sx={{ fontWeight: 600, mb: 0.5, color: "text.secondary" }}
+          >
             {group}
           </Typography>
           {containersByGroup[group].map(({ name, def }) => (
