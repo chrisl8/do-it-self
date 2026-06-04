@@ -57,10 +57,77 @@ fi
 
 ERROR_COUNT=0
 
+# --- Unhealthy-streak escalation ------------------------------------------
+# Track how many consecutive health-check cycles each compose project has been
+# unhealthy. Once a project crosses UNHEALTHY_STREAK_THRESHOLD cycles it is
+# clearly not self-healing, so we (a) stop the futile 15-minute restart loop for
+# it -- which also needlessly bounces its DB sidecars -- by handing
+# all-containers.sh a skip-list, and (b) raise a distinct, greppable alert.
+# Counters live in HEALTH_STATE_DIR (same idiom as the docker-ps-wc files below)
+# and reset automatically when a project goes healthy or disappears (its key is
+# simply dropped). Override the threshold in healthcheck.conf if desired
+# (default 3 cycles ~= 45 minutes at the */15 cron).
+UNHEALTHY_STREAK_THRESHOLD="${UNHEALTHY_STREAK_THRESHOLD:-3}"
+STREAK_FILE="${HEALTH_STATE_DIR}/unhealthy-streaks.txt"
+SKIP_FILE="${HEALTH_STATE_DIR}/unhealthy-skip-list.txt"
+
+declare -A STREAK
+if [[ -e "${STREAK_FILE}" ]]; then
+  while read -r STREAK_NAME STREAK_COUNT; do
+    [[ -n "${STREAK_NAME}" ]] && STREAK["${STREAK_NAME}"]="${STREAK_COUNT}"
+  done < "${STREAK_FILE}"
+fi
+
+# Current set of unhealthy compose projects: any container in the project whose
+# status is not "(healthy)". Non-compose containers (empty project label) are
+# ignored -- all-containers.sh cannot act on them anyway.
+declare -A UNHEALTHY_NOW
+# Delimit with '|' rather than a tab: `read` strips leading IFS *whitespace*, so
+# a leading tab would NOT yield an empty first field for a label-less container
+# (it would mis-parse the status as the project). '|' is non-whitespace, so a
+# leading '|' correctly produces an empty project. Neither project names nor
+# docker status strings ever contain '|'.
+while IFS='|' read -r UNHEALTHY_PROJECT UNHEALTHY_STATUS; do
+  [[ -z "${UNHEALTHY_PROJECT}" ]] && continue
+  if [[ "${UNHEALTHY_STATUS}" != *"(healthy)"* ]]; then
+    UNHEALTHY_NOW["${UNHEALTHY_PROJECT}"]=1
+  fi
+done < <(/usr/bin/docker ps -a --format '{{.Label "com.docker.compose.project"}}|{{.Status}}')
+
+# Drop counters for projects that recovered or disappeared (the reset), then
+# increment counters for the currently-unhealthy ones.
+for STREAK_NAME in "${!STREAK[@]}"; do
+  [[ -z "${UNHEALTHY_NOW[$STREAK_NAME]:-}" ]] && unset 'STREAK[$STREAK_NAME]'
+done
+for UNHEALTHY_PROJECT in "${!UNHEALTHY_NOW[@]}"; do
+  STREAK["${UNHEALTHY_PROJECT}"]=$(( ${STREAK[$UNHEALTHY_PROJECT]:-0} + 1 ))
+done
+
+# Persist counters and build the skip-list; emit a distinct escalation alert for
+# each project that has crossed the threshold.
+: > "${STREAK_FILE}"
+: > "${SKIP_FILE}"
+for STREAK_NAME in "${!STREAK[@]}"; do
+  echo "${STREAK_NAME} ${STREAK[$STREAK_NAME]}" >> "${STREAK_FILE}"
+  if (( STREAK[$STREAK_NAME] >= UNHEALTHY_STREAK_THRESHOLD )); then
+    echo "${STREAK_NAME}" >> "${SKIP_FILE}"
+    echo ""
+    echo "ESCALATION: ${STREAK_NAME} has been unhealthy for ${STREAK[$STREAK_NAME]} consecutive checks -- not self-healing, needs attention (auto-restart suspended)"
+    echo ""
+    ERROR_COUNT=$((ERROR_COUNT + 1))
+  fi
+done
+# Leave no empty skip file behind.
+[[ -s "${SKIP_FILE}" ]] || rm -f "${SKIP_FILE}"
+
 # Restart unhealthy containers automatically
 # but don't run it recursively!
 if [[ ${ALL_CONTAINERS_IS_RUNNING} = false ]];then
-  "${HOME}/containers/scripts/all-containers.sh" --restart-unhealthy --quiet --no-wait
+  if [[ -s "${SKIP_FILE}" ]]; then
+    "${HOME}/containers/scripts/all-containers.sh" --restart-unhealthy --quiet --no-wait --skip-container-list "${SKIP_FILE}"
+  else
+    "${HOME}/containers/scripts/all-containers.sh" --restart-unhealthy --quiet --no-wait
+  fi
 fi
 
 # Ensure web-admin is running (idempotent - does nothing if already running)

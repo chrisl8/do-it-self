@@ -13,6 +13,7 @@ STOP_ACTION=false
 SLEEP_TIME=10
 MOUNT=""
 CONTAINER_LIST_FILE=""
+SKIP_CONTAINER_LIST_FILE=""
 SINGLE_CONTAINER=""
 
 NO_WAIT=false
@@ -52,6 +53,10 @@ do
                 --container-list)
                   shift
                   CONTAINER_LIST_FILE="$1"
+                  ;;
+                --skip-container-list)
+                  shift
+                  SKIP_CONTAINER_LIST_FILE="$1"
                   ;;
                 --container)
                   shift
@@ -154,6 +159,28 @@ SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
 # We moved the script down one level to the scripts directory, so we need to go up one level to get to the containers directory
 SCRIPT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# When pulling image updates, persist the whole run to a dated log so a failure
+# that later self-heals can still be diagnosed (cron otherwise discards this
+# output entirely). TTY-aware: tee to the terminal for interactive runs but
+# redirect straight to the file under cron. Gated on --get-updates so ordinary
+# start/stop/restart runs -- including the every-15-minute health-check restart
+# -- do not write here. Self-pruned below (no root/logrotate dependency); the
+# logs are date-stamped, so retention is just a find-delete of old files.
+if [[ ${GET_UPDATES} = true ]]; then
+  mkdir -p "${HOME}/logs"
+  find "${HOME}/logs" -maxdepth 1 -name 'container-updates-*.log' -mtime +90 -delete 2>/dev/null || true
+  UPDATE_LOG="${HOME}/logs/container-updates-$(date +%Y%m%d).log"
+  if [ -t 1 ]; then
+    exec > >(tee -a "${UPDATE_LOG}") 2>&1
+  else
+    exec >> "${UPDATE_LOG}" 2>&1
+  fi
+  echo ""
+  echo "=========================================="
+  echo "all-containers.sh --get-updates -- $(date)"
+  echo "=========================================="
+fi
 
 DIUN_UPDATE_FILE=""
 # Resolve the diun script volume path from its generated .env file.
@@ -602,6 +629,25 @@ elif [[ -n "${SINGLE_CONTAINER}" ]]; then
   RESTART_LIST_TEXT_UPPER="The container ${SINGLE_CONTAINER}"
 fi
 
+# If a skip-container-list file is provided, remove those directories from the
+# working list. The health check uses this to stop restart-looping containers it
+# has declared "stuck" (unhealthy for too many consecutive cycles, not
+# self-healing) -- see UNHEALTHY_STREAK_THRESHOLD in system-health-check.sh.
+if [[ -n "${SKIP_CONTAINER_LIST_FILE}" && -f "${SKIP_CONTAINER_LIST_FILE}" ]]; then
+  mapfile -t SKIP_DIRS < "${SKIP_CONTAINER_LIST_FILE}"
+  if [[ ${#SKIP_DIRS[@]} -gt 0 ]]; then
+    FILTERED_LIST=()
+    for ENTRY in "${CONTAINER_LIST[@]}"; do
+      CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
+      if [[ " ${SKIP_DIRS[*]} " == *" ${CONTAINER_DIR} "* ]]; then
+        continue
+      fi
+      FILTERED_LIST+=("${ENTRY}")
+    done
+    CONTAINER_LIST=("${FILTERED_LIST[@]}")
+  fi
+fi
+
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
   if [[ ${GET_UPDATES} = true ]];then
     printf "${YELLOW}Pulling updates and rebuilding ${RESTART_LIST_TEXT}${NC}\n\n"
@@ -756,6 +802,31 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         continue
       else
         printf "${YELLOW} - ${CONTAINER_DIR} has ${UNHEALTHY_COUNT} unhealthy container(s), restarting...${NC}\n"
+        # Capture the failed container's logs/health BEFORE the restart below.
+        # The recursive --stop --start runs `docker compose down`, which removes
+        # the containers and destroys their logs -- so without this snapshot a
+        # service that fails and later self-heals leaves nothing to diagnose.
+        # Best-effort only: a capture failure must never abort the restart.
+        set +e
+        SNAP_DIR="${HOME}/logs/unhealthy-snapshots"
+        mkdir -p "${SNAP_DIR}"
+        SNAP_FILE="${SNAP_DIR}/${CONTAINER_DIR}-$(date +%Y%m%d-%H%M%S).log"
+        {
+          echo "=== unhealthy snapshot: ${CONTAINER_DIR} -- $(date) ==="
+          echo "--- docker compose ps -a ---"
+          docker --log-level ERROR compose ps -a
+          echo "--- docker compose logs --no-color --tail=300 ---"
+          docker --log-level ERROR compose logs --no-color --tail=300
+          echo "--- docker inspect health (per service) ---"
+          docker --log-level ERROR compose ps -aq | while read -r SNAP_CID; do
+            [[ -z "${SNAP_CID}" ]] && continue
+            echo "## $(docker inspect --format '{{.Name}}' "${SNAP_CID}")"
+            docker inspect --format '{{json .State.Health}}' "${SNAP_CID}" 2>/dev/null
+          done
+        } >> "${SNAP_FILE}" 2>&1
+        # Keep the snapshots directory bounded.
+        find "${SNAP_DIR}" -type f -name '*.log' -mtime +14 -delete 2>/dev/null
+        set -e
         # Call THIS script with correct parameters to stop and start this container only
         "${SCRIPT_DIR}/scripts/all-containers.sh" --stop --start --container "${CONTAINER_DIR}" --no-wait --no-health-check
       fi
