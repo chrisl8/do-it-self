@@ -30,6 +30,15 @@
 !.vscode/
 .idea/
 
+# Repo-root developer tooling (formatting, linting, git hooks)
+!package.json
+!package-lock.json
+!.prettierrc.json
+!.prettierignore
+!eslint.config.mjs
+!.lintstagedrc.json
+!.git-blame-ignore-revs
+
 # --- Ignores within platform directories ---
 
 # Runtime state that can appear in any directory

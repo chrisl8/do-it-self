@@ -125,9 +125,22 @@ docker compose pull        # update images
 ## Code Style
 
 - **Python**: Black (88 char line length), flake8 (ignore E203, W503), pytest
-- **JavaScript**: Prettier (defaults), ESLint where configured. Plain JS only — no TypeScript. ES modules (`"type": "module"`). npm only.
+- **JavaScript**: Prettier (defaults), ESLint. Plain JS only — no TypeScript. ES modules (`"type": "module"`). npm only.
 - **Shell**: `set -e`, quote all variables (`"$VAR"`), `#!/bin/bash` for arrays. Shellcheck with `external-sources=true`.
 - **Compose YAML**: No blank lines, copious comments, no `:latest` tag (it's the default).
+
+### Enforced standards (first-party code)
+
+A repo-root `package.json` holds the dev tooling (Prettier, ESLint, lint-staged, simple-git-hooks). Run `npm install` once at the repo root to install it and register the git hook.
+
+- `npm run format` / `npm run format:check` — Prettier (defaults) over first-party JS/JSX/JSON.
+- `npm run lint` / `npm run lint:fix` — ESLint (`eslint.config.mjs`, flat config). Rules start at `warn`; tighten over time.
+- `npm run shellcheck` — shellcheck over `scripts/` and `actual-budget-sync/` shell.
+- **Pre-commit hook** (simple-git-hooks → lint-staged) auto-formats staged JS/JSON, runs `eslint --fix`, and runs `shellcheck --severity=error` on staged shell. Bypass in a pinch with `SKIP_SIMPLE_GIT_HOOKS=1 git commit`.
+
+**Scope = first-party only**: `web-admin/`, `scripts/`, `actual-budget-sync/`. Excluded: `node_modules`, `web-admin/backend/public` (built bundle), `.modules/` and other vendored/module clones (they live in their own repos), and **all YAML** (`compose.yaml` is hand-maintained — never let Prettier touch it).
+
+The bulk Prettier reformat lives in one commit recorded in `.git-blame-ignore-revs`. Run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so `git blame` skips it.
 
 ## Notable Sub-Projects
 
