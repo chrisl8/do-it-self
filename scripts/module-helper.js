@@ -62,6 +62,45 @@ function exec(cmd, opts = {}) {
   }).trim();
 }
 
+// Resolve the DIUN pending-updates file the same way the web admin does:
+// read VOL_DIUN_SCRIPT from diun/.env, falling back to ~/container-data.
+// Returns null if the diun .env is missing (diun not installed).
+async function getPendingUpdatesFilePath() {
+  const envFilePath = join(CONTAINERS_DIR, "diun", ".env");
+  if (!(await fileExists(envFilePath))) return null;
+
+  let volDiunScript;
+  const text = await readFile(envFilePath, "utf8");
+  for (const line of text.split("\n")) {
+    const match = line.match(/^\s*VOL_DIUN_SCRIPT\s*=\s*(.*?)\s*$/);
+    if (match) {
+      volDiunScript = match[1].replace(/^["']|["']$/g, "");
+      break;
+    }
+  }
+
+  const base = volDiunScript || join(process.env.HOME, "container-data");
+  return join(base, "container-mounts/diun/script/pendingContainerUpdates.txt");
+}
+
+// Remove any line exactly matching containerName from the DIUN pending-updates
+// file. Without this, uninstalling a container leaves an orphaned entry that
+// the web admin flags as an "invalid stack name". Best-effort: failures are
+// non-fatal since this is cleanup, not a prerequisite for uninstall.
+async function prunePendingUpdates(containerName) {
+  const filePath = await getPendingUpdatesFilePath();
+  if (!filePath || !(await fileExists(filePath))) return;
+
+  const content = await readFile(filePath, "utf8");
+  const lines = content.split("\n");
+  const kept = lines.filter((line) => line.trim() !== containerName);
+  // Nothing to do if the name was not present.
+  if (kept.length === lines.length) return;
+
+  await writeFile(filePath, kept.join("\n"));
+  console.log(`Removed "${containerName}" from pending container updates.`);
+}
+
 async function ensureModulesDir() {
   if (!(await dirExists(MODULES_DIR))) {
     await mkdir(MODULES_DIR, { recursive: true });
@@ -390,6 +429,15 @@ async function uninstallContainer(args) {
     exec(`node "${cronHelper}" remove "${containerName}"`);
   } catch {
     // Cron removal is best-effort
+  }
+
+  // Prune any orphaned DIUN pending-update entry for this container.
+  try {
+    await prunePendingUpdates(containerName);
+  } catch (err) {
+    console.warn(
+      `Warning: could not prune pending updates for ${containerName}: ${err.message}`,
+    );
   }
 
   // Stop container if running

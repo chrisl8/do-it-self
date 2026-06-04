@@ -410,9 +410,9 @@ const DockerStatus = ({
           <strong>{dockerStatus.invalidPendingUpdates.join(", ")}</strong>
           <br />
           <Typography variant="caption">
-            Update or remove these entries from pendingContainerUpdates.txt
-            <br />
-            and fix diunUpdate.sh to prevent this in the future
+            These are usually leftover entries from an uninstalled container.
+            Uninstalling now prunes them automatically; to clear an old one,
+            remove the matching line from pendingContainerUpdates.txt.
           </Typography>
         </Alert>
       )}
