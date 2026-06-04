@@ -406,6 +406,16 @@ containers:
         required: true
         description: PostgreSQL password for the formbricks database
         auto_generate: true
+      HUB_API_KEY:
+        type: secret
+        required: true
+        description: API key for the Formbricks Hub service
+        auto_generate: true
+      CUBEJS_API_SECRET:
+        type: secret
+        required: true
+        description: API secret for the bundled Cube analytics service
+        auto_generate: true
     volumes:
       data:
         var: VOL_FORMBRICKS_DATA
@@ -419,6 +429,10 @@ containers:
         var: VOL_FORMBRICKS_SAML_CONNECTION
         host_subpath: container-mounts/formbricks/saml-connection
         container_path: /home/nextjs/apps/web/saml-connection
+      cube:
+        var: VOL_FORMBRICKS_CUBE
+        host_subpath: container-mounts/formbricks/cube
+        container_path: /cube/conf
     default_disabled: true
   freshrss:
     description: Self-hosted RSS feed reader
