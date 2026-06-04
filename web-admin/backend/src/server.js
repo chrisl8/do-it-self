@@ -11,7 +11,11 @@ import os from "os";
 import getFormattedDockerContainers from "./dockerStatus.js";
 import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 import { getReleaseNotesForStack } from "./githubReleases.js";
-import { fetchRemote, bestEffortFetch, getRepoStatus } from "./gitRepoStatus.js";
+import {
+  fetchRemote,
+  bestEffortFetch,
+  getRepoStatus,
+} from "./gitRepoStatus.js";
 import {
   getRegistry,
   getUserConfig,
@@ -157,17 +161,23 @@ async function processUpdateQueue() {
       operation: "upgrade",
     });
 
-    console.log(`[Update All] Upgrading ${stackName} (${status.completed.length + 1} of ${status.total})...`);
+    console.log(
+      `[Update All] Upgrading ${stackName} (${status.completed.length + 1} of ${status.total})...`,
+    );
 
-    const { child, promise } = spawnTracked(scriptPath, [
-      "--stop",
-      "--start",
-      "--no-wait",
-      "--container",
-      stackName,
-      "--update-git-repos",
-      "--get-updates",
-    ], 600000);
+    const { child, promise } = spawnTracked(
+      scriptPath,
+      [
+        "--stop",
+        "--start",
+        "--no-wait",
+        "--container",
+        stackName,
+        "--update-git-repos",
+        "--get-updates",
+      ],
+      600000,
+    );
 
     updateAllChildProcess = child;
     const { exitCode, output } = await promise;
@@ -196,10 +206,16 @@ async function processUpdateQueue() {
       updateStatus(`restartStatus.${stackName}`, undefined);
       updateStatus("updateAllStatus", { ...status });
     } else {
-      console.log(`[Update All] ${stackName} failed (exit code ${exitCode}), pausing`);
+      console.log(
+        `[Update All] ${stackName} failed (exit code ${exitCode}), pausing`,
+      );
       status.status = "paused";
       status.current = null;
-      status.failed = { stackName, error: `Script exited with code ${exitCode}`, output };
+      status.failed = {
+        stackName,
+        error: `Script exited with code ${exitCode}`,
+        output,
+      };
       updateStatus(`restartStatus.${stackName}`, {
         status: "failed",
         operation: "upgrade",
@@ -241,7 +257,9 @@ async function processUpdateQueue() {
   status.failed = null;
   updateStatus("updateAllStatus", { ...status });
 
-  console.log(`[Update All] Finished: ${status.status} (${status.completed.length} of ${status.total} updated)`);
+  console.log(
+    `[Update All] Finished: ${status.status} (${status.completed.length} of ${status.total} updated)`,
+  );
 
   updateAllAborted = false;
   updateAllInFlight = false;
@@ -274,14 +292,15 @@ async function processStartAllQueue() {
     });
 
     const progressIdx = status.completed.length + status.failed.length + 1;
-    console.log(`[Start All] Starting ${stackName} (${progressIdx} of ${status.total})...`);
+    console.log(
+      `[Start All] Starting ${stackName} (${progressIdx} of ${status.total})...`,
+    );
 
-    const { child, promise } = spawnTracked(scriptPath, [
-      "--start",
-      "--no-wait",
-      "--container",
-      stackName,
-    ], 600000);
+    const { child, promise } = spawnTracked(
+      scriptPath,
+      ["--start", "--no-wait", "--container", stackName],
+      600000,
+    );
 
     startAllChildProcess = child;
     const { exitCode, output } = await promise;
@@ -310,8 +329,14 @@ async function processStartAllQueue() {
       updateStatus(`restartStatus.${stackName}`, undefined);
       updateStatus("startAllStatus", { ...status });
     } else {
-      console.log(`[Start All] ${stackName} failed (exit code ${exitCode}), continuing`);
-      status.failed.push({ stackName, error: `Script exited with code ${exitCode}`, output });
+      console.log(
+        `[Start All] ${stackName} failed (exit code ${exitCode}), continuing`,
+      );
+      status.failed.push({
+        stackName,
+        error: `Script exited with code ${exitCode}`,
+        output,
+      });
       status.current = null;
       updateStatus(`restartStatus.${stackName}`, {
         status: "failed",
@@ -333,7 +358,9 @@ async function processStartAllQueue() {
   status.current = null;
   updateStatus("startAllStatus", { ...status });
 
-  console.log(`[Start All] Finished: ${status.status} (${status.completed.length} of ${status.total} started, ${status.failed.length} failed)`);
+  console.log(
+    `[Start All] Finished: ${status.status} (${status.completed.length} of ${status.total} started, ${status.failed.length} failed)`,
+  );
 
   startAllAborted = false;
 }
@@ -341,9 +368,18 @@ async function processStartAllQueue() {
 const CONTAINERS_DIR = join(os.homedir(), "containers");
 const ICONS_BASE_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
 const KOPIA_CONF_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf");
-const KOPIA_CONF_EXAMPLE_FILE = join(CONTAINERS_DIR, "scripts/kopia-backup-check.conf.example");
-const KOPIA_HOST_THRESHOLDS_FILE = join(CONTAINERS_DIR, "scripts/kopia-host-thresholds.json");
-const KOPIA_IGNORED_SOURCES_FILE = join(CONTAINERS_DIR, "scripts/kopia-ignored-sources.json");
+const KOPIA_CONF_EXAMPLE_FILE = join(
+  CONTAINERS_DIR,
+  "scripts/kopia-backup-check.conf.example",
+);
+const KOPIA_HOST_THRESHOLDS_FILE = join(
+  CONTAINERS_DIR,
+  "scripts/kopia-host-thresholds.json",
+);
+const KOPIA_IGNORED_SOURCES_FILE = join(
+  CONTAINERS_DIR,
+  "scripts/kopia-ignored-sources.json",
+);
 
 // Read the Kopia conf, falling back to the committed .example template when
 // the gitignored runtime file does not yet exist (cron hasn't bootstrapped).
@@ -379,7 +415,10 @@ app.use(
 
 app.get("/api/borg-status", async (req, res) => {
   try {
-    const statusFile = join(os.homedir(), "containers/homepage/images/borg-status.json");
+    const statusFile = join(
+      os.homedir(),
+      "containers/homepage/images/borg-status.json",
+    );
     const data = await readFile(statusFile, "utf8");
     res.json(JSON.parse(data));
   } catch (err) {
@@ -409,8 +448,10 @@ function parseBorgConf(contents) {
     const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)=(.*?)\s*$/);
     if (!m) continue;
     let value = m[2];
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     out[m[1]] = value;
@@ -419,7 +460,8 @@ function parseBorgConf(contents) {
 }
 
 function sideState(status, lastBackup, now) {
-  if (status !== "success") return { ok: false, last_status: status ?? "never_run" };
+  if (status !== "success")
+    return { ok: false, last_status: status ?? "never_run" };
   const ts = lastBackup ? Date.parse(lastBackup) : NaN;
   if (!Number.isFinite(ts) || now - ts > STALE_MS) {
     return { ok: false, last_status: "stale" };
@@ -448,7 +490,10 @@ app.get("/api/system/backup-status", async (req, res) => {
     statusJson = JSON.parse(await readFile(statusPath, "utf8"));
   } catch (err) {
     if (err.code !== "ENOENT") {
-      console.error("backup-status: unexpected error reading borg status:", err);
+      console.error(
+        "backup-status: unexpected error reading borg status:",
+        err,
+      );
     }
   }
 
@@ -460,7 +505,9 @@ app.get("/api/system/backup-status", async (req, res) => {
     console.error("backup-status: unexpected error reading user-config:", err);
   }
 
-  const remoteEnabled = Boolean(conf.BORG_REMOTE_REPO && conf.BORG_REMOTE_REPO.length);
+  const remoteEnabled = Boolean(
+    conf.BORG_REMOTE_REPO && conf.BORG_REMOTE_REPO.length,
+  );
   const now = Date.now();
 
   const local = {
@@ -524,7 +571,9 @@ app.get("/api/system/backup-status", async (req, res) => {
 app.get("/api/config/borg-banner-dismiss", async (req, res) => {
   try {
     const userConfig = await getUserConfig();
-    res.json({ dismissed: userConfig?.web_admin?.borg_banner_dismissed === true });
+    res.json({
+      dismissed: userConfig?.web_admin?.borg_banner_dismissed === true,
+    });
   } catch (err) {
     console.error("Error reading borg banner dismiss flag:", err);
     res.status(500).json({ error: "Failed to read banner preference" });
@@ -564,8 +613,10 @@ function parseBorgConfScalar(conf, key) {
   const m = conf.match(re);
   if (!m) return null;
   let v = m[1].trim();
-  if ((v.startsWith('"') && v.endsWith('"')) ||
-      (v.startsWith("'") && v.endsWith("'"))) {
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
     v = v.slice(1, -1);
   }
   return v;
@@ -640,7 +691,9 @@ app.get("/api/config/borg", async (req, res) => {
     try {
       infisicalAvailable = await isInfisicalAvailable();
       if (infisicalAvailable) {
-        for (const [name, { path, key }] of Object.entries(BORG_PASSPHRASE_SECRETS)) {
+        for (const [name, { path, key }] of Object.entries(
+          BORG_PASSPHRASE_SECRETS,
+        )) {
           const v = await getSecret(key, path).catch(() => null);
           passphraseSet[name] = Boolean(v);
         }
@@ -673,8 +726,13 @@ app.put("/api/config/borg", async (req, res) => {
     if (body.backup_paths !== undefined && !Array.isArray(body.backup_paths)) {
       return res.status(400).json({ error: "backup_paths must be an array" });
     }
-    if (body.remote_ratelimit_kbps !== undefined && typeof body.remote_ratelimit_kbps !== "number") {
-      return res.status(400).json({ error: "remote_ratelimit_kbps must be a number" });
+    if (
+      body.remote_ratelimit_kbps !== undefined &&
+      typeof body.remote_ratelimit_kbps !== "number"
+    ) {
+      return res
+        .status(400)
+        .json({ error: "remote_ratelimit_kbps must be a number" });
     }
 
     // Merge on top of the hydrated state, not the raw block, so a
@@ -688,8 +746,14 @@ app.put("/api/config/borg", async (req, res) => {
       ...existing,
       ...body,
       retention: {
-        local: { ...(existing.retention?.local || {}), ...(body.retention?.local || {}) },
-        remote: { ...(existing.retention?.remote || {}), ...(body.retention?.remote || {}) },
+        local: {
+          ...(existing.retention?.local || {}),
+          ...(body.retention?.local || {}),
+        },
+        remote: {
+          ...(existing.retention?.remote || {}),
+          ...(body.retention?.remote || {}),
+        },
       },
     };
     await saveUserConfig(rawUserConfig);
@@ -730,7 +794,10 @@ app.get("/api/config/borg/passphrase/reveal", async (req, res) => {
 app.post("/api/config/borg/passphrase/generate", async (req, res) => {
   try {
     const { randomBytes } = await import("crypto");
-    const value = randomBytes(30).toString("base64").replace(/[+/=]/g, "").slice(0, 40);
+    const value = randomBytes(30)
+      .toString("base64")
+      .replace(/[+/=]/g, "")
+      .slice(0, 40);
     res.json({ value });
   } catch (err) {
     console.error("Error generating passphrase:", err);
@@ -746,7 +813,9 @@ app.put("/api/config/borg/passphrase", async (req, res) => {
       return res.status(400).json({ error: "Unknown passphrase key" });
     }
     if (typeof value !== "string" || value.length < 8) {
-      return res.status(400).json({ error: "value must be a string of at least 8 characters" });
+      return res
+        .status(400)
+        .json({ error: "value must be a string of at least 8 characters" });
     }
     if (!(await isInfisicalAvailable())) {
       return res.status(503).json({ error: "Infisical is not available" });
@@ -832,7 +901,9 @@ app.get("/api/borg/path-size", async (req, res) => {
   try {
     const { size, exitCode } = await new Promise((resolve) => {
       let buf = "";
-      const child = spawn("du", ["-sh", "--apparent-size", expanded], { env: childEnv() });
+      const child = spawn("du", ["-sh", "--apparent-size", expanded], {
+        env: childEnv(),
+      });
       const timer = setTimeout(() => child.kill("SIGTERM"), 60 * 1000);
       child.stdout.on("data", (d) => (buf += d.toString()));
       child.on("close", (code) => {
@@ -844,7 +915,9 @@ app.get("/api/borg/path-size", async (req, res) => {
     // reports the total. Treat "any size in stdout" as success; only a
     // genuinely empty stdout counts as failure.
     if (!size || size === "?") {
-      return res.status(200).json({ path: raw, size: "?", error: "du failed", exitCode });
+      return res
+        .status(200)
+        .json({ path: raw, size: "?", error: "du failed", exitCode });
     }
     PATH_SIZE_CACHE.set(expanded, { size, at: Date.now() });
     res.json({ path: raw, size, cached: false });
@@ -885,7 +958,9 @@ app.get("/api/kopia-threshold", async (req, res) => {
     const data = await readKopiaConf();
     const match = data.match(/^KOPIA_STALE_HOURS=(\d+)/m);
     if (!match) {
-      res.status(500).json({ error: "Could not find KOPIA_STALE_HOURS in config" });
+      res
+        .status(500)
+        .json({ error: "Could not find KOPIA_STALE_HOURS in config" });
       return;
     }
     res.json({ threshold: parseInt(match[1], 10) });
@@ -908,7 +983,9 @@ app.put("/api/kopia-threshold", async (req, res) => {
       `KOPIA_STALE_HOURS=${threshold}`,
     );
     if (updated === data) {
-      res.status(500).json({ error: "Could not find KOPIA_STALE_HOURS in config" });
+      res
+        .status(500)
+        .json({ error: "Could not find KOPIA_STALE_HOURS in config" });
       return;
     }
     await writeFile(KOPIA_CONF_FILE, updated, "utf8");
@@ -929,7 +1006,9 @@ app.get("/api/kopia-ignore-hosts", async (req, res) => {
       return;
     }
     // Parse bash array: ("host1" "host2") — extract quoted strings
-    const hosts = (match[1].match(/"([^"]*)"/g) || []).map((s) => s.replace(/"/g, ""));
+    const hosts = (match[1].match(/"([^"]*)"/g) || []).map((s) =>
+      s.replace(/"/g, ""),
+    );
     res.json({ hosts });
   } catch (err) {
     console.error("Error reading kopia ignore hosts:", err);
@@ -939,30 +1018,40 @@ app.get("/api/kopia-ignore-hosts", async (req, res) => {
 
 app.put("/api/kopia-ignore-hosts", async (req, res) => {
   const { hosts } = req.body;
-  if (!Array.isArray(hosts) || hosts.some((h) => typeof h !== "string" || !h.trim())) {
-    res.status(400).json({ error: "Hosts must be an array of non-empty strings" });
+  if (
+    !Array.isArray(hosts) ||
+    hosts.some((h) => typeof h !== "string" || !h.trim())
+  ) {
+    res
+      .status(400)
+      .json({ error: "Hosts must be an array of non-empty strings" });
     return;
   }
   const hostnameRe = /^[a-zA-Z0-9._-]+$/;
   if (hosts.some((h) => !hostnameRe.test(h.trim()))) {
-    res.status(400).json({ error: "Hostnames may only contain letters, numbers, dots, hyphens, and underscores" });
+    res.status(400).json({
+      error:
+        "Hostnames may only contain letters, numbers, dots, hyphens, and underscores",
+    });
     return;
   }
   try {
     const data = await readKopiaConf();
-    const bashArray = hosts.length > 0
-      ? `KOPIA_IGNORE_HOSTS=(${hosts.map((h) => `"${h.trim()}"`).join(" ")})`
-      : `KOPIA_IGNORE_HOSTS=()`;
-    const updated = data.replace(
-      /^KOPIA_IGNORE_HOSTS=\([^)]*\)/m,
-      bashArray,
-    );
+    const bashArray =
+      hosts.length > 0
+        ? `KOPIA_IGNORE_HOSTS=(${hosts.map((h) => `"${h.trim()}"`).join(" ")})`
+        : `KOPIA_IGNORE_HOSTS=()`;
+    const updated = data.replace(/^KOPIA_IGNORE_HOSTS=\([^)]*\)/m, bashArray);
     if (updated === data && !data.match(/^KOPIA_IGNORE_HOSTS=/m)) {
-      res.status(500).json({ error: "Could not find KOPIA_IGNORE_HOSTS in config" });
+      res
+        .status(500)
+        .json({ error: "Could not find KOPIA_IGNORE_HOSTS in config" });
       return;
     }
     await writeFile(KOPIA_CONF_FILE, updated, "utf8");
-    console.log(`Kopia ignore hosts updated to: ${hosts.join(", ") || "(none)"}`);
+    console.log(
+      `Kopia ignore hosts updated to: ${hosts.join(", ") || "(none)"}`,
+    );
     res.json({ success: true, hosts });
   } catch (err) {
     console.error("Error updating kopia ignore hosts:", err);
@@ -986,18 +1075,28 @@ app.get("/api/kopia-host-thresholds", async (req, res) => {
 
 app.put("/api/kopia-host-thresholds", async (req, res) => {
   const { thresholds } = req.body;
-  if (!thresholds || typeof thresholds !== "object" || Array.isArray(thresholds)) {
+  if (
+    !thresholds ||
+    typeof thresholds !== "object" ||
+    Array.isArray(thresholds)
+  ) {
     res.status(400).json({ error: "Thresholds must be an object" });
     return;
   }
   for (const [host, hours] of Object.entries(thresholds)) {
     if (!Number.isInteger(hours) || hours < 1) {
-      res.status(400).json({ error: `Invalid threshold for ${host}: must be a positive integer` });
+      res.status(400).json({
+        error: `Invalid threshold for ${host}: must be a positive integer`,
+      });
       return;
     }
   }
   try {
-    await writeFile(KOPIA_HOST_THRESHOLDS_FILE, JSON.stringify(thresholds, null, 2) + "\n", "utf8");
+    await writeFile(
+      KOPIA_HOST_THRESHOLDS_FILE,
+      JSON.stringify(thresholds, null, 2) + "\n",
+      "utf8",
+    );
     console.log(`Kopia host thresholds updated: ${JSON.stringify(thresholds)}`);
     res.json({ success: true, thresholds });
   } catch (err) {
@@ -1043,7 +1142,8 @@ app.put("/api/kopia-ignored-sources", async (req, res) => {
       !entry.path.trim()
     ) {
       res.status(400).json({
-        error: "Each entry must be {host, userName, path} with non-empty strings",
+        error:
+          "Each entry must be {host, userName, path} with non-empty strings",
       });
       return;
     }
@@ -1077,7 +1177,10 @@ app.post("/api/kopia-check", async (req, res) => {
   }
   kopiaCheckRunning = true;
   console.log("Kopia backup check requested via web admin");
-  const scriptPath = join(os.homedir(), "containers/scripts/kopia-backup-check.sh");
+  const scriptPath = join(
+    os.homedir(),
+    "containers/scripts/kopia-backup-check.sh",
+  );
   const child = spawn(scriptPath, [], { env: childEnv() });
   let output = "";
   child.stdout.on("data", (chunk) => {
@@ -1092,7 +1195,11 @@ app.post("/api/kopia-check", async (req, res) => {
     if (code === 0) {
       res.json({ success: true, output });
     } else {
-      res.status(500).json({ success: false, error: `Script exited with code ${code}`, output });
+      res.status(500).json({
+        success: false,
+        error: `Script exited with code ${code}`,
+        output,
+      });
     }
   });
   child.on("error", (err) => {
@@ -1212,11 +1319,14 @@ app.get("/api/config/raw", async (req, res) => {
         }
         // Load per-container secrets
         for (const name of Object.keys(registry.containers || {})) {
-          const containerSecrets = await listSecrets(`/${name}`).catch(() => []);
+          const containerSecrets = await listSecrets(`/${name}`).catch(
+            () => [],
+          );
           if (containerSecrets.length > 0) {
             if (!userConfig.containers) userConfig.containers = {};
             if (!userConfig.containers[name]) userConfig.containers[name] = {};
-            if (!userConfig.containers[name].variables) userConfig.containers[name].variables = {};
+            if (!userConfig.containers[name].variables)
+              userConfig.containers[name].variables = {};
             for (const s of containerSecrets) {
               userConfig.containers[name].variables[s.key] = s.value;
             }
@@ -1274,7 +1384,10 @@ app.put("/api/config/shared", async (req, res) => {
 const HEALTHCHECK_SECRETS = {
   kopia: { path: "/kopia-backup-check", key: "HEALTHCHECK_URL" },
   borg: { path: "/borgbackup", key: "BORG_HEALTHCHECK_URL" },
-  borgRestore: { path: "/borgbackup", key: "BORG_RESTORE_TEST_HEALTHCHECK_URL" },
+  borgRestore: {
+    path: "/borgbackup",
+    key: "BORG_RESTORE_TEST_HEALTHCHECK_URL",
+  },
 };
 
 app.get("/api/config/backup-healthchecks", async (req, res) => {
@@ -1368,13 +1481,19 @@ app.put("/api/config/container/:name", async (req, res) => {
     const existing = userConfig.containers[name] || {};
 
     // Separate variables into secrets (Infisical) and non-secret config (user-config.yaml)
-    const variables = { ...(existing.variables || {}), ...(req.body.variables || {}) };
+    const variables = {
+      ...(existing.variables || {}),
+      ...(req.body.variables || {}),
+    };
 
     // Non-variable config (enabled, volume_mounts) always goes to user-config.yaml
     userConfig.containers[name] = {
       ...existing,
       ...req.body,
-      volume_mounts: { ...(existing.volume_mounts || {}), ...(req.body.volume_mounts || {}) },
+      volume_mounts: {
+        ...(existing.volume_mounts || {}),
+        ...(req.body.volume_mounts || {}),
+      },
     };
     // Don't store variables in user-config.yaml if Infisical is available
     let autoGenerated = 0;
@@ -1397,7 +1516,12 @@ app.put("/api/config/container/:name", async (req, res) => {
     if (!containerDef?.system_service) {
       envResult = await writeContainerEnv(name);
     }
-    res.json({ success: true, envWritten: envResult.written, envMissing: envResult.missing, autoGenerated });
+    res.json({
+      success: true,
+      envWritten: envResult.written,
+      envMissing: envResult.missing,
+      autoGenerated,
+    });
   } catch (err) {
     console.error("Error saving container config:", err);
     res.status(500).json({ error: "Failed to save container config" });
@@ -1418,7 +1542,11 @@ app.get("/api/config/validate/:name", async (req, res) => {
   try {
     const registry = await getRegistry();
     const userConfig = await getUserConfig();
-    const result = await validateContainer(registry, userConfig, req.params.name);
+    const result = await validateContainer(
+      registry,
+      userConfig,
+      req.params.name,
+    );
     res.json(result);
   } catch (err) {
     console.error("Error validating container:", err);
@@ -1485,22 +1613,35 @@ app.get("/api/git-status", async (req, res) => {
   try {
     const doFetch = req.query.fetch === "1" || req.query.fetch === "true";
     const installed = await getInstalledModules();
-    const moduleNames = Object.keys(installed.modules || {})
-      .filter((name) => existsSync(join(MODULES_DIR, name)));
+    const moduleNames = Object.keys(installed.modules || {}).filter((name) =>
+      existsSync(join(MODULES_DIR, name)),
+    );
 
     if (doFetch) {
       await bestEffortFetch(CONTAINERS_DIR, "platform");
       await Promise.all(
-        moduleNames.map((name) => bestEffortFetch(join(MODULES_DIR, name), name)),
+        moduleNames.map((name) =>
+          bestEffortFetch(join(MODULES_DIR, name), name),
+        ),
       );
     }
 
     const repos = [];
-    const platformStatus = await getRepoStatus("platform", "Platform", CONTAINERS_DIR, false);
+    const platformStatus = await getRepoStatus(
+      "platform",
+      "Platform",
+      CONTAINERS_DIR,
+      false,
+    );
     if (doFetch) platformStatus.fetchedAt = new Date().toISOString();
     repos.push(platformStatus);
     for (const moduleName of moduleNames) {
-      const status = await getRepoStatus(moduleName, moduleName, join(MODULES_DIR, moduleName), true);
+      const status = await getRepoStatus(
+        moduleName,
+        moduleName,
+        join(MODULES_DIR, moduleName),
+        true,
+      );
       if (doFetch) status.fetchedAt = new Date().toISOString();
       repos.push(status);
     }
@@ -1534,7 +1675,8 @@ let moduleOpInFlight = false;
 function acquireModuleLock(res) {
   if (moduleOpInFlight) {
     res.status(409).json({
-      error: "Another module operation is in progress. Wait for it to finish and try again.",
+      error:
+        "Another module operation is in progress. Wait for it to finish and try again.",
       output: "",
     });
     return false;
@@ -1589,7 +1731,9 @@ async function handleModuleMutation(res, args) {
 app.post("/api/modules/sources", async (req, res) => {
   const { url, name } = req.body || {};
   if (!url || typeof url !== "string") {
-    return res.status(400).json({ error: "Missing or invalid 'url' in request body" });
+    return res
+      .status(400)
+      .json({ error: "Missing or invalid 'url' in request body" });
   }
   const args = ["add-source", url];
   if (name && typeof name === "string") args.push("--name", name);
@@ -1639,7 +1783,10 @@ app.post("/api/modules/dev-sync/:name", async (req, res) => {
 // Safe platform repo update. Reuses the module lock because the flow writes
 // to installed-modules.yaml (setup hook completions). Maps structured exit
 // codes from update-platform.js to a category so the UI can pick severity.
-const UPDATE_PLATFORM_SH = join(os.homedir(), "containers/scripts/update-platform.sh");
+const UPDATE_PLATFORM_SH = join(
+  os.homedir(),
+  "containers/scripts/update-platform.sh",
+);
 function categorizePlatformUpdateExit(code) {
   if (code === 0) return "ok";
   if (code === 2) return "precondition";
@@ -1664,7 +1811,9 @@ app.post("/api/platform/update", async (req, res) => {
     });
   } catch (err) {
     console.error("Error running update-platform.sh:", err);
-    res.status(500).json({ success: false, output: err.message, category: "error" });
+    res
+      .status(500)
+      .json({ success: false, output: err.message, category: "error" });
   } finally {
     moduleOpInFlight = false;
   }
@@ -1681,7 +1830,9 @@ app.post("/api/platform/update-everything", async (req, res) => {
     const platformArgs = ["--yes"];
     if (req.body?.preBackup) platformArgs.push("--pre-backup");
     const { promise: platformPromise } = spawnTracked(
-      UPDATE_PLATFORM_SH, platformArgs, 15 * 60 * 1000,
+      UPDATE_PLATFORM_SH,
+      platformArgs,
+      15 * 60 * 1000,
     );
     const platform = await platformPromise;
     out.push(platform.output);
@@ -1689,7 +1840,11 @@ app.post("/api/platform/update-everything", async (req, res) => {
     let modules = { exitCode: 0, output: "" };
     if (platform.exitCode === 0) {
       out.push("\n── Module update ──");
-      const { promise: modPromise } = spawnTracked(MODULE_SH, ["update"], 15 * 60 * 1000);
+      const { promise: modPromise } = spawnTracked(
+        MODULE_SH,
+        ["update"],
+        15 * 60 * 1000,
+      );
       modules = await modPromise;
       out.push(modules.output);
     } else {
@@ -1706,7 +1861,9 @@ app.post("/api/platform/update-everything", async (req, res) => {
     });
   } catch (err) {
     console.error("Error running update-everything:", err);
-    res.status(500).json({ success: false, output: err.message, category: "error" });
+    res
+      .status(500)
+      .json({ success: false, output: err.message, category: "error" });
   } finally {
     moduleOpInFlight = false;
   }
@@ -1738,8 +1895,7 @@ app.use((req, res, next) => {
 // tailnet device that isn't the sidecar's own MagicDNS host, or any other
 // docker container can reach the backend except via that sidecar.
 const SOCKET_PATH =
-  process.env.SOCKET_PATH ||
-  join(dirName, "..", "sockets", "web-admin.sock");
+  process.env.SOCKET_PATH || join(dirName, "..", "sockets", "web-admin.sock");
 // Optional secondary listener: a loopback TCP port for local debugging from
 // the host (curl http://127.0.0.1:3333/...). Off by default. Set
 // DEBUG_TCP_PORT in web-admin/backend/.env to enable.
@@ -2130,7 +2286,11 @@ async function webserver() {
                 : info.hasPendingUpdates,
             )
             .sort(([, a], [, b]) =>
-              (a.sortOrder || "z999").localeCompare(b.sortOrder || "z999", undefined, { numeric: true }),
+              (a.sortOrder || "z999").localeCompare(
+                b.sortOrder || "z999",
+                undefined,
+                { numeric: true },
+              ),
             )
             .map(([name]) => name);
 
@@ -2147,7 +2307,9 @@ async function webserver() {
             return;
           }
 
-          console.log(`[Update All] Starting batch update of ${queue.length} stacks: ${queue.join(", ")}`);
+          console.log(
+            `[Update All] Starting batch update of ${queue.length} stacks: ${queue.join(", ")}`,
+          );
 
           updateAllAborted = false;
           updateStatus("updateAllStatus", {
@@ -2178,7 +2340,10 @@ async function webserver() {
         }
       } else if (message.type === "updateAllAction") {
         const action = message.payload?.action;
-        if (updateAllResumeResolver && ["skip", "retry", "cancel"].includes(action)) {
+        if (
+          updateAllResumeResolver &&
+          ["skip", "retry", "cancel"].includes(action)
+        ) {
           console.log(`[Update All] User action: ${action}`);
           updateAllResumeResolver(action);
         }
@@ -2205,7 +2370,11 @@ async function webserver() {
           return;
         }
         const currentUpdateAllStatus = getStatus().updateAllStatus;
-        if (currentUpdateAllStatus && (currentUpdateAllStatus.status === "running" || currentUpdateAllStatus.status === "paused")) {
+        if (
+          currentUpdateAllStatus &&
+          (currentUpdateAllStatus.status === "running" ||
+            currentUpdateAllStatus.status === "paused")
+        ) {
           ws.send(
             JSON.stringify({
               type: "startAllError",
@@ -2222,13 +2391,18 @@ async function webserver() {
           updateStatus("docker.stacks", containers.stacks);
 
           const queue = Object.entries(containers.stacks)
-            .filter(([name, info]) =>
-              !info.isDisabled &&
-              info.configReady !== false &&
-              !containers.running[name]
+            .filter(
+              ([name, info]) =>
+                !info.isDisabled &&
+                info.configReady !== false &&
+                !containers.running[name],
             )
             .sort(([, a], [, b]) =>
-              (a.sortOrder || "z999").localeCompare(b.sortOrder || "z999", undefined, { numeric: true }),
+              (a.sortOrder || "z999").localeCompare(
+                b.sortOrder || "z999",
+                undefined,
+                { numeric: true },
+              ),
             )
             .map(([name]) => name);
 
@@ -2242,7 +2416,9 @@ async function webserver() {
             return;
           }
 
-          console.log(`[Start All] Starting batch of ${queue.length} stacks: ${queue.join(", ")}`);
+          console.log(
+            `[Start All] Starting batch of ${queue.length} stacks: ${queue.join(", ")}`,
+          );
 
           startAllAborted = false;
           updateStatus("startAllStatus", {
@@ -2288,7 +2464,10 @@ async function webserver() {
               checks: [],
             });
           } else {
-            updateStatus("tailscalePreflightStatus", { status: "running", checks: [] });
+            updateStatus("tailscalePreflightStatus", {
+              status: "running",
+              checks: [],
+            });
             const childEnv = { ...process.env };
             childEnv.TS_API_TOKEN = tokenSecret.value;
             for (const s of secrets) {
@@ -2298,7 +2477,9 @@ async function webserver() {
               os.homedir(),
               "containers/scripts/lib/tailscale-preflight.js",
             );
-            const child = spawn("node", [preflightPath, "--json"], { env: childEnv });
+            const child = spawn("node", [preflightPath, "--json"], {
+              env: childEnv,
+            });
             let output = "";
             child.stdout.on("data", (d) => (output += d.toString()));
             child.stderr.on("data", (d) => (output += d.toString()));
@@ -2347,14 +2528,9 @@ async function webserver() {
             stackName,
             stackContainers,
           );
-          ws.send(
-            JSON.stringify({ type: "releaseNotes", payload: result }),
-          );
+          ws.send(JSON.stringify({ type: "releaseNotes", payload: result }));
         } catch (e) {
-          console.error(
-            `Error fetching release notes for ${stackName}:`,
-            e,
-          );
+          console.error(`Error fetching release notes for ${stackName}:`, e);
           ws.send(
             JSON.stringify({
               type: "releaseNotes",

@@ -60,7 +60,9 @@ function tailscaleApi(path, token) {
               reject(new Error(`Invalid JSON from ${path}: ${err.message}`));
             }
           } else {
-            const err = new Error(`API ${path} returned HTTP ${res.statusCode}`);
+            const err = new Error(
+              `API ${path} returned HTTP ${res.statusCode}`,
+            );
             err.statusCode = res.statusCode;
             err.body = data;
             reject(err);
@@ -107,7 +109,8 @@ function parseKeyId(authKey) {
 
 function isKeyValid(keyData) {
   const cap = keyData?.capabilities?.devices?.create;
-  if (!cap) return { ok: false, reason: "key has no devices.create capability" };
+  if (!cap)
+    return { ok: false, reason: "key has no devices.create capability" };
   if (!cap.reusable) {
     return { ok: false, reason: "key is not marked Reusable" };
   }
@@ -123,7 +126,12 @@ function isKeyValid(keyData) {
       expires = keyData.expires;
       expiresInDays = Math.floor((exp - new Date()) / (1000 * 60 * 60 * 24));
       if (exp < new Date()) {
-        return { ok: false, reason: `key expired on ${keyData.expires}`, expires, expiresInDays };
+        return {
+          ok: false,
+          reason: `key expired on ${keyData.expires}`,
+          expires,
+          expiresInDays,
+        };
       }
     }
   }

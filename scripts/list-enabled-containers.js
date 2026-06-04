@@ -47,7 +47,10 @@ function parseYaml(text) {
           const pairs = val.match(/(\w+):\s*"?([^",]*)"?/g) || [];
           for (const pair of pairs) {
             const [k, ...v] = pair.split(": ");
-            obj[k.trim()] = v.join(": ").trim().replace(/^["']|["']$/g, "");
+            obj[k.trim()] = v
+              .join(": ")
+              .trim()
+              .replace(/^["']|["']$/g, "");
           }
           parent.push(obj);
         } else {
@@ -71,8 +74,10 @@ function parseYaml(text) {
     let value = content.slice(colonIdx + 1).trim();
 
     let wasQuoted = false;
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
       wasQuoted = true;
     }
@@ -104,7 +109,12 @@ function parseYaml(text) {
 }
 
 async function fileExists(path) {
-  try { await access(path); return true; } catch { return false; }
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function main() {
@@ -113,12 +123,16 @@ async function main() {
 
   let userConfig = { containers: {} };
   if (await fileExists(USER_CONFIG_PATH)) {
-    userConfig = parseYaml(await readFile(USER_CONFIG_PATH, "utf8")) || { containers: {} };
+    userConfig = parseYaml(await readFile(USER_CONFIG_PATH, "utf8")) || {
+      containers: {},
+    };
   }
 
   let installed = { modules: {} };
   if (await fileExists(INSTALLED_MODULES_PATH)) {
-    installed = parseYaml(await readFile(INSTALLED_MODULES_PATH, "utf8")) || { modules: {} };
+    installed = parseYaml(await readFile(INSTALLED_MODULES_PATH, "utf8")) || {
+      modules: {},
+    };
   }
   const installedSet = installedContainerSet(installed);
 
@@ -141,4 +155,7 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

@@ -18,8 +18,8 @@ const MESSAGES = {
     title: "Remote borg backup is not running",
     body: (
       <>
-        Local backups are current, but remote offsite backups are failing or
-        not configured. See the Backups page for details.
+        Local backups are current, but remote offsite backups are failing or not
+        configured. See the Backups page for details.
       </>
     ),
   },
@@ -37,8 +37,7 @@ const MESSAGES = {
     body: (
       <>
         Borg backup is configured, but its most recent run did not complete
-        successfully (or hasn't run recently). See the Backups page for
-        details.
+        successfully (or hasn't run recently). See the Backups page for details.
       </>
     ),
   },

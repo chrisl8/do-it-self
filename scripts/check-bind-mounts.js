@@ -53,7 +53,9 @@ function isLikelyFileBasename(name) {
 }
 
 function looksLikeFile(src, dest) {
-  return isLikelyFileBasename(basename(src)) || isLikelyFileBasename(basename(dest));
+  return (
+    isLikelyFileBasename(basename(src)) || isLikelyFileBasename(basename(dest))
+  );
 }
 
 // Extract the source path from a compose volume entry, which may be either:
@@ -119,7 +121,9 @@ async function main() {
   try {
     parsed = YAML.parse(composeText);
   } catch (err) {
-    console.error(`check-bind-mounts: ${containerName}: failed to parse compose.yaml: ${err.message}`);
+    console.error(
+      `check-bind-mounts: ${containerName}: failed to parse compose.yaml: ${err.message}`,
+    );
     process.exit(2);
   }
 
@@ -150,7 +154,8 @@ async function main() {
           service: serviceName,
           source,
           target,
-          reason: "host source is missing — Docker will create an empty directory at this path and the container will crash trying to read it as a file",
+          reason:
+            "host source is missing — Docker will create an empty directory at this path and the container will crash trying to read it as a file",
         });
       } else if (kind === "broken-link") {
         errors.push({
@@ -164,7 +169,8 @@ async function main() {
           service: serviceName,
           source,
           target,
-          reason: "host source is a directory, but the bind mount target looks like a file — most likely Docker auto-created an empty directory after the source went missing",
+          reason:
+            "host source is a directory, but the bind mount target looks like a file — most likely Docker auto-created an empty directory after the source went missing",
         });
       }
     }
@@ -190,6 +196,8 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(`check-bind-mounts: unexpected error: ${err.stack || err.message}`);
+  console.error(
+    `check-bind-mounts: unexpected error: ${err.stack || err.message}`,
+  );
   process.exit(2);
 });

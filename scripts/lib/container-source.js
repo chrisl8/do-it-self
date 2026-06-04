@@ -13,9 +13,11 @@ export const PLATFORM_CONTAINERS = new Set(["web-admin"]);
 export function getContainerSource(containerName, installed) {
   if (PLATFORM_CONTAINERS.has(containerName)) return "platform";
   for (const [modName, entry] of Object.entries(installed?.modules || {})) {
-    if ((entry?.installed_containers || []).includes(containerName)) return modName;
+    if ((entry?.installed_containers || []).includes(containerName))
+      return modName;
   }
-  if ((installed?.personal_containers || []).includes(containerName)) return "personal";
+  if ((installed?.personal_containers || []).includes(containerName))
+    return "personal";
   return null;
 }
 

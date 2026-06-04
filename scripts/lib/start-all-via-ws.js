@@ -18,7 +18,9 @@ const { WebSocket } = require("ws");
 const socketPath = process.argv[2];
 const timeoutSec = parseInt(process.argv[3] || "900", 10);
 if (!socketPath) {
-  console.error("usage: node start-all-via-ws.js <unix-socket-path> [timeoutSeconds]");
+  console.error(
+    "usage: node start-all-via-ws.js <unix-socket-path> [timeoutSeconds]",
+  );
   process.exit(2);
 }
 
@@ -70,7 +72,9 @@ ws.on("message", (data) => {
         ws.close();
         process.exit(1);
       }
-      console.log(`start-all ${s.status}: ${s.completed?.length ?? 0}/${s.total ?? 0} started`);
+      console.log(
+        `start-all ${s.status}: ${s.completed?.length ?? 0}/${s.total ?? 0} started`,
+      );
       ws.close();
       process.exit(0);
     }

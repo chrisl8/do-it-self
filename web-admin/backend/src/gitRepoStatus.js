@@ -27,15 +27,24 @@ export async function getUpstreamState(repoPath) {
   };
   try {
     const { stdout } = await execFileAsync(
-      "git", ["rev-parse", "--abbrev-ref", "HEAD"],
+      "git",
+      ["rev-parse", "--abbrev-ref", "HEAD"],
       { cwd: repoPath, env },
     );
     state.branch = stdout.trim();
     if (!state.branch || state.branch === "HEAD") return state;
-  } catch { return state; }
+  } catch {
+    return state;
+  }
   try {
     const { stdout } = await execFileAsync(
-      "git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${state.branch}@{u}`],
+      "git",
+      [
+        "rev-parse",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        `${state.branch}@{u}`,
+      ],
       { cwd: repoPath, env },
     );
     state.upstream = stdout.trim();
@@ -44,14 +53,17 @@ export async function getUpstreamState(repoPath) {
   }
   try {
     const { stdout } = await execFileAsync(
-      "git", ["rev-list", "--left-right", "--count", `${state.upstream}...HEAD`],
+      "git",
+      ["rev-list", "--left-right", "--count", `${state.upstream}...HEAD`],
       { cwd: repoPath, env },
     );
     const [behindStr, aheadStr] = stdout.trim().split(/\s+/);
     state.behind = parseInt(behindStr, 10) || 0;
     state.ahead = parseInt(aheadStr, 10) || 0;
     state.canFastForward = state.behind > 0 && state.ahead === 0;
-  } catch { /* leave zeros */ }
+  } catch {
+    /* leave zeros */
+  }
   return state;
 }
 
@@ -59,7 +71,8 @@ export async function getUpstreamState(repoPath) {
 // forever. Caller catches -- failure of one repo must not kill the batch.
 export async function fetchRemote(repoPath, remote, branch) {
   await execFileAsync(
-    "git", ["fetch", "--quiet", remote || "origin", branch || "HEAD"],
+    "git",
+    ["fetch", "--quiet", remote || "origin", branch || "HEAD"],
     {
       cwd: repoPath,
       env: childEnv(),
@@ -102,7 +115,8 @@ export async function getRepoStatus(name, label, repoPath, isModule) {
 export async function bestEffortFetch(repoPath, label) {
   try {
     const { stdout } = await execFileAsync(
-      "git", ["rev-parse", "--abbrev-ref", "HEAD"],
+      "git",
+      ["rev-parse", "--abbrev-ref", "HEAD"],
       { cwd: repoPath, env: childEnv() },
     );
     await fetchRemote(repoPath, "origin", stdout.trim());

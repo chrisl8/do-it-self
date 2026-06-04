@@ -59,15 +59,29 @@ function sshControlPath(prefix) {
   return join(os.tmpdir(), `${prefix}-ssh-%C`);
 }
 
-function buildSshArgs({ key, user, host, command, controlPrefix, sendEnv = [] }) {
+function buildSshArgs({
+  key,
+  user,
+  host,
+  command,
+  controlPrefix,
+  sendEnv = [],
+}) {
   const args = [
-    "-i", expandHome(key),
-    "-o", "BatchMode=yes",
-    "-o", "ConnectTimeout=10",
-    "-o", "StrictHostKeyChecking=accept-new",
-    "-o", "ControlMaster=auto",
-    "-o", `ControlPath=${sshControlPath(controlPrefix)}`,
-    "-o", "ControlPersist=300",
+    "-i",
+    expandHome(key),
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "StrictHostKeyChecking=accept-new",
+    "-o",
+    "ControlMaster=auto",
+    "-o",
+    `ControlPath=${sshControlPath(controlPrefix)}`,
+    "-o",
+    "ControlPersist=300",
   ];
   for (const name of sendEnv) {
     args.push("-o", `SendEnv=${name}`);
@@ -275,9 +289,7 @@ async function pollOnce(cfg) {
           stale,
         };
       });
-      const any_client_stale = clientsEnriched.some(
-        (c) => c.stale || c.error,
-      );
+      const any_client_stale = clientsEnriched.some((c) => c.stale || c.error);
       updateStatus("backuppi", {
         enabled: true,
         reachable: true,
@@ -301,7 +313,8 @@ function parseBorgArchiveTimestamp(s) {
   if (!s) return NaN;
   let t = Date.parse(s);
   if (!Number.isNaN(t)) return t;
-  const m = /^(?:[A-Za-z]{3},\s+)?(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})/.exec(s);
+  const m =
+    /^(?:[A-Za-z]{3},\s+)?(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})/.exec(s);
   if (m) {
     t = Date.parse(`${m[1]}T${m[2]}`);
     if (!Number.isNaN(t)) return t;
@@ -337,7 +350,11 @@ function parseAction(action, knownClientNames) {
   return null;
 }
 
-export const ALLOWED_ACTIONS = new Set([...RPC_ACTIONS, "borg-check", "borg-prune"]);
+export const ALLOWED_ACTIONS = new Set([
+  ...RPC_ACTIONS,
+  "borg-check",
+  "borg-prune",
+]);
 
 export async function runAction(action, ws) {
   const cfg = await readConfig();
@@ -346,7 +363,8 @@ export async function runAction(action, ws) {
       type: "backupPiActionResult",
       action,
       success: false,
-      error: "backuppi not configured (set backuppi.enabled in user-config.yaml)",
+      error:
+        "backuppi not configured (set backuppi.enabled in user-config.yaml)",
     });
     return;
   }
@@ -383,7 +401,13 @@ export async function runAction(action, ws) {
       let allOk = true;
       let lastCode = 0;
       for (const clientName of targets) {
-        const { code, ok } = await runMgmtVerb(cfg, action, parsed.verb, clientName, ws);
+        const { code, ok } = await runMgmtVerb(
+          cfg,
+          action,
+          parsed.verb,
+          clientName,
+          ws,
+        );
         lastCode = code;
         if (!ok) allOk = false;
       }
@@ -535,7 +559,9 @@ async function start() {
   // Tick immediately so the UI has data within seconds of cold start.
   tick();
   tickTimer = setInterval(tick, POLL_INTERVAL_MS_DEFAULT);
-  console.log(`[backuppi] poller started (${POLL_INTERVAL_MS_DEFAULT / 1000}s)`);
+  console.log(
+    `[backuppi] poller started (${POLL_INTERVAL_MS_DEFAULT / 1000}s)`,
+  );
 }
 
 async function stop() {

@@ -22,7 +22,14 @@
 // directly is futile -- edit homepage/config-personal/ (or, for changes that
 // should ship to all users, homepage/config-defaults/).
 
-import { readFile, writeFile, readdir, mkdir, copyFile, unlink } from "fs/promises";
+import {
+  readFile,
+  writeFile,
+  readdir,
+  mkdir,
+  copyFile,
+  unlink,
+} from "fs/promises";
 import { existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -42,11 +49,7 @@ function log(...args) {
 }
 
 // Files where the top-level shape is a list (concatenate on merge).
-const LIST_FILES = new Set([
-  "services.yaml",
-  "bookmarks.yaml",
-  "widgets.yaml",
-]);
+const LIST_FILES = new Set(["services.yaml", "bookmarks.yaml", "widgets.yaml"]);
 
 async function readYaml(path) {
   if (!existsSync(path)) return null;
@@ -55,7 +58,9 @@ async function readYaml(path) {
   try {
     return yaml.parse(text);
   } catch (err) {
-    console.error(`[merge-homepage-config] Failed to parse ${path}: ${err.message}`);
+    console.error(
+      `[merge-homepage-config] Failed to parse ${path}: ${err.message}`,
+    );
     throw err;
   }
 }
@@ -86,7 +91,12 @@ function deepMerge(a, b) {
   if (b === undefined || b === null) return a;
   if (a === undefined || a === null) return b;
   if (Array.isArray(a) && Array.isArray(b)) return [...a, ...b];
-  if (typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b)) {
+  if (
+    typeof a === "object" &&
+    typeof b === "object" &&
+    !Array.isArray(a) &&
+    !Array.isArray(b)
+  ) {
     const out = { ...a };
     for (const k of Object.keys(b)) out[k] = deepMerge(a[k], b[k]);
     return out;
@@ -173,7 +183,8 @@ async function isEffectivelyEmptyMap(name) {
   const defaults = await readYaml(join(DEFAULTS_DIR, name));
   const personal = await readYaml(join(PERSONAL_DIR, name));
   const empty = (v) =>
-    v === null || v === undefined ||
+    v === null ||
+    v === undefined ||
     (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
   return empty(defaults) && empty(personal);
 }
@@ -209,8 +220,12 @@ async function main() {
   await mkdir(OUTPUT_DIR, { recursive: true });
 
   // Discover all files in either source directory
-  const defaultsFiles = existsSync(DEFAULTS_DIR) ? await readdir(DEFAULTS_DIR) : [];
-  const personalFiles = existsSync(PERSONAL_DIR) ? await readdir(PERSONAL_DIR) : [];
+  const defaultsFiles = existsSync(DEFAULTS_DIR)
+    ? await readdir(DEFAULTS_DIR)
+    : [];
+  const personalFiles = existsSync(PERSONAL_DIR)
+    ? await readdir(PERSONAL_DIR)
+    : [];
   const sourceFiles = new Set(
     [...defaultsFiles, ...personalFiles].filter(isManaged),
   );
@@ -218,7 +233,9 @@ async function main() {
   // Delete any managed files in OUTPUT_DIR that are NOT in sourceFiles (i.e.
   // they used to be in defaults or personal but have been removed). Leaves
   // non-managed files (like homepage's logs/ dir) untouched.
-  const existingOutput = existsSync(OUTPUT_DIR) ? await readdir(OUTPUT_DIR) : [];
+  const existingOutput = existsSync(OUTPUT_DIR)
+    ? await readdir(OUTPUT_DIR)
+    : [];
   for (const name of existingOutput) {
     if (!isManaged(name)) continue;
     if (!sourceFiles.has(name)) {
@@ -252,7 +269,9 @@ async function main() {
 
       const out = yaml.stringify(list);
       await writeFile(outPath, out, "utf8");
-      log(`  merged ${name} (${list.length} item${list.length === 1 ? "" : "s"})`);
+      log(
+        `  merged ${name} (${list.length} item${list.length === 1 ? "" : "s"})`,
+      );
     } else if (await isEffectivelyEmptyMap(name)) {
       // comment-only template (kubernetes.yaml, proxmox.yaml, etc.) --
       // copy the defaults file verbatim so the example comments survive.

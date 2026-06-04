@@ -8,13 +8,25 @@
 //
 // See docs/MODULES.md for the full design.
 
-import { readFile, writeFile, access, mkdir, rm, cp, readdir, rename } from "fs/promises";
+import {
+  readFile,
+  writeFile,
+  access,
+  mkdir,
+  rm,
+  cp,
+  readdir,
+  rename,
+} from "fs/promises";
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import { execSync, execFileSync } from "child_process";
 import { createInterface } from "readline";
 import YAML from "yaml";
-import { PLATFORM_CONTAINERS, getContainerSource } from "./lib/container-source.js";
+import {
+  PLATFORM_CONTAINERS,
+  getContainerSource,
+} from "./lib/container-source.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
@@ -25,18 +37,29 @@ const INSTALLED_MODULES_PATH = join(CONTAINERS_DIR, "installed-modules.yaml");
 // --- Utility helpers ---
 
 async function fileExists(path) {
-  try { await access(path); return true; } catch { return false; }
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function dirExists(path) {
   try {
     const stat = await import("fs").then((m) => m.promises.stat(path));
     return stat.isDirectory();
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function exec(cmd, opts = {}) {
-  return execSync(cmd, { encoding: "utf8", maxBuffer: 10 * 1024 * 1024, ...opts }).trim();
+  return execSync(cmd, {
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+    ...opts,
+  }).trim();
 }
 
 async function ensureModulesDir() {
@@ -132,8 +155,12 @@ async function addSource(args) {
 
   const modulePath = join(MODULES_DIR, name);
   if (await dirExists(modulePath)) {
-    console.error(`Error: Module "${name}" already exists at .modules/${name}/`);
-    console.error("Use 'module.sh update' to update it, or 'module.sh remove-source' first.");
+    console.error(
+      `Error: Module "${name}" already exists at .modules/${name}/`,
+    );
+    console.error(
+      "Use 'module.sh update' to update it, or 'module.sh remove-source' first.",
+    );
     process.exit(1);
   }
 
@@ -193,12 +220,20 @@ async function removeSource(args) {
 
   const installed = await readInstalledModules();
   const moduleEntry = installed.modules[name];
-  if (moduleEntry && moduleEntry.installed_containers && moduleEntry.installed_containers.length > 0) {
-    console.error(`Error: Cannot remove module "${name}" — the following containers are still installed:`);
+  if (
+    moduleEntry &&
+    moduleEntry.installed_containers &&
+    moduleEntry.installed_containers.length > 0
+  ) {
+    console.error(
+      `Error: Cannot remove module "${name}" — the following containers are still installed:`,
+    );
     for (const c of moduleEntry.installed_containers) {
       console.error(`  - ${c}`);
     }
-    console.error("Uninstall these containers first with 'module.sh uninstall <container>'.");
+    console.error(
+      "Uninstall these containers first with 'module.sh uninstall <container>'.",
+    );
     process.exit(1);
   }
 
@@ -224,7 +259,9 @@ async function installContainer(args) {
 
   // Validate module exists
   if (!(await dirExists(modulePath))) {
-    console.error(`Error: Module "${moduleName}" not found. Run 'module.sh add-source' first.`);
+    console.error(
+      `Error: Module "${moduleName}" not found. Run 'module.sh add-source' first.`,
+    );
     process.exit(1);
   }
 
@@ -232,7 +269,9 @@ async function installContainer(args) {
   if (!(await dirExists(sourceDir))) {
     const moduleYaml = await readModuleYaml(moduleName);
     const available = Object.keys(moduleYaml.containers || {});
-    console.error(`Error: Container "${containerName}" not found in module "${moduleName}".`);
+    console.error(
+      `Error: Container "${containerName}" not found in module "${moduleName}".`,
+    );
     if (available.length > 0) {
       console.error(`Available containers: ${available.join(", ")}`);
     }
@@ -242,8 +281,11 @@ async function installContainer(args) {
   // Check target doesn't already exist
   if (await dirExists(targetDir)) {
     const installedCheck = await readInstalledModules();
-    const source = getContainerSource(containerName, installedCheck) || "unknown";
-    console.error(`Error: Container "${containerName}" already exists at ${targetDir}`);
+    const source =
+      getContainerSource(containerName, installedCheck) || "unknown";
+    console.error(
+      `Error: Container "${containerName}" already exists at ${targetDir}`,
+    );
     console.error(`  Current source: ${source}`);
     process.exit(1);
   }
@@ -252,7 +294,9 @@ async function installContainer(args) {
   const moduleYaml = await readModuleYaml(moduleName);
   const containerDef = moduleYaml.containers?.[containerName];
   if (!containerDef) {
-    console.error(`Error: Container "${containerName}" has a directory in the module but no entry in module.yaml.`);
+    console.error(
+      `Error: Container "${containerName}" has a directory in the module but no entry in module.yaml.`,
+    );
     process.exit(1);
   }
 
@@ -265,7 +309,10 @@ async function installContainer(args) {
 
   // Write .start-order if specified
   if (containerDef.start_order) {
-    await writeFile(join(targetDir, ".start-order"), containerDef.start_order + "\n");
+    await writeFile(
+      join(targetDir, ".start-order"),
+      containerDef.start_order + "\n",
+    );
   }
 
   // Update installed-modules.yaml
@@ -281,14 +328,20 @@ async function installContainer(args) {
       installed_containers: [],
     };
   }
-  if (!installed.modules[moduleName].installed_containers.includes(containerName)) {
+  if (
+    !installed.modules[moduleName].installed_containers.includes(containerName)
+  ) {
     installed.modules[moduleName].installed_containers.push(containerName);
     installed.modules[moduleName].installed_containers.sort();
   }
   await writeInstalledModules(installed);
 
-  console.log(`Container "${containerName}" installed from module "${moduleName}".`);
-  console.log(`Enable it via the web admin or user-config.yaml, then run all-containers.sh --start.`);
+  console.log(
+    `Container "${containerName}" installed from module "${moduleName}".`,
+  );
+  console.log(
+    `Enable it via the web admin or user-config.yaml, then run all-containers.sh --start.`,
+  );
 }
 
 async function uninstallContainer(args) {
@@ -305,20 +358,26 @@ async function uninstallContainer(args) {
   const source = getContainerSource(containerName, installed);
 
   if (!source) {
-    console.error(`Error: Container "${containerName}" is not tracked in installed-modules.yaml.`);
+    console.error(
+      `Error: Container "${containerName}" is not tracked in installed-modules.yaml.`,
+    );
     process.exit(1);
   }
 
   if (source === "personal" || source === "platform") {
     console.error(`Error: Container "${containerName}" has source: ${source}.`);
-    console.error("Only module-sourced containers can be uninstalled via the module system.");
+    console.error(
+      "Only module-sourced containers can be uninstalled via the module system.",
+    );
     console.error("Delete the directory manually if you want to remove it.");
     process.exit(1);
   }
 
   const registry = await readRegistry();
   if (registry.containers?.[containerName]?.protected === true) {
-    console.error(`Error: "${containerName}" is marked protected: true in the registry.`);
+    console.error(
+      `Error: "${containerName}" is marked protected: true in the registry.`,
+    );
     console.error("Edit the registry to remove the flag before uninstalling.");
     process.exit(1);
   }
@@ -352,8 +411,9 @@ async function uninstallContainer(args) {
   // Update installed-modules.yaml (including setup_hooks state)
   const moduleEntry = installed.modules?.[moduleName];
   if (moduleEntry) {
-    moduleEntry.installed_containers = (moduleEntry.installed_containers || [])
-      .filter((c) => c !== containerName);
+    moduleEntry.installed_containers = (
+      moduleEntry.installed_containers || []
+    ).filter((c) => c !== containerName);
     if (moduleEntry.container_state?.[containerName]) {
       delete moduleEntry.container_state[containerName];
     }
@@ -361,7 +421,9 @@ async function uninstallContainer(args) {
   }
 
   console.log(`Container "${containerName}" uninstalled.`);
-  console.log("Volume data (~container-mounts/), credentials (~credentials/), and user-config.yaml entries are preserved.");
+  console.log(
+    "Volume data (~container-mounts/), credentials (~credentials/), and user-config.yaml entries are preserved.",
+  );
 }
 
 // Files/dirs to preserve in the target during update (never overwritten from module source).
@@ -393,13 +455,17 @@ async function updateModules(args) {
   for (const name of moduleNames) {
     const moduleEntry = installed.modules[name];
     if (!moduleEntry) {
-      console.error(`Warning: Module "${name}" not found in installed-modules.yaml, skipping.`);
+      console.error(
+        `Warning: Module "${name}" not found in installed-modules.yaml, skipping.`,
+      );
       continue;
     }
 
     const modulePath = join(MODULES_DIR, name);
     if (!(await dirExists(modulePath))) {
-      console.error(`Warning: Module "${name}" directory missing at .modules/${name}/, skipping.`);
+      console.error(
+        `Warning: Module "${name}" directory missing at .modules/${name}/, skipping.`,
+      );
       continue;
     }
 
@@ -451,12 +517,16 @@ async function updateModules(args) {
       }
 
       if (!(await dirExists(sourceDir))) {
-        console.error(`  Warning: ${containerName} no longer exists in module ${name}, skipping.`);
+        console.error(
+          `  Warning: ${containerName} no longer exists in module ${name}, skipping.`,
+        );
         continue;
       }
 
       if (!(await dirExists(targetDir))) {
-        console.error(`  Warning: ${containerName} directory missing at platform root, skipping.`);
+        console.error(
+          `  Warning: ${containerName} directory missing at platform root, skipping.`,
+        );
         continue;
       }
 
@@ -492,7 +562,10 @@ async function updateModules(args) {
       // Apply .start-order in staging if specified in module.yaml.
       const containerDef = moduleYaml.containers?.[containerName];
       if (containerDef?.start_order) {
-        await writeFile(join(stagingDir, ".start-order"), containerDef.start_order + "\n");
+        await writeFile(
+          join(stagingDir, ".start-order"),
+          containerDef.start_order + "\n",
+        );
       }
 
       // Atomic swap. Between these two renames targetDir does not exist
@@ -513,7 +586,9 @@ async function updateModules(args) {
   await writeInstalledModules(installed);
 
   if (anyUpdated) {
-    console.log("Update complete. Restart affected containers with all-containers.sh --start.");
+    console.log(
+      "Update complete. Restart affected containers with all-containers.sh --start.",
+    );
   } else {
     console.log("All modules are up to date.");
   }
@@ -529,7 +604,11 @@ async function listContainers(args) {
     for (const [moduleName, entry] of Object.entries(installed.modules)) {
       for (const c of entry.installed_containers || []) {
         const desc = registry.containers?.[c]?.description || "";
-        installedContainers.push({ name: c, module: moduleName, description: desc });
+        installedContainers.push({
+          name: c,
+          module: moduleName,
+          description: desc,
+        });
       }
     }
 
@@ -581,7 +660,11 @@ async function listContainers(args) {
 
       for (const [name, def] of Object.entries(moduleYaml.containers)) {
         if (!installedNames.has(name)) {
-          availableContainers.push({ name, module: moduleName, description: def.description || "" });
+          availableContainers.push({
+            name,
+            module: moduleName,
+            description: def.description || "",
+          });
         }
       }
     }
@@ -631,8 +714,9 @@ async function regenerateRegistry() {
   }
 
   // Iterate EVERY cloned module, not just installed ones.
-  const moduleNames = (await readdir(MODULES_DIR).catch(() => []))
-    .filter((n) => !n.startsWith("."));
+  const moduleNames = (await readdir(MODULES_DIR).catch(() => [])).filter(
+    (n) => !n.startsWith("."),
+  );
 
   let moduleCount = 0;
   for (const moduleName of moduleNames) {
@@ -656,8 +740,12 @@ async function regenerateRegistry() {
 
   await writeRegistry(newRegistry);
   const total = Object.keys(newRegistry.containers).length;
-  console.log(`Registry rebuilt from module catalogs: ${total} containers from ${moduleCount} modules.`);
-  console.log("This is a maintainer-side tool; commit the result to the platform repo.");
+  console.log(
+    `Registry rebuilt from module catalogs: ${total} containers from ${moduleCount} modules.`,
+  );
+  console.log(
+    "This is a maintainer-side tool; commit the result to the platform repo.",
+  );
 }
 
 // --- Dev-sync ---
@@ -673,7 +761,12 @@ function ask(question) {
 }
 
 function buildSyncExcludes(containerName, registry) {
-  const excludes = [...PRESERVE_ON_UPDATE, "tailscale-state", ".git", "node_modules"];
+  const excludes = [
+    ...PRESERVE_ON_UPDATE,
+    "tailscale-state",
+    ".git",
+    "node_modules",
+  ];
   const containerDef = registry.containers?.[containerName];
   if (containerDef?.git_repos) {
     for (const subdir of Object.keys(containerDef.git_repos)) {
@@ -692,15 +785,27 @@ async function syncOneContainer(containerName, moduleName, registry, yesFlag) {
     return false;
   }
   if (!(await dirExists(join(MODULES_DIR, moduleName, containerName)))) {
-    console.error(`Error: Module source not found at .modules/${moduleName}/${containerName}/`);
+    console.error(
+      `Error: Module source not found at .modules/${moduleName}/${containerName}/`,
+    );
     return false;
   }
 
   const excludeArgs = buildSyncExcludes(containerName, registry);
-  const baseArgs = ["rsync", "--archive", "--checksum", "--delete", ...excludeArgs, sourceDir, targetDir];
+  const baseArgs = [
+    "rsync",
+    "--archive",
+    "--checksum",
+    "--delete",
+    ...excludeArgs,
+    sourceDir,
+    targetDir,
+  ];
 
   const rawPreview = exec(
-    [...baseArgs, "--dry-run", "--itemize-changes"].map((a) => `"${a}"`).join(" "),
+    [...baseArgs, "--dry-run", "--itemize-changes"]
+      .map((a) => `"${a}"`)
+      .join(" "),
   );
 
   // Filter to only show real changes (not timestamp-only).
@@ -720,7 +825,9 @@ async function syncOneContainer(containerName, moduleName, registry, yesFlag) {
   console.log(preview);
 
   if (!yesFlag) {
-    const answer = await ask(`\nSync ${containerName} to .modules/${moduleName}/${containerName}/? [y/N] `);
+    const answer = await ask(
+      `\nSync ${containerName} to .modules/${moduleName}/${containerName}/? [y/N] `,
+    );
     if (answer !== "y" && answer !== "yes") {
       console.log(`  Skipped ${containerName}.`);
       return false;
@@ -739,9 +846,15 @@ async function devSync(args) {
   if (filteredArgs.length === 0) {
     console.log("Usage: module.sh dev-sync [<module>] [<container>]");
     console.log("");
-    console.log("  dev-sync <container>           Sync one container (auto-detect module)");
-    console.log("  dev-sync <module>              Sync all installed containers from a module");
-    console.log("  dev-sync <module> <container>  Sync one container from a specific module");
+    console.log(
+      "  dev-sync <container>           Sync one container (auto-detect module)",
+    );
+    console.log(
+      "  dev-sync <module>              Sync all installed containers from a module",
+    );
+    console.log(
+      "  dev-sync <module> <container>  Sync one container from a specific module",
+    );
     console.log("");
     console.log("Options:");
     console.log("  --yes, -y  Skip confirmation prompts");
@@ -758,7 +871,9 @@ async function devSync(args) {
     moduleName = filteredArgs[0];
     containerNames = [filteredArgs[1]];
     if (!installed.modules?.[moduleName]) {
-      console.error(`Error: Module "${moduleName}" not found in installed-modules.yaml.`);
+      console.error(
+        `Error: Module "${moduleName}" not found in installed-modules.yaml.`,
+      );
       process.exit(1);
     }
   } else {
@@ -770,16 +885,22 @@ async function devSync(args) {
         console.log(`No installed containers from module "${moduleName}".`);
         return;
       }
-      console.log(`Syncing all ${containerNames.length} containers from ${moduleName}...`);
+      console.log(
+        `Syncing all ${containerNames.length} containers from ${moduleName}...`,
+      );
     } else {
       const containerDef = registry.containers?.[arg];
       if (!containerDef) {
-        console.error(`Error: "${arg}" is not a known module or container name.`);
+        console.error(
+          `Error: "${arg}" is not a known module or container name.`,
+        );
         process.exit(1);
       }
       const source = getContainerSource(arg, installed);
       if (!source || source === "personal" || source === "platform") {
-        console.error(`Error: Container "${arg}" is not from a module (source: ${source || "unknown"}). dev-sync only works with module-sourced containers.`);
+        console.error(
+          `Error: Container "${arg}" is not from a module (source: ${source || "unknown"}). dev-sync only works with module-sourced containers.`,
+        );
         process.exit(1);
       }
       moduleName = source;
@@ -789,7 +910,9 @@ async function devSync(args) {
 
   const modulePath = join(MODULES_DIR, moduleName);
   if (!(await dirExists(modulePath))) {
-    console.error(`Error: Module directory not found at .modules/${moduleName}/`);
+    console.error(
+      `Error: Module directory not found at .modules/${moduleName}/`,
+    );
     process.exit(1);
   }
 
@@ -831,9 +954,13 @@ async function devSync(args) {
 
   const changedList = syncedNames.filter((name) => {
     try {
-      const sub = exec(`git -C "${modulePath}" status --porcelain -- "${name}"`);
+      const sub = exec(
+        `git -C "${modulePath}" status --porcelain -- "${name}"`,
+      );
       return sub.length > 0;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   });
   const defaultMsg = `Update ${changedList.join(", ")}`;
 
@@ -853,12 +980,17 @@ async function devSync(args) {
   if (!yesFlag) {
     const answer = await ask("Push to remote? [y/N] ");
     if (answer !== "y" && answer !== "yes") {
-      console.log("Committed locally. Run `git push` in the module repo when ready.");
+      console.log(
+        "Committed locally. Run `git push` in the module repo when ready.",
+      );
       return;
     }
   }
 
-  execFileSync("git", ["-C", modulePath, "push"], { encoding: "utf8", stdio: "inherit" });
+  execFileSync("git", ["-C", modulePath, "push"], {
+    encoding: "utf8",
+    stdio: "inherit",
+  });
   console.log("Pushed.");
 }
 

@@ -1,18 +1,18 @@
-import { readdirSync, readFileSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import os from 'os';
+import { readdirSync, readFileSync, existsSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import os from "os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const CONTAINERS_DIR = join(os.homedir(), 'containers');
-const BASE_ICON_DIR = join(CONTAINERS_DIR, 'homepage/dashboard-icons');
-const FALLBACK_ICON_DIR = join(CONTAINERS_DIR, 'homepage/icons');
+const CONTAINERS_DIR = join(os.homedir(), "containers");
+const BASE_ICON_DIR = join(CONTAINERS_DIR, "homepage/dashboard-icons");
+const FALLBACK_ICON_DIR = join(CONTAINERS_DIR, "homepage/icons");
 
 const ICON_DIRS = {
-  svg: join(BASE_ICON_DIR, 'svg'),
-  png: join(BASE_ICON_DIR, 'png'),
-  webp: join(BASE_ICON_DIR, 'webp'),
+  svg: join(BASE_ICON_DIR, "svg"),
+  png: join(BASE_ICON_DIR, "png"),
+  webp: join(BASE_ICON_DIR, "webp"),
 };
 
 const AVAILABLE_ICONS = {};
@@ -45,11 +45,11 @@ const SUBSTITUTIONS = (() => {
   try {
     const configPath = join(
       os.homedir(),
-      '.config',
-      'Metatron',
-      'iconSubstitutions.json5',
+      ".config",
+      "Metatron",
+      "iconSubstitutions.json5",
     );
-    const configContent = readFileSync(configPath, 'utf-8');
+    const configContent = readFileSync(configPath, "utf-8");
     return JSON.parse(configContent);
   } catch {
     return {};
@@ -58,11 +58,11 @@ const SUBSTITUTIONS = (() => {
 
 function applySubstitution(name) {
   for (const [pattern, replacement] of Object.entries(SUBSTITUTIONS)) {
-    if (pattern.startsWith('-') || pattern.startsWith('_')) {
+    if (pattern.startsWith("-") || pattern.startsWith("_")) {
       if (name.endsWith(pattern)) {
         return replacement;
       }
-    } else if (pattern.endsWith('*')) {
+    } else if (pattern.endsWith("*")) {
       const prefix = pattern.slice(0, -1);
       if (name.startsWith(prefix)) {
         const suffix = name.slice(prefix.length);
@@ -76,7 +76,7 @@ function applySubstitution(name) {
 }
 
 function getIconFilename(name) {
-  for (const ext of ['svg', 'png', 'webp']) {
+  for (const ext of ["svg", "png", "webp"]) {
     const filename = `${name}.${ext}`;
     if (AVAILABLE_ICONS[ext].has(filename)) {
       return filename;
@@ -84,7 +84,7 @@ function getIconFilename(name) {
   }
 
   if (FALLBACK_ICONS.size > 0) {
-    for (const ext of ['svg', 'png', 'webp']) {
+    for (const ext of ["svg", "png", "webp"]) {
       const filename = `${name}.${ext}`;
       if (FALLBACK_ICONS.has(filename)) {
         return `fallback/${filename}`;
@@ -119,8 +119,8 @@ function getContainerIconFilename(containerName) {
 
   const attempts = [];
 
-  if (containerName.includes('_')) {
-    const rightSide = containerName.split('_').pop();
+  if (containerName.includes("_")) {
+    const rightSide = containerName.split("_").pop();
     const rightIcon = getIconFilename(rightSide);
     if (rightSide && rightIcon) {
       return rightIcon;
@@ -129,7 +129,7 @@ function getContainerIconFilename(containerName) {
 
   const dashCount = (containerName.match(/-/g) || []).length;
   if (dashCount === 1) {
-    const rightSide = containerName.split('-').pop();
+    const rightSide = containerName.split("-").pop();
     const rightIcon = getIconFilename(rightSide);
     if (rightSide && rightIcon) {
       return rightIcon;
@@ -137,27 +137,27 @@ function getContainerIconFilename(containerName) {
   }
 
   attempts.push(containerName);
-  attempts.push(containerName.replace(SUFFIX_PATTERN, ''));
-  attempts.push(containerName.replace(/_/g, '-'));
+  attempts.push(containerName.replace(SUFFIX_PATTERN, ""));
+  attempts.push(containerName.replace(/_/g, "-"));
 
-  if (containerName.includes('-')) {
-    attempts.push(containerName.replace(/-/g, '_'));
+  if (containerName.includes("-")) {
+    attempts.push(containerName.replace(/-/g, "_"));
 
-    const segments = containerName.split('-');
+    const segments = containerName.split("-");
     for (let i = segments.length - 1; i >= 1; i--) {
-      const prefix = segments.slice(0, i).join('-');
+      const prefix = segments.slice(0, i).join("-");
       attempts.push(prefix);
     }
   }
 
-  if (containerName.includes('_')) {
-    attempts.push(containerName.replace(/_/g, '-'));
+  if (containerName.includes("_")) {
+    attempts.push(containerName.replace(/_/g, "-"));
   }
 
   if (dashCount > 1) {
-    const afterFirst = containerName.split('-').slice(1).join('-');
+    const afterFirst = containerName.split("-").slice(1).join("-");
     attempts.push(afterFirst);
-    attempts.push(afterFirst.replace(/_/g, '-'));
+    attempts.push(afterFirst.replace(/_/g, "-"));
   }
 
   for (const name of attempts) {
@@ -194,16 +194,16 @@ function getStackIcon(stackName, containerIcons = []) {
     return stackIcon;
   }
 
-  const underscoreReplaced = stackName.replace(/_/g, '-');
+  const underscoreReplaced = stackName.replace(/_/g, "-");
   const underscoreIcon = getIconFilename(underscoreReplaced);
   if (underscoreReplaced !== stackName && underscoreIcon) {
     return underscoreIcon;
   }
 
-  if (stackName.includes('-')) {
-    const segments = stackName.split('-');
+  if (stackName.includes("-")) {
+    const segments = stackName.split("-");
     for (let i = segments.length - 1; i >= 1; i--) {
-      const prefix = segments.slice(0, i).join('-');
+      const prefix = segments.slice(0, i).join("-");
       const prefixIcon = getIconFilename(prefix);
       if (prefixIcon) {
         return prefixIcon;
@@ -212,8 +212,16 @@ function getStackIcon(stackName, containerIcons = []) {
   }
 
   for (const icon of containerIcons) {
-    if (icon && getIconFilename(icon.replace(/\.[^.]+$/, '').split('/').pop())) {
-      const iconName = icon.replace(/\.[^.]+$/, '');
+    if (
+      icon &&
+      getIconFilename(
+        icon
+          .replace(/\.[^.]+$/, "")
+          .split("/")
+          .pop(),
+      )
+    ) {
+      const iconName = icon.replace(/\.[^.]+$/, "");
       const fullIcon = getIconFilename(iconName);
       if (fullIcon) {
         return fullIcon;

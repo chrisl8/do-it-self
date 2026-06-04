@@ -55,7 +55,10 @@ function parseYaml(text) {
           const pairs = val.match(/(\w+):\s*"?([^",]*)"?/g) || [];
           for (const pair of pairs) {
             const [k, ...v] = pair.split(": ");
-            obj[k.trim()] = v.join(": ").trim().replace(/^["']|["']$/g, "");
+            obj[k.trim()] = v
+              .join(": ")
+              .trim()
+              .replace(/^["']|["']$/g, "");
           }
           parent.push(obj);
         } else {
@@ -79,8 +82,10 @@ function parseYaml(text) {
     let value = content.slice(colonIdx + 1).trim();
 
     let wasQuoted = false;
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
       wasQuoted = true;
     }
@@ -112,7 +117,12 @@ function parseYaml(text) {
 }
 
 async function fileExists(path) {
-  try { await access(path); return true; } catch { return false; }
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function loadRegistry() {
@@ -136,7 +146,9 @@ function resolveHomePath(value) {
 
 function getMountPath(mounts, index) {
   const mount = mounts[index] || mounts[0];
-  return mount ? resolveHomePath(mount.path || DEFAULT_MOUNT_PATH) : DEFAULT_MOUNT_PATH;
+  return mount
+    ? resolveHomePath(mount.path || DEFAULT_MOUNT_PATH)
+    : DEFAULT_MOUNT_PATH;
 }
 
 // Per-container secrets that live in Infisical rather than user-config.yaml.
@@ -157,13 +169,19 @@ function loadInfisicalCreds() {
       if (eq === -1) continue;
       const key = line.slice(0, eq).trim();
       let val = line.slice(eq + 1).trim();
-      if ((val.startsWith('"') && val.endsWith('"')) ||
-          (val.startsWith("'") && val.endsWith("'"))) {
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
         val = val.slice(1, -1);
       }
       creds[key] = val;
     }
-    if (!creds.INFISICAL_TOKEN || !creds.INFISICAL_PROJECT_ID || !creds.INFISICAL_API_URL) {
+    if (
+      !creds.INFISICAL_TOKEN ||
+      !creds.INFISICAL_PROJECT_ID ||
+      !creds.INFISICAL_API_URL
+    ) {
       return null;
     }
     return creds;
@@ -193,7 +211,11 @@ function parseDotenv(text) {
     let value = m[2];
     if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) {
       value = value.slice(1, -1).replace(/'\\''/g, "'");
-    } else if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+    } else if (
+      value.startsWith('"') &&
+      value.endsWith('"') &&
+      value.length >= 2
+    ) {
       value = value.slice(1, -1).replace(/\\"/g, '"');
     }
     out[m[1]] = value;
@@ -205,8 +227,14 @@ let infisicalAvailability = null;
 function getInfisicalCreds() {
   if (infisicalAvailability !== null) return infisicalAvailability;
   const creds = loadInfisicalCreds();
-  if (!creds) { infisicalAvailability = null; return null; }
-  if (!isInfisicalRunning()) { infisicalAvailability = null; return null; }
+  if (!creds) {
+    infisicalAvailability = null;
+    return null;
+  }
+  if (!isInfisicalRunning()) {
+    infisicalAvailability = null;
+    return null;
+  }
   infisicalAvailability = creds;
   return creds;
 }
@@ -258,7 +286,9 @@ function buildEnvForContainer(registry, userConfig, containerName) {
 
   const errors = [];
   const env = {};
-  const mounts = userConfig.mounts || [{ path: DEFAULT_MOUNT_PATH, label: "Default" }];
+  const mounts = userConfig.mounts || [
+    { path: DEFAULT_MOUNT_PATH, label: "Default" },
+  ];
   const containerConfig = userConfig.containers?.[containerName] || {};
   const volumeMounts = containerConfig.volume_mounts || {};
 
@@ -278,7 +308,10 @@ function buildEnvForContainer(registry, userConfig, containerName) {
     const value = containerValues[name];
     if (value !== undefined && value !== null && value !== "") {
       env[name] = String(value);
-    } else if (infisicalValues[name] !== undefined && infisicalValues[name] !== "") {
+    } else if (
+      infisicalValues[name] !== undefined &&
+      infisicalValues[name] !== ""
+    ) {
       // Supplied by Infisical at runtime via `infisical export
       // --path=/<container>` in scripts/all-containers.sh. Don't copy into
       // .env — the runtime export is the source of truth.
@@ -328,20 +361,37 @@ function formatEnvFile(env) {
 // and must be appended to .env after generation, or Infisical will refuse to boot.
 async function appendInfisicalBootstrapSecrets(envPath, containerName) {
   if (containerName !== "infisical") return;
-  const secretsPath = join(CONTAINERS_DIR, "infisical", "infisical-secrets.env");
+  const secretsPath = join(
+    CONTAINERS_DIR,
+    "infisical",
+    "infisical-secrets.env",
+  );
   if (!(await fileExists(secretsPath))) return;
   const raw = await readFile(secretsPath, "utf8");
   const lines = raw
     .split("\n")
     .filter((line) => line.trim() && !line.trim().startsWith("#"));
   if (lines.length === 0) return;
-  await appendFile(envPath, `\n# Infisical internal secrets\n${lines.join("\n")}\n`, "utf8");
+  await appendFile(
+    envPath,
+    `\n# Infisical internal secrets\n${lines.join("\n")}\n`,
+    "utf8",
+  );
   await chmod(envPath, 0o600);
 }
 
-async function generateForContainer(registry, userConfig, containerName, opts = {}) {
+async function generateForContainer(
+  registry,
+  userConfig,
+  containerName,
+  opts = {},
+) {
   const { validateOnly = false, quiet = false } = opts;
-  const { env, errors } = buildEnvForContainer(registry, userConfig, containerName);
+  const { env, errors } = buildEnvForContainer(
+    registry,
+    userConfig,
+    containerName,
+  );
 
   if (errors.length > 0 && !quiet) {
     console.error(`${containerName}: missing required variables:`);
@@ -350,9 +400,15 @@ async function generateForContainer(registry, userConfig, containerName, opts = 
 
   if (!validateOnly) {
     const envPath = join(CONTAINERS_DIR, containerName, ".env");
-    await writeFile(envPath, formatEnvFile(env), { encoding: "utf8", mode: 0o600 });
+    await writeFile(envPath, formatEnvFile(env), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
     await appendInfisicalBootstrapSecrets(envPath, containerName);
-    if (!quiet) console.log(`${containerName}: wrote .env (${Object.keys(env).length} variables)`);
+    if (!quiet)
+      console.log(
+        `${containerName}: wrote .env (${Object.keys(env).length} variables)`,
+      );
   }
 
   return { valid: errors.length === 0, missing: errors };
@@ -360,14 +416,16 @@ async function generateForContainer(registry, userConfig, containerName, opts = 
 
 async function main() {
   const args = process.argv.slice(2);
-  const flags = new Set(args.filter(a => a.startsWith("--")));
-  const positional = args.filter(a => !a.startsWith("--"));
+  const flags = new Set(args.filter((a) => a.startsWith("--")));
+  const positional = args.filter((a) => !a.startsWith("--"));
   const validateOnly = flags.has("--validate-only");
   const quiet = flags.has("--quiet");
   const all = flags.has("--all");
 
   if (!all && positional.length === 0) {
-    console.error("Usage: generate-env.js <container-name> [--all] [--validate-only] [--quiet]");
+    console.error(
+      "Usage: generate-env.js <container-name> [--all] [--validate-only] [--quiet]",
+    );
     process.exit(1);
   }
 
@@ -384,23 +442,34 @@ async function main() {
     for (const [name, def] of Object.entries(registry.containers || {})) {
       const cc = userConfig.containers?.[name];
       // Respect user config if set, otherwise check registry default_disabled
-      const enabled = cc?.enabled !== undefined ? cc.enabled : !def.default_disabled;
+      const enabled =
+        cc?.enabled !== undefined ? cc.enabled : !def.default_disabled;
       if (!enabled) continue;
       // Skip containers whose compose.yaml has been deleted but whose
       // user-config or registry entry still lingers — matches the
       // web admin's writeAllContainerEnvs behavior in
       // web-admin/backend/src/configRegistry.js:166. Without this check
       // a stale entry crashes the whole --all run.
-      if (!(await fileExists(join(CONTAINERS_DIR, name, "compose.yaml")))) continue;
-      const r = await generateForContainer(registry, userConfig, name, { validateOnly, quiet });
+      if (!(await fileExists(join(CONTAINERS_DIR, name, "compose.yaml"))))
+        continue;
+      const r = await generateForContainer(registry, userConfig, name, {
+        validateOnly,
+        quiet,
+      });
       if (!r.valid) hasErrors = true;
     }
   } else {
-    const r = await generateForContainer(registry, userConfig, positional[0], { validateOnly, quiet });
+    const r = await generateForContainer(registry, userConfig, positional[0], {
+      validateOnly,
+      quiet,
+    });
     if (!r.valid) hasErrors = true;
   }
 
   if (hasErrors) process.exit(1);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

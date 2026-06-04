@@ -51,7 +51,14 @@ function AvailableCard({ container, onInstall, disabled }) {
   return (
     <Card variant="outlined" sx={{ mb: 1.5 }}>
       <CardContent sx={{ pb: 1 }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+          }}
+        >
           <Typography variant="h6" component="div">
             {container.name}
           </Typography>
@@ -91,7 +98,12 @@ function AvailableCard({ container, onInstall, disabled }) {
 
 function Browse() {
   const { available, loading, error, installContainer } = useModules();
-  const [dialog, setDialog] = useState({ open: false, title: "", running: false, result: null });
+  const [dialog, setDialog] = useState({
+    open: false,
+    title: "",
+    running: false,
+    result: null,
+  });
 
   const containersByGroup = useMemo(() => {
     const list = available?.containers || [];
@@ -107,7 +119,9 @@ function Browse() {
     return grouped;
   }, [available]);
 
-  const sortedGroups = Object.keys(containersByGroup).sort((a, b) => a.localeCompare(b));
+  const sortedGroups = Object.keys(containersByGroup).sort((a, b) =>
+    a.localeCompare(b),
+  );
 
   const handleInstall = async (container) => {
     setDialog({
@@ -116,7 +130,10 @@ function Browse() {
       running: true,
       result: null,
     });
-    const result = await installContainer(container.source_module, container.name);
+    const result = await installContainer(
+      container.source_module,
+      container.name,
+    );
     setDialog((prev) => ({
       ...prev,
       title: result.success
@@ -127,7 +144,8 @@ function Browse() {
     }));
   };
 
-  const closeDialog = () => setDialog({ open: false, title: "", running: false, result: null });
+  const closeDialog = () =>
+    setDialog({ open: false, title: "", running: false, result: null });
 
   if (loading) {
     return (
@@ -155,14 +173,14 @@ function Browse() {
       <Alert severity="info" sx={{ mb: 2 }}>
         Containers available from your added module sources. Click Install to
         copy a container into the platform. It will appear in My Containers as
-        disabled — enable it there, then go to the <strong>Dashboard</strong> and
-        click <strong>Start All Enabled</strong> to bring it up.
+        disabled — enable it there, then go to the <strong>Dashboard</strong>{" "}
+        and click <strong>Start All Enabled</strong> to bring it up.
       </Alert>
 
       {totalAvailable === 0 ? (
         <Alert severity="success">
-          All available containers from your added sources are already installed.
-          Add another source on the Sources page to browse more.
+          All available containers from your added sources are already
+          installed. Add another source on the Sources page to browse more.
         </Alert>
       ) : (
         sortedGroups.map((group) => (

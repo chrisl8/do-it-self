@@ -23,7 +23,12 @@ import { execSync, spawnSync } from "child_process";
 import { createInterface } from "readline";
 import os from "os";
 import YAML from "yaml";
-import { readCatalog, readInstalled, reconcileCatalog, cloneModule } from "./lib/module-catalog.js";
+import {
+  readCatalog,
+  readInstalled,
+  reconcileCatalog,
+  cloneModule,
+} from "./lib/module-catalog.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
@@ -49,15 +54,28 @@ const c = {
 function section(title) {
   console.log(`\n${c.bold}${c.cyan}── ${title} ──${c.reset}`);
 }
-function ok(msg) { console.log(`  ${c.green}OK${c.reset}   ${msg}`); }
-function warn(msg) { console.log(`  ${c.yellow}WARN${c.reset} ${msg}`); }
-function fail(msg) { console.log(`  ${c.red}FAIL${c.reset} ${msg}`); }
-function info(msg) { console.log(`  ${msg}`); }
+function ok(msg) {
+  console.log(`  ${c.green}OK${c.reset}   ${msg}`);
+}
+function warn(msg) {
+  console.log(`  ${c.yellow}WARN${c.reset} ${msg}`);
+}
+function fail(msg) {
+  console.log(`  ${c.red}FAIL${c.reset} ${msg}`);
+}
+function info(msg) {
+  console.log(`  ${msg}`);
+}
 
 // --- Utility ---
 
 async function fileExists(p) {
-  try { await access(p); return true; } catch { return false; }
+  try {
+    await access(p);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function readYaml(p) {
@@ -75,12 +93,25 @@ function git(args, opts = {}) {
 }
 
 function gitSafe(args) {
-  try { return { ok: true, out: git(args) }; }
-  catch (e) { return { ok: false, err: e.message, out: (e.stdout || "") + (e.stderr || "") }; }
+  try {
+    return { ok: true, out: git(args) };
+  } catch (e) {
+    return {
+      ok: false,
+      err: e.message,
+      out: (e.stdout || "") + (e.stderr || ""),
+    };
+  }
 }
 
 function parseFlags(argv) {
-  const flags = { preBackup: false, yes: false, ignoreHooks: false, remote: "origin", branch: null };
+  const flags = {
+    preBackup: false,
+    yes: false,
+    ignoreHooks: false,
+    remote: "origin",
+    branch: null,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--pre-backup") flags.preBackup = true;
@@ -89,7 +120,9 @@ function parseFlags(argv) {
     else if (a === "--remote") flags.remote = argv[++i];
     else if (a === "--branch") flags.branch = argv[++i];
     else if (a === "--help" || a === "-h") {
-      console.log("Usage: update-platform.js [--pre-backup] [--yes] [--ignore-hooks] [--remote <name>] [--branch <name>]");
+      console.log(
+        "Usage: update-platform.js [--pre-backup] [--yes] [--ignore-hooks] [--remote <name>] [--branch <name>]",
+      );
       process.exit(0);
     } else {
       console.error(`Unknown flag: ${a}`);
@@ -119,7 +152,9 @@ async function main() {
   // of this flow writes user-owned state (installed-modules.yaml) and should
   // not be run as root.
   if (typeof process.getuid === "function" && process.getuid() === 0) {
-    console.error(`${c.red}Refusing to run as root.${c.reset} Run as the platform user; borg-backup.sh will elevate itself when --pre-backup is passed.`);
+    console.error(
+      `${c.red}Refusing to run as root.${c.reset} Run as the platform user; borg-backup.sh will elevate itself when --pre-backup is passed.`,
+    );
     process.exit(1);
   }
 
@@ -137,16 +172,22 @@ async function main() {
   if (statusOut) {
     fail("Platform repo has uncommitted changes:");
     for (const line of statusOut.split("\n").slice(0, 20)) info(`    ${line}`);
-    console.log(`  ${c.dim}Commit or stash changes before updating. Do not use --force.${c.reset}`);
+    console.log(
+      `  ${c.dim}Commit or stash changes before updating. Do not use --force.${c.reset}`,
+    );
     process.exit(2);
   }
   ok("working tree clean");
 
   // Step 2: branch has upstream
-  const upstreamProbe = gitSafe(`rev-parse --abbrev-ref --symbolic-full-name ${branch}@{u}`);
+  const upstreamProbe = gitSafe(
+    `rev-parse --abbrev-ref --symbolic-full-name ${branch}@{u}`,
+  );
   if (!upstreamProbe.ok) {
     fail(`Branch ${branch} has no upstream.`);
-    info(`  Set one with: git branch --set-upstream-to=${flags.remote}/${branch} ${branch}`);
+    info(
+      `  Set one with: git branch --set-upstream-to=${flags.remote}/${branch} ${branch}`,
+    );
     process.exit(2);
   }
   const upstream = upstreamProbe.out;
@@ -159,7 +200,10 @@ async function main() {
     const modPath = join(MODULES_DIR, mod);
     if (!(await fileExists(modPath))) continue;
     try {
-      const out = execSync("git status --porcelain", { cwd: modPath, encoding: "utf8" }).trim();
+      const out = execSync("git status --porcelain", {
+        cwd: modPath,
+        encoding: "utf8",
+      }).trim();
       if (out) dirtyModules.push(mod);
     } catch {
       // ignore — missing clone isn't blocking here
@@ -182,16 +226,22 @@ async function main() {
     process.exit(1);
   }
 
-  const countOut = gitSafe(`rev-list --left-right --count ${upstream}...HEAD`).out;
+  const countOut = gitSafe(
+    `rev-list --left-right --count ${upstream}...HEAD`,
+  ).out;
   const [behindStr, aheadStr] = countOut.split(/\s+/);
   const behind = parseInt(behindStr, 10) || 0;
   const ahead = parseInt(aheadStr, 10) || 0;
 
   if (ahead > 0) {
-    fail(`Local branch has ${ahead} commit(s) not in ${upstream} (and is ${behind} behind).`);
+    fail(
+      `Local branch has ${ahead} commit(s) not in ${upstream} (and is ${behind} behind).`,
+    );
     info("  This updater only fast-forwards; it will not push or merge.");
     info(`  Either push/PR your commits upstream, or reset with:`);
-    info(`    git reset --hard ${upstream}   # WARNING: discards local commits`);
+    info(
+      `    git reset --hard ${upstream}   # WARNING: discards local commits`,
+    );
     process.exit(2);
   }
 
@@ -203,7 +253,8 @@ async function main() {
 
   // Interactive confirmation unless --yes
   if (behind > 0 && !flags.yes) {
-    const range = gitSafe(`log --oneline HEAD..${upstream}`).out || "(no summary)";
+    const range =
+      gitSafe(`log --oneline HEAD..${upstream}`).out || "(no summary)";
     info("");
     info("Incoming commits:");
     for (const line of range.split("\n").slice(0, 20)) info(`    ${line}`);
@@ -218,17 +269,27 @@ async function main() {
     section("Pre-backup");
     if (!(await fileExists(join(__dirname, "borg-backup.conf")))) {
       fail("borg-backup.conf not found.");
-      info(`  borg is not configured on this host. See ${c.cyan}scripts/borg-backup.conf.example${c.reset}`);
+      info(
+        `  borg is not configured on this host. See ${c.cyan}scripts/borg-backup.conf.example${c.reset}`,
+      );
       info("  Re-run without --pre-backup, or set up borg first.");
       process.exit(4);
     }
-    info("running borg-backup.sh --skip-dumps --remote-only (may take a while)...");
-    const r = spawnSync("bash", [BORG_BACKUP_SH, "--skip-dumps", "--remote-only"], {
-      stdio: "inherit",
-    });
+    info(
+      "running borg-backup.sh --skip-dumps --remote-only (may take a while)...",
+    );
+    const r = spawnSync(
+      "bash",
+      [BORG_BACKUP_SH, "--skip-dumps", "--remote-only"],
+      {
+        stdio: "inherit",
+      },
+    );
     if (r.status !== 0) {
       fail(`pre-backup failed (exit ${r.status}).`);
-      info("  System was NOT updated. Resolve backup issue or retry without --pre-backup.");
+      info(
+        "  System was NOT updated. Resolve backup issue or retry without --pre-backup.",
+      );
       process.exit(4);
     }
     ok("pre-backup complete");
@@ -241,7 +302,9 @@ async function main() {
 
   let oldRegistry = null;
   try {
-    const oldRegText = git(`show ${OLD_HEAD}:container-registry.yaml`, { maxBuffer: 10 * 1024 * 1024 });
+    const oldRegText = git(`show ${OLD_HEAD}:container-registry.yaml`, {
+      maxBuffer: 10 * 1024 * 1024,
+    });
     oldRegistry = YAML.parse(oldRegText);
   } catch {
     // If old registry missing (fresh repo, untracked earlier, etc.), skip the diff.
@@ -274,7 +337,8 @@ async function main() {
   const userConfig = (await readYaml(USER_CONFIG_PATH)) || { containers: {} };
   const orphanedEnabled = removed.filter((name) => {
     const uc = userConfig.containers?.[name];
-    if (uc && uc.enabled !== undefined) return uc.enabled === true || uc.enabled === "true";
+    if (uc && uc.enabled !== undefined)
+      return uc.enabled === true || uc.enabled === "true";
     return false; // if no user override, it was using the default — removed means it's gone
   });
 
@@ -292,7 +356,11 @@ async function main() {
 
     for (const entry of report.toClone) {
       info(`cloning ${entry.name} (required) from ${entry.url}`);
-      const { ok: cloneOk, error } = cloneModule(MODULES_DIR, entry.name, entry.url);
+      const { ok: cloneOk, error } = cloneModule(
+        MODULES_DIR,
+        entry.name,
+        entry.url,
+      );
       if (cloneOk) {
         ok(`ADDED ${entry.name}`);
         catalogSyncAdded.push(entry.name);
@@ -302,13 +370,19 @@ async function main() {
       }
     }
     for (const entry of report.optional) {
-      info(`OPTIONAL AVAILABLE ${entry.name} — run 'scripts/module.sh add-source ${entry.url}' to clone`);
+      info(
+        `OPTIONAL AVAILABLE ${entry.name} — run 'scripts/module.sh add-source ${entry.url}' to clone`,
+      );
     }
     for (const drift of report.urlDrift) {
-      warn(`URL CHANGED ${drift.name}: catalog says ${drift.catalogUrl}, local remote is ${drift.localUrl} (not rewriting)`);
+      warn(
+        `URL CHANGED ${drift.name}: catalog says ${drift.catalogUrl}, local remote is ${drift.localUrl} (not rewriting)`,
+      );
     }
     for (const name of report.removed) {
-      warn(`REMOVED FROM CATALOG ${name} — still on disk at .modules/${name} (not deleting)`);
+      warn(
+        `REMOVED FROM CATALOG ${name} — still on disk at .modules/${name} (not deleting)`,
+      );
     }
     // User-added sources in installed-modules.yaml that aren't in the catalog
     // are the expected custom-source case — no output.
@@ -337,10 +411,14 @@ async function main() {
     info("no installed containers — skipping");
   } else {
     for (const containerName of hookContainers) {
-      const r = spawnSync("node", [join(__dirname, "run-setup-hooks.js"), containerName], {
-        stdio: "pipe",
-        encoding: "utf8",
-      });
+      const r = spawnSync(
+        "node",
+        [join(__dirname, "run-setup-hooks.js"), containerName],
+        {
+          stdio: "pipe",
+          encoding: "utf8",
+        },
+      );
       const out = (r.stdout || "") + (r.stderr || "");
       if (out.trim()) process.stdout.write(out);
       if (r.status !== 0) hookFailures.push(containerName);
@@ -348,14 +426,34 @@ async function main() {
     if (hookFailures.length === 0) {
       ok(`all hooks ok (${hookContainers.length} container(s))`);
     } else if (flags.ignoreHooks) {
-      warn(`${hookFailures.length} container(s) had hook failures: ${hookFailures.join(", ")} (--ignore-hooks)`);
+      warn(
+        `${hookFailures.length} container(s) had hook failures: ${hookFailures.join(", ")} (--ignore-hooks)`,
+      );
     } else {
-      fail(`${hookFailures.length} container(s) had hook failures: ${hookFailures.join(", ")}`);
+      fail(
+        `${hookFailures.length} container(s) had hook failures: ${hookFailures.join(", ")}`,
+      );
       info("");
-      info(`  ${c.bold}System is now at ${NEW_HEAD_SHORT}.${c.reset} Fix the failing hook(s) and re-run:`);
-      for (const n of hookFailures) info(`    node scripts/run-setup-hooks.js ${n}`);
-      info(`  Or re-run with ${c.cyan}--ignore-hooks${c.reset} to downgrade to a warning.`);
-      printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings: [], dirtyModules, validationFailed: false, hookFailed: true });
+      info(
+        `  ${c.bold}System is now at ${NEW_HEAD_SHORT}.${c.reset} Fix the failing hook(s) and re-run:`,
+      );
+      for (const n of hookFailures)
+        info(`    node scripts/run-setup-hooks.js ${n}`);
+      info(
+        `  Or re-run with ${c.cyan}--ignore-hooks${c.reset} to downgrade to a warning.`,
+      );
+      printSummary({
+        OLD_HEAD_SHORT,
+        NEW_HEAD_SHORT,
+        added,
+        removed,
+        orphanedEnabled,
+        hookFailures,
+        pkgWarnings: [],
+        dirtyModules,
+        validationFailed: false,
+        hookFailed: true,
+      });
       process.exit(3);
     }
   }
@@ -366,10 +464,14 @@ async function main() {
   for (const name of newContainers) {
     const def = newRegistry.containers[name];
     if (!def?.host_packages?.length) continue;
-    const r = spawnSync("node", [join(__dirname, "check-host-packages.js"), name], {
-      stdio: "pipe",
-      encoding: "utf8",
-    });
+    const r = spawnSync(
+      "node",
+      [join(__dirname, "check-host-packages.js"), name],
+      {
+        stdio: "pipe",
+        encoding: "utf8",
+      },
+    );
     const out = ((r.stdout || "") + (r.stderr || "")).trim();
     if (out) pkgWarnings.push(out);
   }
@@ -381,10 +483,14 @@ async function main() {
 
   // Step 10: env validation — THE load-bearing gate
   section("Env validation");
-  const validate = spawnSync("node", [join(__dirname, "generate-env.js"), "--all", "--validate-only"], {
-    stdio: "pipe",
-    encoding: "utf8",
-  });
+  const validate = spawnSync(
+    "node",
+    [join(__dirname, "generate-env.js"), "--all", "--validate-only"],
+    {
+      stdio: "pipe",
+      encoding: "utf8",
+    },
+  );
   const validateOut = (validate.stdout || "") + (validate.stderr || "");
   if (validate.status !== 0) {
     fail("env validation failed");
@@ -392,9 +498,21 @@ async function main() {
       for (const line of validateOut.trim().split("\n")) info(`  ${line}`);
     }
     info("");
-    info(`  ${c.bold}System is now at ${NEW_HEAD_SHORT}.${c.reset} Fix the missing variables above and re-run:`);
+    info(
+      `  ${c.bold}System is now at ${NEW_HEAD_SHORT}.${c.reset} Fix the missing variables above and re-run:`,
+    );
     info(`    node scripts/generate-env.js --all --validate-only`);
-    printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings, dirtyModules, validationFailed: true });
+    printSummary({
+      OLD_HEAD_SHORT,
+      NEW_HEAD_SHORT,
+      added,
+      removed,
+      orphanedEnabled,
+      hookFailures,
+      pkgWarnings,
+      dirtyModules,
+      validationFailed: true,
+    });
     process.exit(3);
   }
   ok("all enabled containers have required variables");
@@ -407,7 +525,17 @@ async function main() {
   maybeRebuildWebAdmin(OLD_HEAD, NEW_HEAD);
 
   // Step 12: summary
-  printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings, dirtyModules, validationFailed: false });
+  printSummary({
+    OLD_HEAD_SHORT,
+    NEW_HEAD_SHORT,
+    added,
+    removed,
+    orphanedEnabled,
+    hookFailures,
+    pkgWarnings,
+    dirtyModules,
+    validationFailed: false,
+  });
   process.exit(0);
 }
 
@@ -415,7 +543,9 @@ function maybeRebuildWebAdmin(OLD_HEAD, NEW_HEAD) {
   if (!OLD_HEAD || !NEW_HEAD || OLD_HEAD === NEW_HEAD) return;
   let changed = false;
   try {
-    const diff = git(`diff --name-only ${OLD_HEAD} ${NEW_HEAD}`, { maxBuffer: 4 * 1024 * 1024 });
+    const diff = git(`diff --name-only ${OLD_HEAD} ${NEW_HEAD}`, {
+      maxBuffer: 4 * 1024 * 1024,
+    });
     changed = diff.split("\n").some((f) => f.startsWith("web-admin/"));
   } catch (e) {
     warn(`web-admin diff check failed: ${e.message}`);
@@ -423,7 +553,9 @@ function maybeRebuildWebAdmin(OLD_HEAD, NEW_HEAD) {
   }
   if (!changed) return;
   section("Web admin rebuild");
-  info("web-admin/ changed — scheduling `start-web-admin.sh rebuild` in 5s (detached)");
+  info(
+    "web-admin/ changed — scheduling `start-web-admin.sh rebuild` in 5s (detached)",
+  );
   info("the web admin will rebuild the frontend and restart PM2 shortly");
   const script = join(__dirname, "start-web-admin.sh");
   const logFile = join(os.homedir(), "logs/web-admin-rebuild.log");
@@ -431,41 +563,69 @@ function maybeRebuildWebAdmin(OLD_HEAD, NEW_HEAD) {
     // Double-forked via the bash subshell so the grandchild survives after
     // spawnSync returns. Output goes to a log file so "did it actually run?"
     // is answerable after the fact.
-    spawnSync("bash", [
-      "-c",
-      `(sleep 5 && "${script}" rebuild) >> "${logFile}" 2>&1 </dev/null &`,
-    ], { stdio: "ignore", detached: true });
+    spawnSync(
+      "bash",
+      [
+        "-c",
+        `(sleep 5 && "${script}" rebuild) >> "${logFile}" 2>&1 </dev/null &`,
+      ],
+      { stdio: "ignore", detached: true },
+    );
     ok(`rebuild scheduled (log: ${logFile})`);
   } catch (e) {
     warn(`could not schedule web-admin rebuild: ${e.message}`);
   }
 }
 
-function printSummary({ OLD_HEAD_SHORT, NEW_HEAD_SHORT, added, removed, orphanedEnabled, hookFailures, pkgWarnings, dirtyModules, validationFailed, hookFailed }) {
+function printSummary({
+  OLD_HEAD_SHORT,
+  NEW_HEAD_SHORT,
+  added,
+  removed,
+  orphanedEnabled,
+  hookFailures,
+  pkgWarnings,
+  dirtyModules,
+  validationFailed,
+  hookFailed,
+}) {
   section("Summary");
   info(`${OLD_HEAD_SHORT} → ${NEW_HEAD_SHORT}`);
   if (added.length) info(`Added containers: ${added.join(", ")}`);
   if (removed.length) info(`Removed containers: ${removed.join(", ")}`);
   if (orphanedEnabled.length) {
-    warn(`these enabled containers no longer exist upstream: ${orphanedEnabled.join(", ")}`);
+    warn(
+      `these enabled containers no longer exist upstream: ${orphanedEnabled.join(", ")}`,
+    );
     for (const name of orphanedEnabled) {
-      info(`  Stop with: cd ${name} && docker compose down && scripts/module.sh uninstall ${name}`);
+      info(
+        `  Stop with: cd ${name} && docker compose down && scripts/module.sh uninstall ${name}`,
+      );
     }
   }
   if (hookFailures.length) {
     if (hookFailed) fail(`setup hook failures: ${hookFailures.join(", ")}`);
-    else warn(`setup hook failures: ${hookFailures.join(", ")} (ignored via --ignore-hooks)`);
+    else
+      warn(
+        `setup hook failures: ${hookFailures.join(", ")} (ignored via --ignore-hooks)`,
+      );
   }
-  if (pkgWarnings.length) warn(`${pkgWarnings.length} container(s) need host packages (see above)`);
-  if (dirtyModules.length) warn(`dirty module clones: ${dirtyModules.join(", ")}`);
+  if (pkgWarnings.length)
+    warn(`${pkgWarnings.length} container(s) need host packages (see above)`);
+  if (dirtyModules.length)
+    warn(`dirty module clones: ${dirtyModules.join(", ")}`);
 
   if (!validationFailed && !hookFailed) {
     info("");
-    info(`${c.bold}Next step:${c.reset} run ${c.cyan}scripts/all-containers.sh --stop --start${c.reset} (or click "Restart All" in the web admin) to pick up compose changes.`);
+    info(
+      `${c.bold}Next step:${c.reset} run ${c.cyan}scripts/all-containers.sh --stop --start${c.reset} (or click "Restart All" in the web admin) to pick up compose changes.`,
+    );
   }
 }
 
 main().catch((e) => {
-  console.error(`${c.red}update-platform.js crashed:${c.reset} ${e.stack || e.message}`);
+  console.error(
+    `${c.red}update-platform.js crashed:${c.reset} ${e.stack || e.message}`,
+  );
   process.exit(1);
 });

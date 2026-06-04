@@ -27,34 +27,43 @@ function formatRelative(iso) {
 // behindAction } — behindAction is true when the "Update" button should be
 // enabled for this row.
 function statusOf(repo) {
-  if (!repo.clean) return { label: "uncommitted changes", color: "warning", canUpdate: false };
-  if (!repo.upstream) return { label: "no upstream", color: "warning", canUpdate: false };
-  if (repo.ahead > 0 && repo.behind === 0) return { label: `${repo.ahead} ahead`, color: "error", canUpdate: false };
-  if (repo.ahead > 0 && repo.behind > 0) return { label: "diverged", color: "error", canUpdate: false };
-  if (repo.behind > 0) return { label: `${repo.behind} behind`, color: "info", canUpdate: true };
+  if (!repo.clean)
+    return { label: "uncommitted changes", color: "warning", canUpdate: false };
+  if (!repo.upstream)
+    return { label: "no upstream", color: "warning", canUpdate: false };
+  if (repo.ahead > 0 && repo.behind === 0)
+    return { label: `${repo.ahead} ahead`, color: "error", canUpdate: false };
+  if (repo.ahead > 0 && repo.behind > 0)
+    return { label: "diverged", color: "error", canUpdate: false };
+  if (repo.behind > 0)
+    return { label: `${repo.behind} behind`, color: "info", canUpdate: true };
   return { label: "up to date", color: "success", canUpdate: false };
 }
 
 // One row per repo (platform or module). Consistent layout regardless of role.
 function RepoRow({
-  role,             // "platform" | "required" | "optional" | "user-added"
-  repo,             // { name, branch, upstream, ahead, behind, clean, fetchedAt }
+  role, // "platform" | "required" | "optional" | "user-added"
+  repo, // { name, branch, upstream, ahead, behind, clean, fetchedAt }
   onUpdate,
-  extraControls,    // JSX slotted to the right of Update (pre-backup checkbox, etc.)
+  extraControls, // JSX slotted to the right of Update (pre-backup checkbox, etc.)
   busy,
 }) {
   const status = statusOf(repo);
-  const roleLabel = {
-    platform: "platform",
-    required: "required module",
-    optional: "optional module",
-    "user-added": "user-added",
-  }[role] || role;
+  const roleLabel =
+    {
+      platform: "platform",
+      required: "required module",
+      optional: "optional module",
+      "user-added": "user-added",
+    }[role] || role;
   return (
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: "minmax(180px, 1.3fr) minmax(120px, 0.8fr) minmax(150px, 1fr) auto" },
+        gridTemplateColumns: {
+          xs: "1fr",
+          md: "minmax(180px, 1.3fr) minmax(120px, 0.8fr) minmax(150px, 1fr) auto",
+        },
         alignItems: "center",
         gap: 1.5,
         py: 1.25,
@@ -65,11 +74,19 @@ function RepoRow({
       }}
     >
       <Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{repo.name}</Typography>
-        <Typography variant="caption" color="text.secondary">{roleLabel}</Typography>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+          {repo.name}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {roleLabel}
+        </Typography>
       </Box>
       <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block" }}
+        >
           {repo.branch || "?"} → {repo.upstream || "(no upstream)"}
         </Typography>
         <Typography variant="caption" color="text.secondary">
@@ -77,9 +94,22 @@ function RepoRow({
         </Typography>
       </Box>
       <Box>
-        <Chip size="small" label={status.label} color={status.color} variant={status.color === "success" ? "outlined" : "filled"} />
+        <Chip
+          size="small"
+          label={status.label}
+          color={status.color}
+          variant={status.color === "success" ? "outlined" : "filled"}
+        />
       </Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          justifyContent: "flex-end",
+          flexWrap: "wrap",
+        }}
+      >
         {extraControls}
         <Button
           size="small"
@@ -99,40 +129,60 @@ function RepoRow({
 // update buttons. Header has Refresh, and "Update everything" when anything
 // is actually behind.
 function SystemUpdatesPanel({
-  repos,                      // array of platform + module repo status objects
-  roleFor,                    // (name) => "platform" | "required" | "optional" | "user-added"
-  onRefresh,                  // manual refresh (runs git fetch server-side)
-  fetchingUpstream,           // boolean
+  repos, // array of platform + module repo status objects
+  roleFor, // (name) => "platform" | "required" | "optional" | "user-added"
+  onRefresh, // manual refresh (runs git fetch server-side)
+  fetchingUpstream, // boolean
   preBackup,
   onPreBackupChange,
-  onUpdatePlatform,           // (repo) => void
-  onUpdateModule,             // (repo) => void
-  onUpdateEverything,         // () => void  (null if nothing to update)
+  onUpdatePlatform, // (repo) => void
+  onUpdateModule, // (repo) => void
+  onUpdateEverything, // () => void  (null if nothing to update)
   busy,
   lastTickAt,
 }) {
-  const anyBehind = (repos || []).some((r) => r.clean && r.behind > 0 && r.ahead === 0);
+  const anyBehind = (repos || []).some(
+    (r) => r.clean && r.behind > 0 && r.ahead === 0,
+  );
   const anyBlocked = (repos || []).some((r) => !r.clean || r.ahead > 0);
 
   return (
     <Box sx={{ mb: 3, border: 1, borderColor: "divider", borderRadius: 1 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, px: 1.5, py: 1, borderBottom: 1, borderColor: "divider" }}>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>System Updates</Typography>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          px: 1.5,
+          py: 1,
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
+      >
+        <Typography variant="h6" sx={{ flexGrow: 1 }}>
+          System Updates
+        </Typography>
         <Typography variant="caption" color="text.secondary">
           last checked {formatRelative(lastTickAt)}
         </Typography>
         <Tooltip title="Check upstream for new commits">
           <span>
-            <IconButton size="small" onClick={onRefresh} disabled={busy || fetchingUpstream}>
+            <IconButton
+              size="small"
+              onClick={onRefresh}
+              disabled={busy || fetchingUpstream}
+            >
               <RefreshIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>
-        <Tooltip title={
-          anyBehind
-            ? "Update platform, then every module that is behind upstream"
-            : "Nothing is behind upstream"
-        }>
+        <Tooltip
+          title={
+            anyBehind
+              ? "Update platform, then every module that is behind upstream"
+              : "Nothing is behind upstream"
+          }
+        >
           <span>
             <Button
               size="small"
@@ -148,14 +198,16 @@ function SystemUpdatesPanel({
 
       {anyBlocked && (
         <Alert severity="warning" sx={{ borderRadius: 0 }}>
-          One or more repos have uncommitted changes or local commits ahead of upstream. Those rows are blocked from updating — resolve on the CLI.
+          One or more repos have uncommitted changes or local commits ahead of
+          upstream. Those rows are blocked from updating — resolve on the CLI.
         </Alert>
       )}
 
       {(repos || []).length === 0 && (
         <Box sx={{ p: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            No repos to show yet — the background poller runs every 15 minutes; click refresh above to check now.
+            No repos to show yet — the background poller runs every 15 minutes;
+            click refresh above to check now.
           </Typography>
         </Box>
       )}
@@ -170,20 +222,24 @@ function SystemUpdatesPanel({
             repo={repo}
             busy={busy}
             onUpdate={isPlatform ? onUpdatePlatform : onUpdateModule}
-            extraControls={isPlatform ? (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={!!preBackup}
-                    onChange={(e) => onPreBackupChange(e.target.checked)}
-                    disabled={busy}
-                  />
-                }
-                label={<Typography variant="caption">borg backup first</Typography>}
-                sx={{ mr: 1 }}
-              />
-            ) : null}
+            extraControls={
+              isPlatform ? (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={!!preBackup}
+                      onChange={(e) => onPreBackupChange(e.target.checked)}
+                      disabled={busy}
+                    />
+                  }
+                  label={
+                    <Typography variant="caption">borg backup first</Typography>
+                  }
+                  sx={{ mr: 1 }}
+                />
+              ) : null
+            }
           />
         );
       })}

@@ -1,5 +1,5 @@
-import _ from 'lodash';
-import { EventEmitter } from 'events';
+import _ from "lodash";
+import { EventEmitter } from "events";
 
 const statusEmitter = new EventEmitter();
 statusEmitter.setMaxListeners(20);

@@ -1,9 +1,12 @@
-import Docker from 'dockerode';
-import esMain from 'es-main';
-import scanContainerFolders from './containerFolderScanner.js';
-import { getContainerIconFilename, getStackIcon } from './dockerContainerIcons.js';
-import { getPendingUpdates } from './pendingUpdates.js';
-import { getConfigStatus } from './configRegistry.js';
+import Docker from "dockerode";
+import esMain from "es-main";
+import scanContainerFolders from "./containerFolderScanner.js";
+import {
+  getContainerIconFilename,
+  getStackIcon,
+} from "./dockerContainerIcons.js";
+import { getPendingUpdates } from "./pendingUpdates.js";
+import { getConfigStatus } from "./configRegistry.js";
 
 const docker = new Docker();
 
@@ -12,7 +15,7 @@ async function getDockerContainers() {
   return containers.map((c) => ({
     id: c.Id,
     image: c.Image,
-    name: c.Names?.[0]?.replace(/^\//, '') || '',
+    name: c.Names?.[0]?.replace(/^\//, "") || "",
     status: c.Status,
     state: c.State,
     ports: (c.Ports || []).map((p) => ({
@@ -35,10 +38,10 @@ async function getFormattedDockerContainers() {
       for (const container of containers) {
         if (
           container.labels &&
-          container.labels['com.docker.compose.project']
+          container.labels["com.docker.compose.project"]
         ) {
-          const containerName = container.name.replace(/^\//, '');
-          const projectName = container.labels['com.docker.compose.project'];
+          const containerName = container.name.replace(/^\//, "");
+          const projectName = container.labels["com.docker.compose.project"];
           if (!running[projectName]) {
             running[projectName] = {};
           }
@@ -95,7 +98,7 @@ async function getFormattedDockerContainers() {
 
     return { running, stacks: stacksWithIcons, invalidPendingUpdates };
   } catch (error) {
-    console.error('Error fetching Docker containers:', error);
+    console.error("Error fetching Docker containers:", error);
     throw error;
   }
 }
@@ -104,9 +107,9 @@ if (esMain(import.meta)) {
   (async () => {
     try {
       const projectList = await getFormattedDockerContainers();
-      console.log('Docker Compose Projects:', projectList);
+      console.log("Docker Compose Projects:", projectList);
     } catch (error) {
-      console.error('Error fetching Docker containers:', error);
+      console.error("Error fetching Docker containers:", error);
     }
   })();
 }

@@ -14,7 +14,12 @@ const CONTAINERS_DIR = join(__dirname, "..");
 const DEFAULT_MOUNT = "~/container-data";
 
 async function fileExists(path) {
-  try { await access(path); return true; } catch { return false; }
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function toVarName(containerName, volumeName) {
@@ -36,7 +41,10 @@ function deriveVolumeName(hostSubpath, containerName) {
         containerName,
         containerName.replace(/-/g, ""),
       ];
-      if (containerVariants.includes(first) || first === containerName.split("-").pop()) {
+      if (
+        containerVariants.includes(first) ||
+        first === containerName.split("-").pop()
+      ) {
         afterCm.shift();
       }
     }
@@ -74,7 +82,12 @@ async function main() {
 
       const dedupeKey = `${currentVar}/${hostSubpath}`;
       if (!uniqueVolumes.has(dedupeKey)) {
-        uniqueVolumes.set(dedupeKey, { volumeName, hostSubpath, containerPath, currentVar });
+        uniqueVolumes.set(dedupeKey, {
+          volumeName,
+          hostSubpath,
+          containerPath,
+          currentVar,
+        });
       }
     }
 
@@ -103,7 +116,7 @@ async function main() {
     const hasMonitoring = /for-homepage/.test(content);
     registryVolumes[entry.name] = {
       monitorAllMounts: hasMonitoring,
-      volumes: [...uniqueVolumes.values()].map(v => ({
+      volumes: [...uniqueVolumes.values()].map((v) => ({
         name: v.volumeName,
         var: v.newVar,
         host_subpath: v.hostSubpath,
@@ -120,7 +133,7 @@ async function main() {
       const escaped = vol.hostSubpath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const pattern = new RegExp(
         `\\$\\{${currentVar}:-[^}]+\\}/${escaped}`,
-        "g"
+        "g",
       );
       const replacement = `\${${vol.newVar}:-${DEFAULT_MOUNT}}/${vol.hostSubpath}`;
       modified = modified.replace(pattern, replacement);
@@ -138,8 +151,13 @@ async function main() {
   if (process.argv.includes("--registry-json")) {
     console.log(JSON.stringify(registryVolumes, null, 2));
   } else {
-    console.error(`Modified ${filesModified} compose files, ${volumesTotal} unique volumes`);
+    console.error(
+      `Modified ${filesModified} compose files, ${volumesTotal} unique volumes`,
+    );
   }
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

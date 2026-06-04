@@ -26,17 +26,20 @@ const useBorgConfig = () => {
     fetchConfig();
   }, [fetchConfig]);
 
-  const save = useCallback(async (patch) => {
-    const res = await fetch("/api/config/borg", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || "Failed to save");
-    await fetchConfig();
-    return body;
-  }, [fetchConfig]);
+  const save = useCallback(
+    async (patch) => {
+      const res = await fetch("/api/config/borg", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Failed to save");
+      await fetchConfig();
+      return body;
+    },
+    [fetchConfig],
+  );
 
   const generatePassphrase = useCallback(async () => {
     const res = await fetch("/api/config/borg/passphrase/generate", {
@@ -48,23 +51,28 @@ const useBorgConfig = () => {
   }, []);
 
   const revealPassphrase = useCallback(async (key) => {
-    const res = await fetch(`/api/config/borg/passphrase/reveal?key=${encodeURIComponent(key)}`);
+    const res = await fetch(
+      `/api/config/borg/passphrase/reveal?key=${encodeURIComponent(key)}`,
+    );
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || "Failed to reveal passphrase");
     return body.value;
   }, []);
 
-  const savePassphrase = useCallback(async (key, value) => {
-    const res = await fetch("/api/config/borg/passphrase", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, value }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || "Failed to save passphrase");
-    await fetchConfig();
-    return body;
-  }, [fetchConfig]);
+  const savePassphrase = useCallback(
+    async (key, value) => {
+      const res = await fetch("/api/config/borg/passphrase", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Failed to save passphrase");
+      await fetchConfig();
+      return body;
+    },
+    [fetchConfig],
+  );
 
   const initRepo = useCallback(async () => {
     const res = await fetch("/api/borg/init-repo", { method: "POST" });

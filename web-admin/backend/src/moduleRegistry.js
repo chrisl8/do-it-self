@@ -77,7 +77,9 @@ export async function getAvailableContainers() {
 
   if (!(await dirExists(MODULES_DIR))) return { containers };
 
-  for (const [moduleName, moduleEntry] of Object.entries(installed.modules || {})) {
+  for (const [moduleName, moduleEntry] of Object.entries(
+    installed.modules || {},
+  )) {
     const modulePath = join(MODULES_DIR, moduleName);
     if (!(await dirExists(modulePath))) continue;
 
