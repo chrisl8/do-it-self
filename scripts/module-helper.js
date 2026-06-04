@@ -113,12 +113,6 @@ async function readYaml(path) {
   return YAML.parse(text);
 }
 
-async function readYamlDoc(path) {
-  if (!(await fileExists(path))) return null;
-  const text = await readFile(path, "utf8");
-  return YAML.parseDocument(text);
-}
-
 async function writeYaml(path, data) {
   const text = YAML.stringify(data, { lineWidth: 0 });
   await writeFile(path, text);

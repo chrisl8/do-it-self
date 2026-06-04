@@ -32,6 +32,7 @@ function useDockerStatus() {
     reconnectTimeout.current = setTimeout(() => {
       connectWebSocket();
     }, delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- connectWebSocket is declared after this hook (referencing it here would be a TDZ error); the reconnect/connect pair is intentionally stable for the socket's lifetime.
   }, []);
 
   const connectWebSocket = useCallback(() => {
@@ -50,7 +51,7 @@ function useDockerStatus() {
       scheduleReconnect();
     };
 
-    newSocket.onerror = (error) => {
+    newSocket.onerror = () => {
       setConnectionState("disconnected");
     };
 

@@ -30,17 +30,6 @@ const PASSPHRASE_CACHE_TTL_MS = 5 * 60 * 1000;
 // pi-rpc.sh's verb whitelist (matches scripts/setup-backup-pi.sh STEP 19b).
 const RPC_ACTIONS = new Set(["apt-upgrade", "reboot"]);
 
-// borg-manage.sh's verb whitelist (matches scripts/setup-backup-pi.sh STEP 10).
-const MGMT_VERBS = new Set([
-  "check",
-  "prune",
-  "compact",
-  "list",
-  "list-last",
-  "info",
-  "break-lock",
-]);
-
 let tickTimer = null;
 let tickInFlight = false;
 let activeAction = null; // { action, ws } when something is running

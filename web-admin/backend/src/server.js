@@ -2,20 +2,15 @@ import express from "express";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { spawn, execFile } from "child_process";
+import { spawn } from "child_process";
 import { readFile, writeFile, unlink, chmod, mkdir } from "fs/promises";
 import { unlinkSync, existsSync } from "fs";
-import { promisify } from "util";
 import http from "http";
 import os from "os";
 import getFormattedDockerContainers from "./dockerStatus.js";
 import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 import { getReleaseNotesForStack } from "./githubReleases.js";
-import {
-  fetchRemote,
-  bestEffortFetch,
-  getRepoStatus,
-} from "./gitRepoStatus.js";
+import { bestEffortFetch, getRepoStatus } from "./gitRepoStatus.js";
 import {
   getRegistry,
   getUserConfig,
@@ -38,7 +33,6 @@ import {
 } from "./moduleRegistry.js";
 import {
   isAvailable as isInfisicalAvailable,
-  getContainerSecrets,
   setContainerSecrets,
   setSharedSecrets,
   listSecrets,
@@ -51,7 +45,7 @@ import {
   runAction as runBackupPiAction,
   setClientPassphrase as setBackupPiClientPassphrase,
 } from "./backupPi.js";
-import backupCoverageModule, {
+import {
   acknowledgePath as ackBackupCoveragePath,
   unacknowledgePath as unackBackupCoveragePath,
 } from "./backupCoverage.js";
@@ -1347,7 +1341,7 @@ app.get("/api/config/infisical-status", async (req, res) => {
   try {
     const available = await isInfisicalAvailable();
     res.json({ available });
-  } catch (err) {
+  } catch {
     res.json({ available: false });
   }
 });
@@ -1606,7 +1600,6 @@ app.get("/api/modules/available", async (req, res) => {
   }
 });
 
-const execFileAsync = promisify(execFile);
 const MODULES_DIR = join(CONTAINERS_DIR, ".modules");
 
 app.get("/api/git-status", async (req, res) => {

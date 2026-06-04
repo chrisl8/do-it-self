@@ -92,7 +92,7 @@ async function main() {
       completed.push(hook);
       changed = true;
       console.log(`  setup: ${hook} completed`);
-    } catch (e) {
+    } catch {
       console.error(`  setup: ${hook} failed`);
       failed = true;
     }

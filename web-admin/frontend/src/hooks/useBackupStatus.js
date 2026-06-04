@@ -252,8 +252,6 @@ const useBackupStatus = () => {
       // Clear cached log so next view gets fresh data
       setKopiaLog(null);
       return data;
-    } catch (err) {
-      throw err;
     } finally {
       setKopiaCheckRunning(false);
     }
