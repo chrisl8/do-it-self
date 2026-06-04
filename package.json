@@ -1,0 +1,27 @@
+{
+  "name": "do-it-self-containers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Repo-root developer tooling (formatting, linting, git hooks) for first-party code. This is NOT a runtime package — web-admin and other apps have their own package.json.",
+  "scripts": {
+    "format": "prettier --write \"{web-admin,scripts,actual-budget-sync}/**/*.{js,jsx,json}\"",
+    "format:check": "prettier --check \"{web-admin,scripts,actual-budget-sync}/**/*.{js,jsx,json}\"",
+    "lint": "eslint web-admin/backend/src web-admin/frontend/src scripts actual-budget-sync",
+    "lint:fix": "eslint web-admin/backend/src web-admin/frontend/src scripts actual-budget-sync --fix",
+    "shellcheck": "shellcheck scripts/*.sh actual-budget-sync/*.sh",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.6.0",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.3",
+    "simple-git-hooks": "^2.13.1"
+  }
+}

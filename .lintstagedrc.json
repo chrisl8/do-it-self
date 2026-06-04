@@ -1,0 +1,8 @@
+{
+  "{web-admin,scripts,actual-budget-sync}/**/*.{js,jsx}": [
+    "prettier --write",
+    "eslint --fix"
+  ],
+  "{web-admin,scripts,actual-budget-sync}/**/*.json": ["prettier --write"],
+  "{scripts,actual-budget-sync}/**/*.sh": ["shellcheck --severity=error"]
+}
