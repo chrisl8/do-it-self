@@ -63,6 +63,11 @@ const activeStacks = new Set();
 let updateAllResumeResolver = null;
 let updateAllChildProcess = null;
 let updateAllAborted = false;
+// Synchronous claim flag for the batch updater. Set the instant a startUpdateAll
+// request passes the guard — before any await — so a second request (e.g. from
+// another browser tab) can't slip through the check-then-act window while we
+// build the queue. Cleared on every exit path and when the queue finishes.
+let updateAllInFlight = false;
 
 // Start-all state
 let startAllChildProcess = null;
@@ -239,6 +244,7 @@ async function processUpdateQueue() {
   console.log(`[Update All] Finished: ${status.status} (${status.completed.length} of ${status.total} updated)`);
 
   updateAllAborted = false;
+  updateAllInFlight = false;
 }
 
 async function processStartAllQueue() {
@@ -2083,7 +2089,12 @@ async function webserver() {
         }
       } else if (message.type === "startUpdateAll") {
         const currentStatus = getStatus().updateAllStatus;
-        if (currentStatus && (currentStatus.status === "running" || currentStatus.status === "paused")) {
+        if (
+          updateAllInFlight ||
+          (currentStatus &&
+            (currentStatus.status === "running" ||
+              currentStatus.status === "paused"))
+        ) {
           ws.send(
             JSON.stringify({
               type: "updateAllError",
@@ -2093,24 +2104,44 @@ async function webserver() {
           return;
         }
 
+        // Claim the batch synchronously, before the await below, so an
+        // overlapping request can't pass the guard above mid-await.
+        updateAllInFlight = true;
+
+        // Optional explicit subset of stacks to update. When absent, fall back
+        // to every stack that has a pending update.
+        const requestedStacks = Array.isArray(message.payload?.stackNames)
+          ? message.payload.stackNames
+          : null;
+
         // Build queue from stacks with pending updates
         try {
           const containers = await getFormattedDockerContainers();
           updateStatus("docker.running", containers.running);
           updateStatus("docker.stacks", containers.stacks);
 
+          const requestedSet = requestedStacks
+            ? new Set(requestedStacks)
+            : null;
           const queue = Object.entries(containers.stacks)
-            .filter(([, info]) => info.hasPendingUpdates)
+            .filter(([name, info]) =>
+              requestedSet
+                ? requestedSet.has(name) && info.hasPendingUpdates
+                : info.hasPendingUpdates,
+            )
             .sort(([, a], [, b]) =>
               (a.sortOrder || "z999").localeCompare(b.sortOrder || "z999", undefined, { numeric: true }),
             )
             .map(([name]) => name);
 
           if (queue.length === 0) {
+            updateAllInFlight = false;
             ws.send(
               JSON.stringify({
                 type: "updateAllError",
-                error: "No stacks have pending updates",
+                error: requestedSet
+                  ? "None of the selected stacks have pending updates"
+                  : "No stacks have pending updates",
               }),
             );
             return;
@@ -2128,10 +2159,15 @@ async function webserver() {
             total: queue.length,
           });
 
-          processUpdateQueue().catch((err) =>
-            console.error("[Update All] Unhandled error in queue:", err),
-          );
+          processUpdateQueue().catch((err) => {
+            // Defensive: the queue clears updateAllInFlight in its terminal
+            // block, but if it ever rejects before reaching that, clear here
+            // so a stuck flag can't permanently lock out future batches.
+            updateAllInFlight = false;
+            console.error("[Update All] Unhandled error in queue:", err);
+          });
         } catch (e) {
+          updateAllInFlight = false;
           console.error("[Update All] Error starting batch update:", e);
           ws.send(
             JSON.stringify({

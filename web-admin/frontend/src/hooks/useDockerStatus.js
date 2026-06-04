@@ -172,9 +172,14 @@ function useDockerStatus() {
     });
   }, []);
 
-  const startUpdateAll = useCallback(() => {
+  const startUpdateAll = useCallback((stackNames) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: "startUpdateAll" }));
+      socketRef.current.send(
+        JSON.stringify({
+          type: "startUpdateAll",
+          payload: stackNames ? { stackNames } : {},
+        }),
+      );
     }
   }, []);
 

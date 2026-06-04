@@ -9,6 +9,7 @@ import CardContent from "@mui/material/CardContent";
 import Collapse from "@mui/material/Collapse";
 import IconButton from "@mui/material/IconButton";
 import Chip from "@mui/material/Chip";
+import Checkbox from "@mui/material/Checkbox";
 import Typography from "@mui/material/Typography";
 import Spinner from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
@@ -213,6 +214,19 @@ const DockerStatus = ({
     output: "",
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
+  const [selectedForUpdate, setSelectedForUpdate] = useState(() => new Set());
+
+  const toggleUpdateSelection = (stackName) => {
+    setSelectedForUpdate((prev) => {
+      const next = new Set(prev);
+      if (next.has(stackName)) {
+        next.delete(stackName);
+      } else {
+        next.add(stackName);
+      }
+      return next;
+    });
+  };
 
   const handleRefresh = () => {
     getDockerStatus();
@@ -300,6 +314,19 @@ const DockerStatus = ({
       !stack.isRunning &&
       stack.configReady !== false,
   ).length;
+
+  // A batch update is "active" while running or paused-on-failure. This is the
+  // same single global operation reflected to every tab, so it gates the
+  // selection UI everywhere at once.
+  const batchActive =
+    updateAllStatus?.status === "running" ||
+    updateAllStatus?.status === "paused";
+
+  // Selected stacks that still actually have a pending update (selection can go
+  // stale as updates complete). Drives the button count and the payload.
+  const selectedPendingNames = unifiedStacks
+    .filter((stack) => stack.hasPendingUpdates && selectedForUpdate.has(stack.name))
+    .map((stack) => stack.name);
 
   const hasData = dockerStatus.running || dockerStatus.stacks;
 
@@ -539,10 +566,27 @@ const DockerStatus = ({
               variant="contained"
               color="warning"
               startIcon={<UpgradeIcon />}
-              onClick={startUpdateAll}
+              onClick={() => startUpdateAll()}
               size="small"
             >
               Update All ({pendingUpdatesCount})
+            </Button>
+          )}
+        {selectedPendingNames.length > 0 &&
+          (!updateAllStatus ||
+            updateAllStatus.status === "completed" ||
+            updateAllStatus.status === "cancelled") && (
+            <Button
+              variant="contained"
+              color="warning"
+              startIcon={<UpgradeIcon />}
+              onClick={() => {
+                startUpdateAll(selectedPendingNames);
+                setSelectedForUpdate(new Set());
+              }}
+              size="small"
+            >
+              Update Selected ({selectedPendingNames.length})
             </Button>
           )}
         {startableCount > 0 &&
@@ -887,6 +931,18 @@ const DockerStatus = ({
                     minWidth: 0,
                   }}
                 >
+                  {stack.hasPendingUpdates && !batchActive && (
+                    <Checkbox
+                      size="small"
+                      checked={selectedForUpdate.has(stack.name)}
+                      onChange={() => toggleUpdateSelection(stack.name)}
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ p: 0, flexShrink: 0 }}
+                      inputProps={{
+                        "aria-label": `Select ${stack.name} for update`,
+                      }}
+                    />
+                  )}
                   {stack.icon && (
                     <Box
                       component="img"
