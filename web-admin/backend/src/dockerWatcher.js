@@ -1,6 +1,7 @@
 import Docker from "dockerode";
 import getFormattedDockerContainers from "./dockerStatus.js";
 import { updateStatus } from "./statusEmitter.js";
+import reconcileUpgradeStatus from "./reconcileUpgradeStatus.js";
 
 const docker = new Docker();
 let eventStream = null;
@@ -34,6 +35,10 @@ async function refreshDockerStatus() {
     const dockerData = await getFormattedDockerContainers();
     dockerData.lastUpdated = new Date().toISOString();
     updateStatus("docker", dockerData);
+    // Drop any stale "Update Failed" badge for a stack that has since recovered.
+    // Runs on every event-driven refresh and the 60s periodic tick, so a
+    // container that comes up healthy after a timed-out upgrade clears itself.
+    await reconcileUpgradeStatus();
   } catch (error) {
     console.error("Error refreshing Docker status:", error);
     updateStatus("docker", {
