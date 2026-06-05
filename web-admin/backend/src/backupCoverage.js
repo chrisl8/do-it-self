@@ -25,16 +25,16 @@
 // run. Optional and not required for the UI to be correct.
 
 import { readFile, writeFile, stat, readdir, mkdir } from "fs/promises";
-import { hostname } from "os";
+import { hostname, homedir } from "os";
 import path from "path";
 import { updateStatus, getStatus } from "./statusEmitter.js";
 
 const REPORTS_DIR =
   process.env.BACKUP_COVERAGE_REPORTS_DIR ||
-  "/home/chrisl8/logs/coverage-reports";
+  path.join(homedir(), "logs", "coverage-reports");
 const ACKS_DIR =
   process.env.BACKUP_COVERAGE_ACKS_DIR ||
-  "/home/chrisl8/containers/scripts/backup-coverage-acks";
+  path.join(homedir(), "containers", "scripts", "backup-coverage-acks");
 
 const POLL_INTERVAL_MS = 30 * 1000;
 const LOCAL_HOST = hostname();
