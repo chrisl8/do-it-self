@@ -11,6 +11,12 @@ RESTART_UNHEALTHY=false
 START_ACTION=false
 STOP_ACTION=false
 SLEEP_TIME=10
+# Hard ceiling (seconds) shared by both `docker compose up --wait-timeout` and
+# the host-wide "wait for containers to settle" loops below. The timeout only
+# bites when a container is wedged mid-start, so it just needs to comfortably
+# exceed the slowest healthcheck start_period (currently 600s for dawarich
+# app/sidekiq); set too low it would turn a slow-but-fine start into a failure.
+HEALTH_WAIT_TIMEOUT=900
 MOUNT=""
 CONTAINER_LIST_FILE=""
 SKIP_CONTAINER_LIST_FILE=""
@@ -196,6 +202,35 @@ if [ -f "$DIUN_ENV_FILE" ]; then
   SCRIPT_VOLUME_PATH="${VOL_DIUN_SCRIPT:-$HOME/container-data}/container-mounts/diun/script"
   DIUN_UPDATE_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
 fi
+
+# Block until no container is still in the "(health: starting)" phase, i.e. the
+# system has settled. Only *running* containers can be starting, so we scan
+# `docker ps` (not `-a`).
+#
+# This deliberately waits ONLY on the transient "starting" state. The previous
+# implementation waited for every container to read "(healthy)" via
+# `grep -v "(healthy)"`, which meant any container that can never reach
+# "(healthy)" -- one stuck in Created (a half-finished `compose up`), Exited,
+# Restarting, unhealthy, or simply running without a healthcheck -- looped
+# forever. (A `Created` dawarich sidekiq/ts pair wedged a whole update run this
+# way.) Those states are "settled but unhappy"; we stop waiting and let the
+# caller's system-health-check surface them rather than hanging here.
+#
+# A hard timeout backstops even the legitimate-but-slow case (a container whose
+# start_period never elapses, or a healthcheck that flaps through "starting").
+# $1 (optional): context label included in the timeout message.
+wait_for_containers_to_settle() {
+  local label="${1:-}"
+  local deadline=$((SECONDS + HEALTH_WAIT_TIMEOUT))
+  while /usr/bin/docker --log-level ERROR ps --format '{{.Status}}' | grep -q "(health: starting)"; do
+    if (( SECONDS >= deadline )); then
+      printf "${RED} ...Timed out after %ss waiting for containers to settle${label:+ (%s)}; continuing anyway:${NC}\n" "${HEALTH_WAIT_TIMEOUT}" "${label}"
+      /usr/bin/docker --log-level ERROR ps --format '{{.Names}}\t{{.Status}}' | grep "(health: starting)" || true
+      return 0
+    fi
+    sleep 0.5
+  done
+}
 
 resolve_to_absolute() {
   local path="$1"
@@ -1127,7 +1162,12 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             continue
           fi
         fi
-        docker compose up -d --wait
+        # --wait-timeout bounds the per-project wait so a container whose
+        # healthcheck never passes (flapping, or a start_period that never
+        # elapses) surfaces as a clean start failure instead of blocking the
+        # whole run. Must exceed the slowest start_period; reuses the same
+        # ceiling as the host-wide settle loops.
+        docker compose up -d --wait --wait-timeout "${HEALTH_WAIT_TIMEOUT}"
         COMPOSE_EXIT_CODE=$?
         set -e
         if [[ ${COMPOSE_EXIT_CODE} -ne 0 ]]; then
@@ -1161,9 +1201,7 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
 
         if [[ ${NO_WAIT} = false ]];then
           printf "${YELLOW} ...Waiting for all containers to report healthy...${NC}\n"
-          while /usr/bin/docker --log-level ERROR ps -a --format '{{.Status}}' | grep -v "(healthy)" > /dev/null; do
-            sleep 0.1;
-          done;
+          wait_for_containers_to_settle "after ${CONTAINER_DIR}"
           printf "${YELLOW} ...Continuing to next task in ${SLEEP_TIME} seconds...${NC}\n"
           sleep "${SLEEP_TIME}"
           printf "\n"
@@ -1178,9 +1216,7 @@ done
 
 if [[ ${NO_WAIT} = false ]];then
   printf "${YELLOW}Waiting for all containers to report healthy on final pass...${NC}\n\n"
-  while /usr/bin/docker --log-level ERROR ps -a --format '{{.Status}}' | grep -v "(healthy)" > /dev/null; do
-    sleep 0.1;
-  done;
+  wait_for_containers_to_settle "final pass"
 
   if [[ ${START_ACTION} = true ]];then
     printf "${YELLOW}Performing post-start chores${NC}\n"
