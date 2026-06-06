@@ -22,6 +22,32 @@ Migration of neuromancer's primary container storage from a single 2TB mdadm+LVM
 | Filesystem | **ZFS** (not mdadm+ext4) | Bit-rot detection via scrub is the killer feature for irreplaceable data. Native snapshots replace ad-hoc backup scripts. Per-dataset properties (compression, recordsize, atime) tune per workload. Cost is operational overhead — accepted because the data being protected justifies it. |
 | Replication target | **None** (2TB is primary storage, not a replica) | Mirror + borg covers disk failure and catastrophic loss. `syncoid` only adds value for "logical corruption caught quickly" — narrow window, not worth the ongoing maintenance for a home server. |
 
+### Current SATA topology (neuromancer, pre-migration)
+
+This board has **two** SATA controllers, and the Intel chipset ports are **not all the same speed**. The Intel 6-Series/C200 PCH provides only **2× SATA 6 Gb/s** ports (ata1/ata2) and **4× SATA 3 Gb/s** ports (ata3–ata6) — a hardware limit of this PCH generation, not a BIOS setting. Captured from `lsblk` + `/sys/class/ata_port` link speeds:
+
+| Dev | Drive | ATA port | Controller | Port max | Negotiated | Current use |
+|---|---|---|---|---|---|---|
+| sda | PNY 2TB SSD | ata1 | Intel C200 (chipset) | 6 Gb/s | 6.0 Gb/s | md1 → `/mnt/2000` (→ future tank-2tb) |
+| sdb | PNY 2TB SSD | ata2 | Intel C200 (chipset) | 6 Gb/s | 6.0 Gb/s | md1 → `/mnt/2000` (→ future tank-2tb) |
+| sdc | Samsung 850 233G | ata3 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | md0 → `/` + `/boot` |
+| sdd | Samsung 850 233G | ata4 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | md0 → `/` + `/boot` |
+| sde | Samsung 850 112G | ata5 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | `/mnt/120` (Monitor) |
+| sdf | Samsung 840 238G | ata6 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | `/mnt/250` (Cache) |
+| sdg | ST22000NM 22TB HDD | ata7 | Marvell 88SE9172 (add-in) | 6 Gb/s | 6.0 Gb/s | `/mnt/22TB` |
+| — | (empty) | ata8 | Marvell 88SE9172 (add-in) | 6 Gb/s | — | free |
+
+**Why this layout is already correct (don't rearrange existing drives):**
+- The two PNY 2TB SSDs (future `tank-2tb` mirror) occupy the only two 6 Gb/s chipset ports — keep them there.
+- The 3 Gb/s-throttled drives are exactly the ones that don't care (boot/root mirror, cache, monitor); un-throttling them isn't worth a scarce 6 Gb/s port.
+- The 22TB HDD sits on the least-trusted controller (Marvell 88SE9172) — correct, because an HDD can't use 6 Gb/s anyway and this **keeps the flaky controller off every ZFS pool**, which is the same cache-flush-honesty concern that drove the JMB585 purchase.
+
+**Where the new 4TB SSDs go:** both on the JMB585 card. All native 6 Gb/s ports are already taken, and `tank-4tb` is the busiest pool (immich/nextcloud), so it must not land on a 3 Gb/s port. This keeps both ZFS pools on trustworthy controllers (tank-2tb on Intel native, tank-4tb on JMB585). **Do not split the tank-4tb mirror across the JMB585 and the Marvell's free port** — putting a mirror leg on the 88SE9172 reintroduces the exact risk the card was bought to avoid.
+
+**Verify after install:**
+- `sudo lspci -vv -s <card> | grep LnkSta` → confirm `Width x2` (an x1 slot makes the two 4TB drives share ~985 MB/s; put the card in an x4-or-wider physical slot).
+- Re-check the 4TB drives negotiated **6.0 Gb/s** (a bad cable silently falls back to 3.0).
+
 ### Hardware purchase list
 
 - [ ] SYBA SI-PEX40139 PCIe SATA card — Amazon B07ST9CPND or equivalent JMB585 card (~$35)
