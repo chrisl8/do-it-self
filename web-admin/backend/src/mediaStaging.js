@@ -98,13 +98,8 @@ async function readConfig() {
     return null;
   }
   const libraries = ms.libraries
-    .filter((l) => l?.name && l?.jellyfin_path_prefix && l?.dest_root)
-    .map((l) => ({
-      name: l.name,
-      collection_type: l.collection_type || "movies",
-      jellyfin_path_prefix: l.jellyfin_path_prefix,
-      dest_root: expandHome(l.dest_root),
-    }));
+    .map(normalizeLibrary)
+    .filter((l) => l && l.dest_root && l.folders.length > 0);
   if (libraries.length === 0) return null;
   return {
     enabled: true,
@@ -185,6 +180,56 @@ async function setApiKeys({ sourceKey, localKey }) {
   }
   if (written.length === 0) return { ok: false, error: "no keys provided" };
   return { ok: true, keys: written, path: cfg.jellyfinApiKeyPath };
+}
+
+// A Jellyfin library can be composed of several on-disk folders, each a
+// different container path prefix backed by a different host source_root on
+// the sender. Normalize to { name, collection_type, dest_root, folders[] }
+// where each folder is { key, jellyfin_path_prefix }. The `key` ties a folder
+// to its source_root in the sender's config. Legacy single-prefix configs are
+// upgraded to a one-folder list with key "default".
+function normalizeLibrary(l) {
+  if (!l?.name || !l?.dest_root) return null;
+  let folders = [];
+  if (Array.isArray(l.folders) && l.folders.length > 0) {
+    folders = l.folders
+      .filter((f) => f?.jellyfin_path_prefix)
+      .map((f, i) => ({
+        key: f.key || `f${i}`,
+        jellyfin_path_prefix: f.jellyfin_path_prefix,
+      }));
+  } else if (l.jellyfin_path_prefix) {
+    folders = [
+      { key: "default", jellyfin_path_prefix: l.jellyfin_path_prefix },
+    ];
+  }
+  return {
+    name: l.name,
+    collection_type: l.collection_type || "movies",
+    dest_root: expandHome(l.dest_root),
+    folders,
+  };
+}
+
+// Map an item's Jellyfin (container) path to { rel, folderKey } by finding
+// which of the library's folders it lives under. Throws if it matches none —
+// surfaced as an "unmappable" item in the UI rather than guessing.
+function mapItem(lib, jellyfinPath, useParentDir) {
+  if (!jellyfinPath) throw new Error("item has no on-disk path");
+  for (const folder of lib.folders) {
+    const prefix = folder.jellyfin_path_prefix.replace(/\/+$/, "");
+    if (jellyfinPath === prefix || jellyfinPath.startsWith(prefix + "/")) {
+      const rel = jf.computeRel({
+        jellyfinPath,
+        libraryCfg: { jellyfin_path_prefix: prefix },
+        useParentDir,
+      });
+      return { rel, folderKey: folder.key };
+    }
+  }
+  throw new Error(
+    `path "${jellyfinPath}" is not under any configured folder for "${lib.name}"`,
+  );
 }
 
 function findLibrary(cfg, name) {
@@ -390,7 +435,7 @@ async function withLibraryContext(libraryName) {
 async function stagedFor(lib, jellyfinPath, useParentDir) {
   if (!jellyfinPath) return false;
   try {
-    const rel = jf.computeRel({ jellyfinPath, libraryCfg: lib, useParentDir });
+    const { rel } = mapItem(lib, jellyfinPath, useParentDir);
     return await existsPath(destPathFor(lib, rel));
   } catch {
     return false;
@@ -410,11 +455,7 @@ async function getItemsForUI(libraryName) {
     let mapError = null;
     if (it.path) {
       try {
-        jf.computeRel({
-          jellyfinPath: it.path,
-          libraryCfg: lib,
-          useParentDir: !isTv,
-        });
+        mapItem(lib, it.path, !isTv);
       } catch (e) {
         mapError = e?.message || String(e);
       }
@@ -513,9 +554,10 @@ async function resolveSelection(server, userId, cfg, sel) {
     throw new Error(`unknown selection kind "${sel.kind}"`);
   }
 
-  const rel = jf.computeRel({ jellyfinPath, libraryCfg: lib, useParentDir });
+  const { rel, folderKey } = mapItem(lib, jellyfinPath, useParentDir);
   return {
     library: lib.name,
+    folderKey, // tells the sender which source_root to read from
     kind: sel.kind,
     rel,
     label: label || rel,

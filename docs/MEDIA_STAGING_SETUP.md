@@ -100,27 +100,55 @@ Edit the file by hand and add the block below. No web-admin restart is needed �
 config is re-read on each request and poll; just reload the Media Staging page
 afterward and the tab will appear.
 
+A Jellyfin library is often built from **several folders** (multiple mount
+points). List each one under `folders:` — items from any of them stage into the
+single `dest_root`. Find a library's container folders with:
+
+```
+docker exec jellyfin sh -c 'find /config -name "*.mblink" | while read f; do echo "$(basename "$(dirname "$f")") -> $(cat "$f")"; done'
+```
+
 ```yaml
 mediaStaging:
   enabled: true
   jellyfin_base_url: https://jellyfin.<your-tailnet>.ts.net   # shared sidecar, reachable from deepthought
   jellyfin_api_key_infisical_path: /mediaStaging
   jellyfin_api_key_infisical_key: NEUROMANCER_JELLYFIN_API_KEY
-  spool_dir: ~/media-staging                 # where job + status files live (neuromancer reads this over SSH)
+  spool_dir: ~/media-staging                 # job + status files (neuromancer reads this over SSH)
   libraries:
     - name: Movies                           # MUST match the Jellyfin library name
       collection_type: movies                # "movies" or "tvshows"
-      jellyfin_path_prefix: /media/movies     # container path Jellyfin reports (stripped to a relative path)
-      dest_root: ~/container-data/container-mounts/jellyfin/movies   # local Jellyfin mount on deepthought
+      dest_root: ~/container-data/container-mounts/jellyfin/movies   # everything in this library lands here
+      folders:                               # one entry per container folder the library spans
+        - key: recon                         # arbitrary label; MUST match the sender's key
+          jellyfin_path_prefix: /media/recon/movies   # container path Jellyfin reports
+        - key: downloads
+          jellyfin_path_prefix: /media/downloads/movies
     - name: Shows
       collection_type: tvshows
-      jellyfin_path_prefix: /media/videos
-      dest_root: ~/container-data/container-mounts/jellyfin/videos
+      dest_root: ~/container-data/container-mounts/jellyfin/series
+      folders:
+        - key: recon
+          jellyfin_path_prefix: /media/recon/series
+        - key: downloads
+          jellyfin_path_prefix: /media/downloads/shows
   local_jellyfin_base_url: http://localhost:8096
   local_jellyfin_api_key_infisical_key: DEEPTHOUGHT_JELLYFIN_API_KEY
   free_space_path: ~/container-data/container-mounts/jellyfin
   poll_interval_seconds: 5
 ```
+
+A single-folder library can instead use the short form — put
+`jellyfin_path_prefix` directly on the library and omit `folders:` (it's
+treated as one folder with key `default`).
+
+> **Prerequisite — dest must be writable by the push user.** Docker creates
+> bind-mount directories as `root:root` on first `up`, so the `dest_root` paths
+> are typically root-owned and the push (which runs as `ssh_user`) can't write
+> to them — you'll see `rsync exited 23`. Fix on deepthought:
+> `sudo chown -R <ssh_user>:<ssh_user> <dest_root> …`. Jellyfin runs as root, so
+> it still reads them fine. (Safe as long as deepthought doesn't run its own
+> radarr/sonarr writing to those same dirs.)
 
 ## 4. Store the API keys via the web admin
 
@@ -140,6 +168,11 @@ the dialog reads the path and key names from the config block.)
 
 ## 5. Sender config — hand-edit neuromancer's `~/containers/user-config.yaml`
 
+Each folder's `key` must match the receiver's, and its `source_root` is the
+**host** side of the bind mount backing that container prefix — read them out
+of `jellyfin/compose.yaml` (e.g. `/media/recon` ← `…/recon/data/media`,
+`/media/downloads` ← `…/container-mounts/jellyfin`).
+
 ```yaml
 mediaStagingPush:
   enabled: true
@@ -151,22 +184,36 @@ mediaStagingPush:
       ssh_key_path: ~/.ssh/media-staging-push
       spool_dir: /home/<deepthought-user>/media-staging   # MUST match deepthought's spool_dir (absolute)
       libraries:
-        - name: Movies                              # MUST match the names in the receiver config
-          source_root: /home/chrisl8/container-data/container-mounts/jellyfin/movies
+        - name: Movies                              # MUST match the receiver's library name
+          folders:
+            - key: recon                            # MUST match the receiver's folder key
+              source_root: /mnt/22TB/container-mounts/recon/data/media/movies
+            - key: downloads
+              source_root: <host path mounted at /media/downloads>/movies
         - name: Shows
-          source_root: /home/chrisl8/container-data/container-mounts/jellyfin/videos
+          folders:
+            - key: recon
+              source_root: /mnt/22TB/container-mounts/recon/data/media/series
+            - key: downloads
+              source_root: <host path mounted at /media/downloads>/shows
 ```
+
+(Short form still works for a single-folder library: `source_root` directly on
+the library, no `folders:`.)
 
 ### How the path mapping lines up
 
 Jellyfin reports each item's path as the path **inside the Jellyfin
-container** (e.g. `/media/movies/Inception (2010)/...`). The receiver strips
-`jellyfin_path_prefix` to get a library-relative path (`Inception (2010)/...`)
-and ships only that in the job. The sender prepends its `source_root` to read
-the file and pushes it under the receiver's `dest_root`, recreating the same
+container** (e.g. `/media/recon/movies/Inception (2010)/...`). The receiver
+finds which of the library's `folders` the item lives under, strips that
+folder's `jellyfin_path_prefix` to a library-relative path
+(`Inception (2010)/...`), and ships the relative path **plus the folder `key`**
+in the job. The sender looks up the `source_root` for that `key`, reads the
+file, and pushes it under the receiver's `dest_root`, recreating the same
 layout (via an `rsync --relative` pivot) so deepthought's Jellyfin recognizes
-it. The library `name` is the join key between the two configs — keep them
-identical.
+it. Two join keys must line up across the configs: the library `name`, and each
+folder `key`. An item that matches none of the configured folders shows as
+**unmappable** (greyed out) in the UI rather than failing silently.
 
 ## 6. Verify
 
