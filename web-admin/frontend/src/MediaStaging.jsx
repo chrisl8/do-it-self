@@ -422,7 +422,7 @@ const STATUS_LABEL = {
   cancelled: "cancelled",
 };
 
-const QueuePanel = ({ queue, onCancel }) => {
+const QueuePanel = ({ queue, onCancel, onRetry }) => {
   if (!queue || queue.length === 0) return null;
   return (
     <Card>
@@ -471,6 +471,11 @@ const QueuePanel = ({ queue, onCancel }) => {
                   {active && (
                     <Button size="small" onClick={() => onCancel(job.id)}>
                       Cancel
+                    </Button>
+                  )}
+                  {(job.status === "failed" || job.status === "cancelled") && (
+                    <Button size="small" onClick={() => onRetry(job.id)}>
+                      Retry
                     </Button>
                   )}
                 </Stack>
@@ -648,8 +653,14 @@ const DiskBar = ({ disk }) => {
 
 // ── Page ────────────────────────────────────────────────────────
 const MediaStaging = () => {
-  const { snapshot, startCopy, cancelCopy, enqueueError, clearEnqueueError } =
-    useMediaStaging();
+  const {
+    snapshot,
+    startCopy,
+    cancelCopy,
+    retryCopy,
+    enqueueError,
+    clearEnqueueError,
+  } = useMediaStaging();
   const [config, setConfig] = useState(null);
   const [configError, setConfigError] = useState(null);
   const [tab, setTab] = useState(0);
@@ -845,7 +856,11 @@ const MediaStaging = () => {
         )}
       </Box>
 
-      <QueuePanel queue={snapshot?.queue} onCancel={cancelCopy} />
+      <QueuePanel
+        queue={snapshot?.queue}
+        onCancel={cancelCopy}
+        onRetry={retryCopy}
+      />
 
       <StagedPanel refreshSignal={doneCount} />
 

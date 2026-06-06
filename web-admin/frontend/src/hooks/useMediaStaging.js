@@ -32,6 +32,14 @@ const useMediaStaging = () => {
     );
   }, []);
 
+  const retryCopy = useCallback((jobId) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    setEnqueueError(null);
+    wsRef.current.send(
+      JSON.stringify({ type: "mediaStagingRetryCopy", payload: { jobId } }),
+    );
+  }, []);
+
   useEffect(() => {
     let closed = false;
     let reconnectTimer = null;
@@ -84,6 +92,7 @@ const useMediaStaging = () => {
     clearEnqueueError,
     startCopy,
     cancelCopy,
+    retryCopy,
   };
 };
 
