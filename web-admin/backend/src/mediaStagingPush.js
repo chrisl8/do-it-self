@@ -44,6 +44,26 @@ function shQuote(s) {
   return `'${String(s).replace(/'/g, `'\\''`)}'`;
 }
 
+// A library can span several folders, each backed by its own host source_root
+// and tied to the receiver by a `key`. Normalize to { name, folders[] } where
+// each folder is { key, sourceRoot }. Legacy single-source_root configs become
+// a one-folder list with key "default".
+function normalizeLibrary(l) {
+  if (!l?.name) return null;
+  let folders = [];
+  if (Array.isArray(l.folders) && l.folders.length > 0) {
+    folders = l.folders
+      .filter((f) => f?.source_root)
+      .map((f, i) => ({
+        key: f.key || `f${i}`,
+        sourceRoot: expandHome(f.source_root),
+      }));
+  } else if (l.source_root) {
+    folders = [{ key: "default", sourceRoot: expandHome(l.source_root) }];
+  }
+  return { name: l.name, folders };
+}
+
 // ── config ──────────────────────────────────────────────────────
 async function readConfig() {
   const config = await getUserConfig();
@@ -58,8 +78,8 @@ async function readConfig() {
       sshKey: expandHome(c.ssh_key_path),
       spoolDir: c.spool_dir || "~/media-staging",
       libraries: (Array.isArray(c.libraries) ? c.libraries : [])
-        .filter((l) => l?.name && l?.source_root)
-        .map((l) => ({ name: l.name, sourceRoot: expandHome(l.source_root) })),
+        .map(normalizeLibrary)
+        .filter((l) => l && l.folders.length > 0),
     }));
   if (clients.length === 0) return null;
   return {
@@ -206,9 +226,15 @@ async function findNextJob(cfg) {
   return null;
 }
 
-function sourceRootFor(client, libraryName) {
+function sourceRootFor(client, libraryName, folderKey) {
   const lib = client.libraries.find((l) => l.name === libraryName);
-  return lib?.sourceRoot || null;
+  if (!lib) return null;
+  // Match the folder the receiver tagged the job with; fall back to the first
+  // folder for legacy jobs written before folderKey existed.
+  const folder = folderKey
+    ? lib.folders.find((f) => f.key === folderKey)
+    : lib.folders[0];
+  return folder?.sourceRoot || null;
 }
 
 // ── running a transfer ──────────────────────────────────────────
@@ -227,11 +253,11 @@ async function runJob({ client, job, p }) {
     return;
   }
 
-  const sourceRoot = sourceRootFor(client, job.library);
+  const sourceRoot = sourceRootFor(client, job.library, job.folderKey);
   if (!sourceRoot) {
     await setStatus({
       state: "failed",
-      error: `no source_root configured for library "${job.library}"`,
+      error: `no source_root configured for library "${job.library}"${job.folderKey ? ` folder "${job.folderKey}"` : ""}`,
     });
     return;
   }
