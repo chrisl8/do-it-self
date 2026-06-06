@@ -29,6 +29,23 @@ Two config blocks, one per host, each activating only where it's present:
 - deepthought: `mediaStaging:` (the **receiver** / UI).
 - neuromancer: `mediaStagingPush:` (the **sender** / transfer engine).
 
+## Order of operations
+
+The config blocks are **hand-edited** in `~/containers/user-config.yaml` on
+each host (there is no UI to create them — same as the `backuppi:` block). The
+order matters: the API-key dialog only appears, and only knows where to write,
+**after** deepthought's config block exists. So:
+
+0. Get this code onto deepthought (`git pull` + the platform update, which
+   rebuilds the web admin).
+1. SSH key (neuromancer → deepthought).
+2. Create the two Jellyfin API keys (dashboards only — copy the strings).
+3. Hand-edit deepthought's `user-config.yaml` (`mediaStaging:` block).
+4. In deepthought's web admin, paste the keys via the **Jellyfin API keys**
+   dialog (works now that the block exists).
+5. Hand-edit neuromancer's `user-config.yaml` (`mediaStagingPush:` block).
+6. Verify.
+
 ## 1. SSH key: neuromancer → deepthought
 
 On **neuromancer**:
@@ -63,10 +80,12 @@ ssh -i ~/.ssh/media-staging-push <deepthought-user>@deepthought.<her-tailnet>.ts
 > `rsync --server`, modeled on `scripts/` + the backup-pi `pi-rpc.sh`
 > whitelist. Not required for a first install.
 
-## 2. Jellyfin API keys (both stored in deepthought's Infisical)
+## 2. Create the Jellyfin API keys
 
 Only the **receiver** (deepthought) talks to Jellyfin — neuromancer just runs
-rsync, so it needs no Jellyfin key.
+rsync, so it needs no Jellyfin key. Create them now and keep the strings handy;
+you'll paste them through the web admin in step 4 (after the config block
+exists). Don't try to store them yet.
 
 1. **Source key** — in **neuromancer's** Jellyfin: Dashboard → API Keys → **+**
    → `media-staging`. deepthought uses it to list the library via the shared
@@ -75,20 +94,11 @@ rsync, so it needs no Jellyfin key.
    only to kick a library scan after a copy so new files appear automatically.
    If absent, scanning is skipped and you can refresh manually in Jellyfin.
 
-**Inject them through the web admin, not a CLI.** Infisical here is reached via
-the web admin's machine-identity token (`~/credentials/infisical.env`), not an
-interactive `infisical login`. So after adding the receiver config block
-(step 3), open deepthought's web admin → **Media Staging** → **Jellyfin API
-keys** and paste the source key (and optionally the local key). The web admin
-writes them to Infisical at `/mediaStaging` under
-`NEUROMANCER_JELLYFIN_API_KEY` / `DEEPTHOUGHT_JELLYFIN_API_KEY` — the same
-mechanism Backup Pi uses for its passphrase. (This is why the keys live in
-their own `/mediaStaging` folder and not `/shared`: `/shared` is exported into
-every container's environment, which would leak the keys everywhere.)
+## 3. Receiver config — hand-edit deepthought's `~/containers/user-config.yaml`
 
-## 3. Receiver config — deepthought's `~/containers/user-config.yaml`
-
-No web-admin restart is needed — config is re-read on each request and poll.
+Edit the file by hand and add the block below. No web-admin restart is needed —
+config is re-read on each request and poll; just reload the Media Staging page
+afterward and the tab will appear.
 
 ```yaml
 mediaStaging:
@@ -112,7 +122,23 @@ mediaStaging:
   poll_interval_seconds: 5
 ```
 
-## 4. Sender config — neuromancer's `~/containers/user-config.yaml`
+## 4. Store the API keys via the web admin
+
+Infisical here is reached through the web admin's machine-identity token
+(`~/credentials/infisical.env`), **not** an interactive `infisical login` — so
+there's no CLI to run. Now that the config block from step 3 exists, reload
+deepthought's web admin → **Media Staging** tab → **Jellyfin API keys** button,
+and paste the source key (and optionally the local key) from step 2. The web
+admin writes them to Infisical at `/mediaStaging` under
+`NEUROMANCER_JELLYFIN_API_KEY` / `DEEPTHOUGHT_JELLYFIN_API_KEY` — the same
+mechanism Backup Pi uses for its passphrase.
+
+(This is why the keys live in their own `/mediaStaging` folder and not
+`/shared`: `/shared` is exported into every container's environment, which
+would leak the keys everywhere. And it's why this step comes *after* step 3 —
+the dialog reads the path and key names from the config block.)
+
+## 5. Sender config — hand-edit neuromancer's `~/containers/user-config.yaml`
 
 ```yaml
 mediaStagingPush:
@@ -142,7 +168,7 @@ layout (via an `rsync --relative` pivot) so deepthought's Jellyfin recognizes
 it. The library `name` is the join key between the two configs — keep them
 identical.
 
-## 5. Verify
+## 6. Verify
 
 1. **SSH + push path, dry run** from **neuromancer** (no files written),
    confirming the key and a real source path resolve:
@@ -173,7 +199,7 @@ identical.
   web-admin log for `[mediaStagingPush]` lines — it polls every
   `poll_interval_seconds`.
 - **`failed` in the queue.** The `error` shown is the rsync exit reason. Re-run
-  the dry-run in step 1; a path mismatch (wrong `source_root` /
+  the dry-run above (step 6.1); a path mismatch (wrong `source_root` /
   `jellyfin_path_prefix`) is the usual cause.
 - **Out of space.** The source side won't pre-flight disk; deepthought's UI
   shows free space and warns when a selection exceeds it. `--partial` leaves a
