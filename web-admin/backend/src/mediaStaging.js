@@ -629,6 +629,29 @@ async function cancelCopy(jobId) {
   await refreshQueue(cfg);
 }
 
+// Retry a failed/cancelled job: clear its status + cancel markers so the
+// sender re-claims the still-present pending file on its next poll (resuming
+// any partial transfer via rsync --partial). Self-service recovery for the
+// inevitable mid-copy restart / network blip.
+async function retryJob(jobId) {
+  const cfg = await readConfig();
+  if (!cfg) return { ok: false, error: "media staging not configured" };
+  if (typeof jobId !== "string") return { ok: false, error: "bad job id" };
+  const pending = join(pendingDir(cfg), `${jobId}.json`);
+  try {
+    await stat(pending);
+  } catch {
+    return { ok: false, error: "job expired — re-select it from the list" };
+  }
+  await rm(join(statusDir(cfg), `${jobId}.json`), { force: true }).catch(
+    () => {},
+  );
+  await rm(join(cancelDir(cfg), jobId), { force: true }).catch(() => {});
+  seenDoneIds.delete(jobId);
+  await refreshQueue(cfg);
+  return { ok: true };
+}
+
 function safeSend(ws, payload) {
   if (!ws || ws.readyState !== 1) return;
   try {
@@ -778,6 +801,7 @@ export {
   deleteStaged,
   enqueueCopies,
   cancelCopy,
+  retryJob,
   setApiKeys,
 };
 export default { init: start, stop };
