@@ -3,6 +3,8 @@ import dockerWatcher from "./dockerWatcher.js";
 import gitStatusPoller from "./gitStatusPoller.js";
 import backupPi from "./backupPi.js";
 import backupCoverage from "./backupCoverage.js";
+import mediaStaging from "./mediaStaging.js";
+import mediaStagingPush from "./mediaStagingPush.js";
 
 async function main() {
   try {
@@ -11,6 +13,8 @@ async function main() {
     await gitStatusPoller.init();
     await backupPi.init();
     await backupCoverage.init();
+    await mediaStaging.init();
+    await mediaStagingPush.init();
     console.log("Docker Status monitoring started");
   } catch (error) {
     console.error("Failed to start server:", error);
