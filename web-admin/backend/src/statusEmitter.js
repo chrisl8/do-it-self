@@ -11,6 +11,7 @@ const trackedStatus = {
   tailscalePreflightStatus: null,
   gitStatus: null,
   backuppi: null,
+  mediaStaging: null,
 };
 
 const debouncedEmit = _.debounce(() => {

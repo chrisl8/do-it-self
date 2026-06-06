@@ -49,6 +49,18 @@ import {
   acknowledgePath as ackBackupCoveragePath,
   unacknowledgePath as unackBackupCoveragePath,
 } from "./backupCoverage.js";
+import {
+  getConfigForUI as getMediaStagingConfig,
+  getItemsForUI as getMediaStagingItems,
+  getSeasonsForUI as getMediaStagingSeasons,
+  getEpisodesForUI as getMediaStagingEpisodes,
+  getPosterResponse as getMediaStagingPoster,
+  getStaged as getMediaStagingStaged,
+  deleteStaged as deleteMediaStagingStaged,
+  enqueueCopies as enqueueMediaStagingCopies,
+  cancelCopy as cancelMediaStagingCopy,
+  setApiKeys as setMediaStagingApiKeys,
+} from "./mediaStaging.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -1862,6 +1874,100 @@ app.post("/api/platform/update-everything", async (req, res) => {
   }
 });
 
+// ── Media Staging (deepthought-only feature) ────────────────────
+// Browse the source Jellyfin and pull selected titles via rsync. All routes
+// no-op gracefully (enabled: false) on hosts without a mediaStaging config.
+app.get("/api/media-staging/config", async (req, res) => {
+  try {
+    res.json(await getMediaStagingConfig());
+  } catch (err) {
+    res.status(500).json({ enabled: false, error: err.message });
+  }
+});
+
+app.get("/api/media-staging/items", async (req, res) => {
+  const library = req.query.library;
+  if (!library) return res.status(400).json({ error: "library is required" });
+  try {
+    res.json({ items: await getMediaStagingItems(library) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/media-staging/seasons", async (req, res) => {
+  const { library, seriesId } = req.query;
+  if (!library || !seriesId) {
+    return res.status(400).json({ error: "library and seriesId are required" });
+  }
+  try {
+    res.json({ seasons: await getMediaStagingSeasons(library, seriesId) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/media-staging/episodes", async (req, res) => {
+  const { library, seriesId, seasonId } = req.query;
+  if (!library || !seriesId) {
+    return res.status(400).json({ error: "library and seriesId are required" });
+  }
+  try {
+    res.json({
+      episodes: await getMediaStagingEpisodes(library, seriesId, seasonId),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/media-staging/staged", async (req, res) => {
+  try {
+    res.json(await getMediaStagingStaged());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Inject the Jellyfin API key(s) into Infisical from the UI (Infisical is
+// reached via the web admin's machine identity, not an interactive CLI).
+app.post("/api/media-staging/api-keys", async (req, res) => {
+  try {
+    const result = await setMediaStagingApiKeys({
+      sourceKey: req.body?.sourceKey,
+      localKey: req.body?.localKey,
+    });
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete("/api/media-staging/staged", async (req, res) => {
+  try {
+    const result = await deleteMediaStagingStaged(req.body?.path);
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Proxy the primary image so the Jellyfin API key never reaches the browser.
+app.get("/api/media-staging/poster/:itemId", async (req, res) => {
+  try {
+    const upstream = await getMediaStagingPoster(req.params.itemId);
+    res.set(
+      "Content-Type",
+      upstream.headers.get("content-type") || "image/jpeg",
+    );
+    res.set("Cache-Control", "public, max-age=86400");
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.send(buf);
+  } catch {
+    res.status(404).end();
+  }
+});
+
 app.use((req, res, next) => {
   if (
     req.path.startsWith("/api/") ||
@@ -2648,6 +2754,34 @@ async function webserver() {
               }),
             );
           });
+      } else if (message.type === "mediaStagingStartCopy") {
+        // Pull selected titles. Selections identify items by Jellyfin id only;
+        // mediaStaging resolves the canonical path server-side, dedupes,
+        // queues, and streams progress back to this ws.
+        const selections = message.payload?.selections;
+        if (!Array.isArray(selections) || selections.length === 0) {
+          ws.send(
+            JSON.stringify({
+              type: "mediaStagingCopyResult",
+              success: false,
+              error: "no selections provided",
+            }),
+          );
+          return;
+        }
+        enqueueMediaStagingCopies(selections, ws).catch((err) => {
+          console.error("[mediaStaging] enqueue failed:", err);
+          ws.send(
+            JSON.stringify({
+              type: "mediaStagingCopyResult",
+              success: false,
+              error: err?.message || "enqueue failed",
+            }),
+          );
+        });
+      } else if (message.type === "mediaStagingCancelCopy") {
+        const jobId = message.payload?.jobId;
+        if (typeof jobId === "string") cancelMediaStagingCopy(jobId);
       }
     });
 

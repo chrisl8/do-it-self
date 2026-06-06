@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import {
   BrowserRouter,
   Route,
@@ -22,6 +22,7 @@ import BackupCoverage from "./BackupCoverage";
 import ContainerConfig from "./ContainerConfig";
 import Browse from "./Browse";
 import Sources from "./Sources";
+import MediaStaging from "./MediaStaging";
 import BorgNotConfiguredBanner from "./BorgNotConfiguredBanner";
 import useDockerStatus from "./hooks/useDockerStatus";
 
@@ -33,13 +34,31 @@ const routes = [
   { path: "/backup-status", label: "Backups" },
   { path: "/backup-pi", label: "Backup Pi" },
   { path: "/backup-coverage", label: "Coverage" },
+  // Niche, per-host feature: only show the tab where a mediaStaging config
+  // block exists (the receiver host). Keeps it out of the way for everyone
+  // else, including the source host and any other deployment of this code.
+  { path: "/media-staging", label: "Media Staging", gated: "mediaStaging" },
 ];
 
 const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, toggleColorMode } = useContext(ColorModeContext);
-  const currentTab = routes.findIndex((r) => r.path === location.pathname);
+
+  const [mediaStagingEnabled, setMediaStagingEnabled] = useState(false);
+  useEffect(() => {
+    fetch("/api/media-staging/config")
+      .then((r) => r.json())
+      .then((d) => setMediaStagingEnabled(!!d.enabled))
+      .catch(() => setMediaStagingEnabled(false));
+  }, []);
+
+  const visibleRoutes = routes.filter(
+    (r) => r.gated !== "mediaStaging" || mediaStagingEnabled,
+  );
+  const currentTab = visibleRoutes.findIndex(
+    (r) => r.path === location.pathname,
+  );
 
   return (
     <Box
@@ -52,13 +71,13 @@ const Navigation = () => {
     >
       <Tabs
         value={currentTab === -1 ? 0 : currentTab}
-        onChange={(e, val) => navigate(routes[val].path)}
+        onChange={(e, val) => navigate(visibleRoutes[val].path)}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{ flexGrow: 1, minWidth: 0 }}
       >
-        {routes.map((r) => (
+        {visibleRoutes.map((r) => (
           <Tab key={r.path} label={r.label} />
         ))}
       </Tabs>
@@ -157,6 +176,7 @@ const App = () => {
         <Route path="/backup-pi" element={<BackupPi />} />
         <Route path="/backup-coverage" element={<BackupCoverage />} />
         <Route path="/backup-coverage/:host" element={<BackupCoverage />} />
+        <Route path="/media-staging" element={<MediaStaging />} />
       </Routes>
     </BrowserRouter>
   );
