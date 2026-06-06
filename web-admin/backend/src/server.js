@@ -1983,9 +1983,7 @@ async function webserver() {
 
     emitStatusToFrontEnd();
 
-    statusEmitter.on("update", () => {
-      emitStatusToFrontEnd();
-    });
+    statusEmitter.on("update", emitStatusToFrontEnd);
 
     ws.on("message", async (data) => {
       let message;
