@@ -38,7 +38,11 @@ import * as jf from "./jellyfinClient.js";
 const POLL_INTERVAL_MS_DEFAULT = 5 * 1000;
 const SECRET_CACHE_TTL_MS = 5 * 60 * 1000;
 const POSTER_MAX_WIDTH = 240;
-const TERMINAL_RETENTION_MS = 6 * 60 * 60 * 1000; // prune finished jobs after 6h
+// "done" jobs clear from the queue quickly — the Staged section is the record
+// of what's on disk, so a lingering "done" row is just noise. failed/cancelled
+// stick around (you need them to Retry) until dismissed or this longer expiry.
+const DONE_RETENTION_MS = 60 * 1000;
+const TERMINAL_RETENTION_MS = 6 * 60 * 60 * 1000;
 const MAX_TERMINAL_IN_VIEW = 10;
 
 let tickTimer = null;
@@ -652,6 +656,23 @@ async function retryJob(jobId) {
   return { ok: true };
 }
 
+// Dismiss a job from the queue: remove its spool files so it stops showing.
+// Intended for failed/cancelled rows the user doesn't want to retry.
+async function dismissJob(jobId) {
+  const cfg = await readConfig();
+  if (!cfg || typeof jobId !== "string") return { ok: false };
+  await rm(join(pendingDir(cfg), `${jobId}.json`), { force: true }).catch(
+    () => {},
+  );
+  await rm(join(statusDir(cfg), `${jobId}.json`), { force: true }).catch(
+    () => {},
+  );
+  await rm(join(cancelDir(cfg), jobId), { force: true }).catch(() => {});
+  seenDoneIds.delete(jobId);
+  await refreshQueue(cfg);
+  return { ok: true };
+}
+
 function safeSend(ws, payload) {
   if (!ws || ws.readyState !== 1) return;
   try {
@@ -706,11 +727,14 @@ async function refreshQueue(cfg) {
     const isTerminal =
       state === "done" || state === "failed" || state === "cancelled";
     if (isTerminal) {
-      terminal.push(entry);
-      // Prune old terminal jobs (and their status/cancel files).
+      // Prune finished jobs (and their status/cancel files). "done" clears
+      // fast since it's now reflected in the Staged section; failures linger
+      // so they stay retry-able.
+      const retentionSec =
+        (state === "done" ? DONE_RETENTION_MS : TERMINAL_RETENTION_MS) / 1000;
       if (
         status?.updatedEpoch &&
-        nowEpoch() - status.updatedEpoch > TERMINAL_RETENTION_MS / 1000
+        nowEpoch() - status.updatedEpoch > retentionSec
       ) {
         await rm(join(pendingDir(cfg), `${id}.json`), { force: true }).catch(
           () => {},
@@ -719,8 +743,10 @@ async function refreshQueue(cfg) {
           () => {},
         );
         await rm(join(cancelDir(cfg), id), { force: true }).catch(() => {});
+        seenDoneIds.delete(id);
         continue;
       }
+      terminal.push(entry);
       if (state === "done" && !seenDoneIds.has(id)) {
         seenDoneIds.add(id);
         anyNewlyDone = true;
@@ -802,6 +828,7 @@ export {
   enqueueCopies,
   cancelCopy,
   retryJob,
+  dismissJob,
   setApiKeys,
 };
 export default { init: start, stop };

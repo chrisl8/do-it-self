@@ -422,7 +422,7 @@ const STATUS_LABEL = {
   cancelled: "cancelled",
 };
 
-const QueuePanel = ({ queue, onCancel, onRetry }) => {
+const QueuePanel = ({ queue, onCancel, onRetry, onDismiss }) => {
   if (!queue || queue.length === 0) return null;
   return (
     <Card>
@@ -474,9 +474,18 @@ const QueuePanel = ({ queue, onCancel, onRetry }) => {
                     </Button>
                   )}
                   {(job.status === "failed" || job.status === "cancelled") && (
-                    <Button size="small" onClick={() => onRetry(job.id)}>
-                      Retry
-                    </Button>
+                    <>
+                      <Button size="small" onClick={() => onRetry(job.id)}>
+                        Retry
+                      </Button>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => onDismiss(job.id)}
+                      >
+                        Dismiss
+                      </Button>
+                    </>
                   )}
                 </Stack>
                 <LinearProgress
@@ -658,6 +667,7 @@ const MediaStaging = () => {
     startCopy,
     cancelCopy,
     retryCopy,
+    dismissCopy,
     enqueueError,
     clearEnqueueError,
   } = useMediaStaging();
@@ -860,6 +870,7 @@ const MediaStaging = () => {
         queue={snapshot?.queue}
         onCancel={cancelCopy}
         onRetry={retryCopy}
+        onDismiss={dismissCopy}
       />
 
       <StagedPanel refreshSignal={doneCount} />

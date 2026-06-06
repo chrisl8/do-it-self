@@ -40,6 +40,13 @@ const useMediaStaging = () => {
     );
   }, []);
 
+  const dismissCopy = useCallback((jobId) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(
+      JSON.stringify({ type: "mediaStagingDismissCopy", payload: { jobId } }),
+    );
+  }, []);
+
   useEffect(() => {
     let closed = false;
     let reconnectTimer = null;
@@ -93,6 +100,7 @@ const useMediaStaging = () => {
     startCopy,
     cancelCopy,
     retryCopy,
+    dismissCopy,
   };
 };
 
