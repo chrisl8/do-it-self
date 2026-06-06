@@ -60,6 +60,7 @@ import {
   enqueueCopies as enqueueMediaStagingCopies,
   cancelCopy as cancelMediaStagingCopy,
   retryJob as retryMediaStagingCopy,
+  dismissJob as dismissMediaStagingCopy,
   setApiKeys as setMediaStagingApiKeys,
 } from "./mediaStaging.js";
 
@@ -2783,6 +2784,9 @@ async function webserver() {
       } else if (message.type === "mediaStagingCancelCopy") {
         const jobId = message.payload?.jobId;
         if (typeof jobId === "string") cancelMediaStagingCopy(jobId);
+      } else if (message.type === "mediaStagingDismissCopy") {
+        const jobId = message.payload?.jobId;
+        if (typeof jobId === "string") dismissMediaStagingCopy(jobId);
       } else if (message.type === "mediaStagingRetryCopy") {
         const jobId = message.payload?.jobId;
         if (typeof jobId === "string") {
