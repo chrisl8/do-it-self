@@ -19,6 +19,19 @@ If BorgBackup is configured (`setup-borg-backup.sh`), two more are added:
 | `0 3 * * *` | `borg-backup.sh` | Nightly backup: DB dumps, local Borg archive, prune, optional remote sync |
 | `0 6 * * 0` | `borg-restore-test.sh` | Weekly restore test (Sundays) |
 
+If other hosts push borg archives into this machine via `borg serve` (e.g. wintermute's borgmatic writing to `/mnt/22TB/borg/backups/<host>`), add a freshness check for those inbound repos:
+
+| Schedule | Script | What it does |
+|----------|--------|--------------|
+| `40 */6 * * *` | `borg-inbound-check.sh` | Auto-enumerates inbound borg repos under `BORG_INBOUND_REPOS_ROOT`, reports each repo's newest-archive freshness (48h default threshold) to the web admin's Backup Status page; optional healthchecks.io ping |
+
+```cron
+# Inbound borg freshness check (repos other hosts push into this machine)
+40 */6 * * * /home/chrisl8/containers/scripts/borg-inbound-check.sh
+```
+
+The `:40` offset keeps it clear of the borg-backup remote-push and borg-pi-manage windows. It reads each repo with `--lock-wait`, so it won't fail if a push is in progress.
+
 Containers can also declare their own cron jobs in `module.yaml` — these are managed automatically when you enable or disable a container.
 
 ## Rebooting
