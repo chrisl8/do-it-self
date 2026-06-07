@@ -26,9 +26,12 @@ REPORT_FILE="$HOME/logs/coverage-reports/$(hostname).json"
 # See docs/WINTERMUTE_COVERAGE_SETUP.md for the SSH key bootstrap.
 
 # Where user acknowledgements live. Web admin's "Acknowledge" button
-# appends here; the audit script reads it on each run to suppress
-# repeated nagging on paths the user has consciously decided to skip.
-ACK_FILE="$HOME/containers/scripts/backup-coverage-acks.json"
+# writes the per-host file backup-coverage-acks/<hostname>.json; the
+# audit reads that same file on each run to suppress repeated nagging on
+# paths the user has consciously decided to skip. Single source of truth
+# shared with the web admin — do not point this at the legacy single
+# backup-coverage-acks.json (that store is dead post-May-2026 refactor).
+ACK_FILE="$HOME/containers/scripts/backup-coverage-acks/$(hostname).json"
 
 # Where the per-pattern exclude-match cache lives. Refreshed at most
 # once per EXCLUDE_MATCHES_MAX_AGE_HOURS — the underlying walk is a
