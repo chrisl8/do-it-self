@@ -1,0 +1,46 @@
+# Inbound borg backup freshness check configuration
+# Sourced by borg-inbound-check.sh
+#
+# "Inbound" = borg repos that OTHER hosts push into this machine via
+# `borg serve` (e.g. wintermute's borgmatic writes to neuromancer). These
+# repos do not appear in borg-backup.conf — that file only describes THIS
+# host backing up itself. This check enumerates the receive-side repos and
+# reports their freshness so the web admin can show them.
+
+# Root directory holding one subdirectory per inbound repo. Each immediate
+# subdirectory that is a borg repo (has a `config` with [repository]) is
+# checked. The subdirectory name is the repo's display name and also drives
+# the Infisical passphrase key lookup (see below).
+BORG_INBOUND_REPOS_ROOT="/mnt/22TB/borg/backups"
+
+# Staleness threshold in hours. A repo whose newest archive is older than
+# this is reported "stale".
+BORG_INBOUND_STALE_HOURS=48
+
+# Infisical path + passphrase key convention.
+# For a repo subdirectory named "<name>", the passphrase is fetched from
+# Infisical path BORG_INBOUND_INFISICAL_PATH using key
+#   BORG_REMOTE_PASSPHRASE_<NAME>   (NAME uppercased, '-' -> '_')
+# e.g. repo "wintermute" -> BORG_REMOTE_PASSPHRASE_WINTERMUTE
+# This matches the per-client keys used by borg-pi-manage / backuppi.
+BORG_INBOUND_INFISICAL_PATH="borgbackup"
+
+# Status file served by Homepage dashboard / read by the web admin
+BORG_INBOUND_STATUS_DIR="${HOME}/containers/homepage/images"
+BORG_INBOUND_STATUS_FILE="${BORG_INBOUND_STATUS_DIR}/borg-inbound-status.json"
+
+# Lock file to prevent concurrent runs
+BORG_INBOUND_LOCK_FILE="/tmp/borg-inbound-check.lock"
+
+# Log file
+BORG_INBOUND_LOG_FILE="${HOME}/logs/borg-inbound-check.log"
+
+# Healthchecks.io URL (optional). Leave empty to skip external pinging.
+# Success -> bare URL; any stale/error repo -> URL/fail with a summary.
+# Sourced from Infisical key HEALTHCHECK_URL at the inbound path if empty
+# here (see borg-inbound-check.sh).
+BORG_INBOUND_HEALTHCHECK_URL=""
+
+# Web admin URL for the backup status page (included in failure output).
+# Constructed after Infisical loads TS_DOMAIN — see borg-inbound-check.sh
+BORG_INBOUND_WEB_ADMIN_URL=""
