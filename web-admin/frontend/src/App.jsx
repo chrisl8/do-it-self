@@ -53,6 +53,16 @@ const Navigation = () => {
       .catch(() => setMediaStagingEnabled(false));
   }, []);
 
+  // Per-page browser tab title (was hard-coded "Docker Status" for the whole
+  // app, which is just one of many pages).
+  useEffect(() => {
+    const SITE = "Container Web Admin";
+    const match =
+      routes.find((r) => location.pathname === r.path) ||
+      routes.find((r) => location.pathname.startsWith(r.path + "/"));
+    document.title = match ? `${match.label} · ${SITE}` : SITE;
+  }, [location.pathname]);
+
   const visibleRoutes = routes.filter(
     (r) => r.gated !== "mediaStaging" || mediaStagingEnabled,
   );
