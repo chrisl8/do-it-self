@@ -181,6 +181,19 @@ const getBorgStatusLabel = (status) => {
   }
 };
 
+const getInboundStatusLabel = (status) => {
+  switch (status) {
+    case "success":
+      return "All Fresh";
+    case "stale":
+      return "Stale";
+    case "error":
+      return "Error";
+    default:
+      return status;
+  }
+};
+
 const formatTimestamp = (ts) => {
   if (!ts) return "Unknown";
   const d = new Date(ts);
@@ -295,12 +308,15 @@ const BackupStatus = () => {
     kopiaLog,
     borgStatus,
     borgLog,
+    borgInboundStatus,
+    borgInboundLog,
     kopiaCheckRunning,
     loading,
     error,
     refresh,
     fetchKopiaLog,
     fetchBorgLog,
+    fetchBorgInboundLog,
     ignoreHosts,
     ignoredSources,
     hostThresholds,
@@ -318,6 +334,7 @@ const BackupStatus = () => {
   const [expandedHosts, setExpandedHosts] = useState({});
   const [kopiaLogOpen, setKopiaLogOpen] = useState(false);
   const [borgLogOpen, setBorgLogOpen] = useState(false);
+  const [borgInboundLogOpen, setBorgInboundLogOpen] = useState(false);
   const [globalThresholdLocal, setGlobalThresholdLocal] = useState(null);
   const [thresholdSaving, setThresholdSaving] = useState(false);
   const [localHostThresholds, setLocalHostThresholds] = useState({});
@@ -374,6 +391,11 @@ const BackupStatus = () => {
   const handleViewBorgLog = async () => {
     if (!borgLog) await fetchBorgLog();
     setBorgLogOpen(true);
+  };
+
+  const handleViewBorgInboundLog = async () => {
+    if (!borgInboundLog) await fetchBorgInboundLog();
+    setBorgInboundLogOpen(true);
   };
 
   if (loading && !kopiaStatus && !borgStatus) {
@@ -695,6 +717,152 @@ const BackupStatus = () => {
                   label="Show dashboard banner when borg backups are incomplete"
                   sx={{ ml: "auto" }}
                 />
+              </Box>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Inbound Borg Section — repos other hosts push into this machine */}
+      {borgInboundStatus && (
+        <>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+            <Typography variant="h6" component="h2">
+              Inbound Borg
+            </Typography>
+            <Tooltip
+              title="Borg repos that other hosts push into this machine via borg serve (e.g. wintermute's nightly borgmatic). Freshness is measured from each repo's newest archive."
+              arrow
+            >
+              <Chip
+                label={getInboundStatusLabel(borgInboundStatus.status)}
+                color={getStatusColor(borgInboundStatus.status)}
+                size="small"
+                sx={{ cursor: "help" }}
+              />
+            </Tooltip>
+          </Box>
+
+          {borgInboundStatus.error && (
+            <Alert
+              severity={
+                borgInboundStatus.status === "error" ? "error" : "warning"
+              }
+              sx={{ mb: 1 }}
+            >
+              {borgInboundStatus.error}
+            </Alert>
+          )}
+
+          <Card sx={{ mb: 1 }}>
+            <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: { xs: 1, sm: 3 },
+                  mb: 1,
+                }}
+              >
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Last Checked
+                  </Typography>
+                  <Typography variant="body2">
+                    {formatTimestamp(borgInboundStatus.last_check)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Repos
+                  </Typography>
+                  <Typography variant="body2">
+                    {borgInboundStatus.total_repos}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Threshold
+                  </Typography>
+                  <Typography variant="body2">
+                    {formatDuration(borgInboundStatus.threshold_hours)}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {(borgInboundStatus.repos ?? []).length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  No inbound repos found.
+                </Typography>
+              )}
+
+              {(borgInboundStatus.repos ?? []).map((repo) => (
+                <Box
+                  key={repo.name}
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    alignItems: { xs: "flex-start", sm: "center" },
+                    gap: 1,
+                    py: 0.75,
+                    borderTop: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
+                  <Chip
+                    label={repo.status}
+                    color={getStatusColor(repo.status)}
+                    size="small"
+                    sx={{ minWidth: 70 }}
+                  />
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: "bold", minWidth: 0 }}
+                  >
+                    {repo.name}
+                  </Typography>
+                  {repo.error ? (
+                    <Typography variant="body2" color="error" sx={{ flex: 1 }}>
+                      {repo.error}
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography
+                        variant="body2"
+                        color={
+                          repo.status === "stale"
+                            ? "warning.main"
+                            : "text.secondary"
+                        }
+                      >
+                        last archive {formatDuration(repo.age_hours ?? 0)} ago
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ flex: 1 }}
+                      >
+                        {formatTimestamp(repo.last_archive_iso)}
+                        {repo.archive_count != null &&
+                          ` · ${repo.archive_count} archive${repo.archive_count !== 1 ? "s" : ""}`}
+                        {repo.repo_size && ` · ${repo.repo_size}`}
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              ))}
+
+              <Box
+                sx={{
+                  mt: 1,
+                  pt: 1,
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <Button size="small" onClick={handleViewBorgInboundLog}>
+                  View Log
+                </Button>
               </Box>
             </CardContent>
           </Card>
@@ -1133,6 +1301,12 @@ const BackupStatus = () => {
         onClose={() => setKopiaLogOpen(false)}
         title="Kopia Backup Check Log"
         log={kopiaLog}
+      />
+      <LogDialog
+        open={borgInboundLogOpen}
+        onClose={() => setBorgInboundLogOpen(false)}
+        title="Inbound Borg Check Log"
+        log={borgInboundLog}
       />
     </Box>
   );
