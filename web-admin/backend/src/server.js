@@ -413,6 +413,12 @@ app.get("/dashboard-icons/svg/web-admin.svg", (req, res) => {
   res.sendFile(join(dirName, "../../frontend/public/Metatron.svg"));
 });
 
+// Host identity — used by the frontend for per-host browser-tab titles so the
+// neuromancer and deepthought admin tabs are distinguishable.
+app.get("/api/hostname", (req, res) => {
+  res.json({ hostname: os.hostname() });
+});
+
 app.use("/dashboard-icons/svg", express.static(join(ICONS_BASE_DIR, "svg")));
 app.use("/dashboard-icons/png", express.static(join(ICONS_BASE_DIR, "png")));
 app.use("/dashboard-icons/webp", express.static(join(ICONS_BASE_DIR, "webp")));
