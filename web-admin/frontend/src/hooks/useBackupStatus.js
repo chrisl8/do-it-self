@@ -5,6 +5,8 @@ const useBackupStatus = () => {
   const [kopiaLog, setKopiaLog] = useState(null);
   const [borgStatus, setBorgStatus] = useState(null);
   const [borgLog, setBorgLog] = useState(null);
+  const [borgInboundStatus, setBorgInboundStatus] = useState(null);
+  const [borgInboundLog, setBorgInboundLog] = useState(null);
   const [kopiaCheckRunning, setKopiaCheckRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,12 +15,16 @@ const useBackupStatus = () => {
     setLoading(true);
     setError(null);
     try {
-      const [kopiaRes, borgRes] = await Promise.all([
+      const [kopiaRes, borgRes, borgInboundRes] = await Promise.all([
         fetch("/api/kopia-status"),
         fetch("/api/borg-status"),
+        fetch("/api/borg-inbound-status"),
       ]);
       if (kopiaRes.ok) setKopiaStatus(await kopiaRes.json());
       if (borgRes.ok) setBorgStatus(await borgRes.json());
+      // 404 = the inbound check has never run on this host; leave it null so
+      // the section simply doesn't render (it's not applicable everywhere).
+      if (borgInboundRes.ok) setBorgInboundStatus(await borgInboundRes.json());
       if (!kopiaRes.ok && !borgRes.ok)
         throw new Error("Failed to fetch backup status");
     } catch (err) {
@@ -47,6 +53,17 @@ const useBackupStatus = () => {
       setBorgLog(data.log);
     } catch (err) {
       setBorgLog([`Error loading log: ${err.message}`]);
+    }
+  }, []);
+
+  const fetchBorgInboundLog = useCallback(async () => {
+    try {
+      const res = await fetch("/api/borg-inbound-log");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setBorgInboundLog(data.log);
+    } catch (err) {
+      setBorgInboundLog([`Error loading log: ${err.message}`]);
     }
   }, []);
 
@@ -278,12 +295,15 @@ const useBackupStatus = () => {
     kopiaLog,
     borgStatus,
     borgLog,
+    borgInboundStatus,
+    borgInboundLog,
     kopiaCheckRunning,
     loading,
     error,
     refresh: fetchStatus,
     fetchKopiaLog,
     fetchBorgLog,
+    fetchBorgInboundLog,
     ignoreHosts,
     ignoredSources,
     hostThresholds,

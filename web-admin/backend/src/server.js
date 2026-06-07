@@ -441,6 +441,38 @@ app.get("/api/borg-status", async (req, res) => {
   }
 });
 
+// Inbound borg repos — repos other hosts push into this machine via
+// `borg serve` (e.g. wintermute's borgmatic). Written by
+// scripts/borg-inbound-check.sh. A 404 (file absent) means the check has
+// never run on this host; the frontend treats that as "not configured".
+app.get("/api/borg-inbound-status", async (req, res) => {
+  try {
+    const statusFile = join(
+      os.homedir(),
+      "containers/homepage/images/borg-inbound-status.json",
+    );
+    const data = await readFile(statusFile, "utf8");
+    res.json(JSON.parse(data));
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      return res.status(404).json({ error: "No inbound borg status yet" });
+    }
+    console.error("Error reading borg inbound status:", err);
+    res.status(500).json({ error: "Failed to read borg inbound status" });
+  }
+});
+
+app.get("/api/borg-inbound-log", async (req, res) => {
+  try {
+    const logFile = join(os.homedir(), "logs/borg-inbound-check.log");
+    const data = await readFile(logFile, "utf8");
+    res.json({ log: data.split("\n") });
+  } catch (err) {
+    console.error("Error reading borg inbound log:", err);
+    res.status(500).json({ error: "Failed to read borg inbound log" });
+  }
+});
+
 // Drives the borg-backup banner on the dashboard. Returns a derived
 // state so the frontend can render one of these nudges:
 //   - "none"        : conf missing OR backup has never run — the strong
