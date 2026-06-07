@@ -124,10 +124,9 @@ That means the UI always reflects the current ack state even if the
 remote audit hasn't yet re-classified entries with the new acks.
 
 The audit on wintermute still reads its own local ack file
-(`~/containers/scripts/backup-coverage-acks.json` on wintermute) when
-classifying — that's the legacy single-file path the audit was built
-with. It's no longer the source of truth, so its contents drift from
-central over time. The overlay corrects this for the UI; the audit
+(`~/containers/scripts/backup-coverage-acks/wintermute.json` on
+wintermute) when classifying. It's no longer the source of truth, so
+its contents drift from central over time. The overlay corrects this for the UI; the audit
 log on wintermute itself can be ignored. If for some reason you want
 wintermute's audit log to reflect the central state, manually `scp`
 the file across; not required for normal operation.
