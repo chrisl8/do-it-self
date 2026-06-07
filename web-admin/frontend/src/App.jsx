@@ -53,15 +53,25 @@ const Navigation = () => {
       .catch(() => setMediaStagingEnabled(false));
   }, []);
 
+  // Host name drives the browser-tab title so the neuromancer vs deepthought
+  // admin tabs are distinguishable.
+  const [hostName, setHostName] = useState("");
+  useEffect(() => {
+    fetch("/api/hostname")
+      .then((r) => r.json())
+      .then((d) => setHostName(d.hostname || ""))
+      .catch(() => setHostName(""));
+  }, []);
+
   // Per-page browser tab title (was hard-coded "Docker Status" for the whole
   // app, which is just one of many pages).
   useEffect(() => {
-    const SITE = "Container Web Admin";
+    const site = hostName || "Web Admin";
     const match =
       routes.find((r) => location.pathname === r.path) ||
       routes.find((r) => location.pathname.startsWith(r.path + "/"));
-    document.title = match ? `${match.label} · ${SITE}` : SITE;
-  }, [location.pathname]);
+    document.title = match ? `${match.label} · ${site}` : site;
+  }, [location.pathname, hostName]);
 
   const visibleRoutes = routes.filter(
     (r) => r.gated !== "mediaStaging" || mediaStagingEnabled,
