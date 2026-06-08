@@ -696,6 +696,28 @@ if [[ ! "$VERB" =~ ^[a-z-]+$ ]]; then
     echo "ERROR: invalid verb" >&2
     exit 1
 fi
+
+# Drive health — NOT client-scoped, so handle before the client/repo/passphrase
+# checks. SMART_DEVICE + SMARTCTL_PATH come from /etc/backup-pi.smart.env (written
+# by setup-backup-pi.sh) and the tightly-scoped /etc/sudoers.d/borg-smart entry.
+# The Pi is inbound-only and can't alert; neuromancer polls this and alerts.
+if [[ "$VERB" == "smart-health" ]]; then
+    SMART_DEVICE=""
+    SMARTCTL_PATH=""
+    [[ -f /etc/backup-pi.smart.env ]] && . /etc/backup-pi.smart.env
+    if [[ -z "$SMART_DEVICE" || -z "$SMARTCTL_PATH" ]]; then
+        logger -t borg-manage "smart-health: not configured"
+        echo "ERROR: SMART monitoring not configured on this Pi" >&2
+        exit 1
+    fi
+    logger -t borg-manage "smart-health ($SMART_DEVICE)"
+    # smartctl uses a bitmask exit status (non-zero even for some benign states),
+    # so don't abort on it — the manager side parses the output for health. Print
+    # whatever smartctl emits, then exit 0 so the SSH channel reports success.
+    sudo -n "$SMARTCTL_PATH" -H -A "$SMART_DEVICE" || true
+    exit 0
+fi
+
 if [[ ! "$CLIENT_NAME" =~ ^[a-z0-9-]+$ ]]; then
     logger -t borg-manage "rejected: bad client name: ${CLIENT_NAME:-<empty>}"
     echo "ERROR: invalid client name" >&2
@@ -925,10 +947,36 @@ if smartctl -i "$DRIVE_DEVICE" &>/dev/null; then
 # SMART check — weekly Saturday 4am
 0 4 * * 6 root smartctl -a ${DRIVE_DEVICE} 2>&1 | logger -t smart-check
 EOF
-    log_info "Weekly SMART check scheduled"
+    log_info "Weekly SMART check scheduled (local syslog record)"
+
+    # ── Pull-based SMART health (queried from neuromancer) ──────────
+    # The Pi is inbound-only and can't send its own alerts, so neuromancer's
+    # borg-pi-manage.sh polls drive health via the 'smart-health' manager verb,
+    # which runs smartctl as root through a tightly-scoped sudoers entry.
+    SMARTCTL_PATH="$(command -v smartctl || echo /usr/sbin/smartctl)"
+    cat > /etc/backup-pi.smart.env << EOF
+# Written by setup-backup-pi.sh — consumed by borg-manage.sh's 'smart-health' verb.
+SMART_DEVICE="${DRIVE_DEVICE}"
+SMARTCTL_PATH="${SMARTCTL_PATH}"
+EOF
+    chmod 644 /etc/backup-pi.smart.env
+
+    # Allow the borg user to run ONLY this exact read-only smartctl invocation.
+    cat > /etc/sudoers.d/borg-smart << EOF
+borg ALL=(root) NOPASSWD: ${SMARTCTL_PATH} -H -A ${DRIVE_DEVICE}
+EOF
+    chmod 440 /etc/sudoers.d/borg-smart
+    if visudo -cf /etc/sudoers.d/borg-smart >/dev/null 2>&1; then
+        log_info "SMART pull-health enabled (sudoers + smart.env installed)"
+    else
+        rm -f /etc/sudoers.d/borg-smart /etc/backup-pi.smart.env
+        log_warn "sudoers validation failed — SMART pull-health NOT enabled"
+    fi
 else
     log_warn "SMART not supported on $DRIVE_DEVICE (common with USB enclosures)"
     log_warn "Relying on filesystem checks and I/O error monitoring"
+    # Ensure no stale pull-health config lingers if SMART later stops working.
+    rm -f /etc/sudoers.d/borg-smart /etc/backup-pi.smart.env
 fi
 
 # ============================================================
