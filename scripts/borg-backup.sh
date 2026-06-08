@@ -1,8 +1,18 @@
 #!/bin/bash
 # Main BorgBackup script — runs database dumps, creates archive, prunes, updates status
 # Intended to run via cron daily at 3:00 AM
-# Flags: --remote-only  skip DB dumps and local backup, run only remote
+# Flags: --remote-only  skip DB dumps and local backup, run only the remote push
+#        --skip-remote  run DB dumps + local archive, skip the remote push
 #        --skip-dumps   skip DB dumps
+#
+# The daily backup is SPLIT into two cron jobs so the over-the-wire push to the
+# offsite Pi runs at a fixed safe overnight hour instead of "whenever the local
+# archive happens to finish" (a heavy-data day used to drift the push into the
+# recipients' daytime bandwidth and lock out borg-pi-manage.sh):
+#   <local job, late evening>   borg-backup.sh --skip-remote
+#   <push job,  ~02:30 Central>  borg-backup.sh --remote-only
+# They use separate lock files, log files, and healthchecks so they don't
+# collide or stomp each other's status. A flagless run still does it all at once.
 set -e
 
 # Re-exec as root if not already — needed to read all container mount files
@@ -19,14 +29,23 @@ fi
 # Parse flags
 REMOTE_ONLY=false
 SKIP_DUMPS=false
+SKIP_REMOTE=false
 while [ $# -gt 0 ]; do
     case "$1" in
         --remote-only) REMOTE_ONLY=true; SKIP_DUMPS=true ;;
+        --skip-remote) SKIP_REMOTE=true ;;
         --skip-dumps)  SKIP_DUMPS=true ;;
         *) echo "Unknown flag: $1"; exit 1 ;;
     esac
     shift
 done
+
+# --remote-only (push job) and --skip-remote (local job) are the two halves of
+# the split daily backup; asking for both at once is a config error.
+if [ "${REMOTE_ONLY}" = "true" ] && [ "${SKIP_REMOTE}" = "true" ]; then
+    echo "ERROR: --remote-only and --skip-remote are mutually exclusive"
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -34,8 +53,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=borg-backup.conf
 . "${SCRIPT_DIR}/borg-backup.conf"
 
+# The push job (--remote-only) and the local job (--skip-remote / flagless) use
+# separate lock and log files so the two halves of the split daily backup never
+# block each other or interleave their logs (the web admin serves borg-backup.log).
+LOCK_TARGET="${BORG_LOCK_FILE}"
+LOG_TARGET="${BORG_LOG_FILE}"
+if [ "${REMOTE_ONLY}" = "true" ]; then
+    LOCK_TARGET="${BORG_LOCK_FILE}.remote"
+    LOG_TARGET="${BORG_LOG_FILE%.log}-remote.log"
+fi
+
 # Ensure log directory exists (redirect happens after credential loading below)
-mkdir -p "$(dirname "${BORG_LOG_FILE}")"
+mkdir -p "$(dirname "${LOG_TARGET}")"
 
 # Load credentials from Infisical
 load_secret() {
@@ -60,6 +89,9 @@ fi
 if [ "${SECRETS_AVAILABLE}" = "true" ]; then
     BORG_PASSPHRASE=$(load_secret "borgbackup" "BORG_PASSPHRASE") || true
     BORG_HEALTHCHECK_URL=$(load_secret "borgbackup" "BORG_HEALTHCHECK_URL") || true
+    # Optional dedicated check for the offsite push (--remote-only job). If unset,
+    # the push is still monitored indirectly by borg-pi-manage.sh freshness.
+    BORG_REMOTE_HEALTHCHECK_URL=$(load_secret "borgbackup" "BORG_REMOTE_HEALTHCHECK_URL") || true
     TS_DOMAIN=$(load_secret "shared" "TS_DOMAIN") || true
 fi
 
@@ -82,16 +114,16 @@ if [ -z "${BORG_PASSPHRASE}" ] && [ "${REMOTE_ONLY}" != "true" ]; then
 fi
 
 # Rotate log files — keep 5 previous runs
-if [ -f "${BORG_LOG_FILE}" ]; then
+if [ -f "${LOG_TARGET}" ]; then
     for i in 4 3 2 1; do
-        [ -f "${BORG_LOG_FILE}.$i" ] && mv "${BORG_LOG_FILE}.$i" "${BORG_LOG_FILE}.$((i+1))"
+        [ -f "${LOG_TARGET}.$i" ] && mv "${LOG_TARGET}.$i" "${LOG_TARGET}.$((i+1))"
     done
-    mv "${BORG_LOG_FILE}" "${BORG_LOG_FILE}.1"
+    mv "${LOG_TARGET}" "${LOG_TARGET}.1"
 fi
 
 # Redirect all output to log file — after credential loading to avoid
 # the tee redirect interfering with command substitution captures
-exec > >(tee -a "${BORG_LOG_FILE}") 2>&1
+exec > >(tee -a "${LOG_TARGET}") 2>&1
 
 export BORG_PASSPHRASE
 export BORG_REPO
@@ -103,9 +135,9 @@ echo "=========================================="
 
 # ── Lock file ─────────────────────────────────────────────────────
 
-exec 9>"${BORG_LOCK_FILE}"
+exec 9>"${LOCK_TARGET}"
 if ! flock -n 9; then
-    echo "ERROR: Another borg-backup.sh is already running"
+    echo "ERROR: Another borg-backup.sh is already running (lock: ${LOCK_TARGET})"
     exit 1
 fi
 # Lock is held for the lifetime of this process (fd 9 closes on exit)
@@ -122,7 +154,12 @@ fi
 
 # ── Healthcheck start ping ───────────────────────────────────────
 
-if [ -n "${BORG_HEALTHCHECK_URL}" ]; then
+# Start ping — local job to the main check, push job to its own check (if set).
+if [ "${REMOTE_ONLY}" = "true" ]; then
+    if [ -n "${BORG_REMOTE_HEALTHCHECK_URL}" ]; then
+        curl -m 10 --retry 5 -s "${BORG_REMOTE_HEALTHCHECK_URL}/start" > /dev/null || true
+    fi
+elif [ -n "${BORG_HEALTHCHECK_URL}" ]; then
     curl -m 10 --retry 5 -s "${BORG_HEALTHCHECK_URL}/start" > /dev/null || true
 fi
 
@@ -214,6 +251,7 @@ fi
 REMOTE_STATUS="skipped"
 REMOTE_ERROR=""
 REMOTE_DURATION=""
+REMOTE_RAN=false
 
 run_remote_backup() {
     local REMOTE_BORG_OPTS=()
@@ -250,7 +288,11 @@ run_remote_backup() {
     return 0
 }
 
-if [ -n "${BORG_REMOTE_REPO}" ] && [ -n "${BORG_REMOTE_PASSPHRASE}" ]; then
+if [ "${SKIP_REMOTE}" = "true" ]; then
+    echo ""
+    echo "── Remote (offsite) backup (skipped — --skip-remote; runs in the push job) ──"
+elif [ -n "${BORG_REMOTE_REPO}" ] && [ -n "${BORG_REMOTE_PASSPHRASE}" ]; then
+    REMOTE_RAN=true
     echo ""
     echo "── Remote (offsite) backup ──"
 
@@ -285,41 +327,77 @@ if [ "${REMOTE_STATUS}" = "failed" ] && [ "${BACKUP_STATUS}" = "success" ]; then
     BACKUP_ERROR="Local backup OK but remote backup failed: ${REMOTE_ERROR}"
 fi
 
-# ── Update status file ───────────────────────────────────────────
+# ── Update status file (merged) ──────────────────────────────────
+# The split daily backup writes this file from two separate runs: the local job
+# owns the top-level fields, the push job owns the "remote" object. Each run
+# therefore MERGES its half into the existing JSON instead of overwriting, so
+# the web admin Backup Status page keeps showing both halves. A flagless full
+# run updates both.
 
 END_TIME=$(date +%s)
 DURATION_SECS=$((END_TIME - START_TIME))
 DURATION_MIN=$((DURATION_SECS / 60))
 DURATION_REM_SECS=$((DURATION_SECS % 60))
 
-# Get repo info for status
-if [ "${REMOTE_ONLY}" = "true" ]; then
-    REPO_SIZE="skipped"
-    ARCHIVE_COUNT="skipped"
-else
+mkdir -p "${BORG_STATUS_DIR}"
+
+# Local repo info — only meaningful when the local archive ran this invocation.
+REPO_SIZE=""
+ARCHIVE_COUNT=""
+if [ "${REMOTE_ONLY}" != "true" ]; then
     REPO_SIZE=$(borg info "${BORG_REPO}" 2>/dev/null | grep "All archives:" | head -1 | awk '{print $7, $8}') || REPO_SIZE="unknown"
     ARCHIVE_COUNT=$(borg list "${BORG_REPO}" 2>/dev/null | wc -l) || ARCHIVE_COUNT="unknown"
 fi
 
-mkdir -p "${BORG_STATUS_DIR}"
+# Decide which halves of the status file this run owns.
+STATUS_TS="$(date -Iseconds)"
+ST_UPDATE_LOCAL=true
+ST_UPDATE_REMOTE=false
+if [ "${REMOTE_ONLY}" = "true" ]; then
+    ST_UPDATE_LOCAL=false
+    ST_UPDATE_REMOTE=true
+elif [ "${REMOTE_RAN}" = "true" ]; then
+    ST_UPDATE_REMOTE=true
+fi
 
-cat > "${BORG_STATUS_FILE}" << STATUSEOF
-{
-    "status": "${BACKUP_STATUS}",
-    "last_backup": "$(date -Iseconds)",
-    "archive": "${ARCHIVE_NAME}",
-    "duration": "${DURATION_MIN}m ${DURATION_REM_SECS}s",
-    "repo_size": "${REPO_SIZE}",
-    "archive_count": "${ARCHIVE_COUNT}",
-    "dump_errors": ${DUMP_ERRORS},
-    "error": "${BACKUP_ERROR}",
-    "remote": {
-        "status": "${REMOTE_STATUS}",
-        "duration": "${REMOTE_DURATION}",
-        "error": "${REMOTE_ERROR}"
-    }
-}
-STATUSEOF
+# Values passed via env to keep them out of the (quoted) Python heredoc.
+BORG_STATUS_FILE="${BORG_STATUS_FILE}" \
+UPDATE_LOCAL="${ST_UPDATE_LOCAL}" UPDATE_REMOTE="${ST_UPDATE_REMOTE}" \
+S_STATUS="${BACKUP_STATUS}" S_TS="${STATUS_TS}" S_ARCHIVE="${ARCHIVE_NAME}" \
+S_DURATION="${DURATION_MIN}m ${DURATION_REM_SECS}s" S_REPO_SIZE="${REPO_SIZE}" \
+S_ARCHIVE_COUNT="${ARCHIVE_COUNT}" S_DUMP_ERRORS="${DUMP_ERRORS}" S_ERROR="${BACKUP_ERROR}" \
+R_STATUS="${REMOTE_STATUS}" R_DURATION="${REMOTE_DURATION}" R_ERROR="${REMOTE_ERROR}" \
+R_ARCHIVE="${ARCHIVE_NAME}" \
+python3 - <<'PYEOF'
+import json, os
+path = os.environ["BORG_STATUS_FILE"]
+try:
+    with open(path) as f:
+        data = json.load(f)
+except (FileNotFoundError, ValueError):
+    data = {}
+if os.environ["UPDATE_LOCAL"] == "true":
+    data["status"] = os.environ["S_STATUS"]
+    data["last_backup"] = os.environ["S_TS"]
+    data["archive"] = os.environ["S_ARCHIVE"]
+    data["duration"] = os.environ["S_DURATION"]
+    data["repo_size"] = os.environ["S_REPO_SIZE"]
+    data["archive_count"] = os.environ["S_ARCHIVE_COUNT"]
+    try:
+        data["dump_errors"] = int(os.environ["S_DUMP_ERRORS"])
+    except ValueError:
+        data["dump_errors"] = os.environ["S_DUMP_ERRORS"]
+    data["error"] = os.environ["S_ERROR"]
+data.setdefault("remote", {})
+if os.environ["UPDATE_REMOTE"] == "true":
+    data["remote"]["status"] = os.environ["R_STATUS"]
+    data["remote"]["duration"] = os.environ["R_DURATION"]
+    data["remote"]["error"] = os.environ["R_ERROR"]
+    data["remote"]["archive"] = os.environ["R_ARCHIVE"]
+    data["remote"]["last_backup"] = os.environ["S_TS"]
+with open(path, "w") as f:
+    json.dump(data, f, indent=4)
+PYEOF
 chown 1000:1000 "${BORG_STATUS_FILE}"
 chmod 644 "${BORG_STATUS_FILE}"
 
@@ -329,7 +407,21 @@ cat "${BORG_STATUS_FILE}"
 
 # ── Healthcheck ping ─────────────────────────────────────────────
 
-if [ -n "${BORG_HEALTHCHECK_URL}" ]; then
+# The two split jobs ping SEPARATE checks so neither resets the other's deadman:
+#   - local job → BORG_HEALTHCHECK_URL (the nightly "BorgBackup" check)
+#   - push job  → BORG_REMOTE_HEALTHCHECK_URL if configured; otherwise no ping
+#     (the offsite copy is also covered by borg-pi-manage.sh freshness).
+if [ "${REMOTE_ONLY}" = "true" ]; then
+    if [ -n "${BORG_REMOTE_HEALTHCHECK_URL}" ]; then
+        if [ "${REMOTE_STATUS}" = "success" ]; then
+            curl -m 10 --retry 5 -s "${BORG_REMOTE_HEALTHCHECK_URL}" > /dev/null || true
+        else
+            curl -m 10 --retry 5 -s "${BORG_REMOTE_HEALTHCHECK_URL}/fail" --data-raw "offsite push ${REMOTE_STATUS}: ${REMOTE_ERROR} — Details: ${BORG_WEB_ADMIN_URL}" > /dev/null || true
+        fi
+    else
+        echo "No BORG_REMOTE_HEALTHCHECK_URL configured — skipping push healthcheck ping (offsite freshness still monitored by borg-pi-manage.sh)"
+    fi
+elif [ -n "${BORG_HEALTHCHECK_URL}" ]; then
     if [ "${BACKUP_STATUS}" = "success" ]; then
         curl -m 10 --retry 5 -s "${BORG_HEALTHCHECK_URL}" > /dev/null || true
     else
