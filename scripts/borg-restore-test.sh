@@ -118,9 +118,6 @@ fi
 if [ "${SECRETS_AVAILABLE}" = "true" ]; then
     BORG_PASSPHRASE=$(load_secret_retry "borgbackup" "BORG_PASSPHRASE") || true
     BORG_RESTORE_TEST_HEALTHCHECK_URL=$(load_secret "borgbackup" "BORG_RESTORE_TEST_HEALTHCHECK_URL") || true
-    if [ -n "${BORG_REMOTE_REPO}" ]; then
-        BORG_REMOTE_PASSPHRASE=$(load_secret "borgbackup" "BORG_REMOTE_PASSPHRASE") || true
-    fi
 fi
 
 # Cache the healthcheck URL so the trap can ping /fail on future runs even if
@@ -223,34 +220,16 @@ else
     fi
 fi
 
-# ── Remote repository integrity check ────────────────────────────
-
-REMOTE_INTEGRITY_STATUS="skipped"
-
-if [ -n "${BORG_REMOTE_REPO}" ] && [ -n "${BORG_REMOTE_PASSPHRASE}" ]; then
-    echo ""
-    echo "── Remote repository integrity check ──"
-
-    # BORG_CHECK_ARGS contains multiple flags, must word-split
-    # shellcheck disable=SC2086
-    if BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg check ${BORG_CHECK_ARGS} "${BORG_REMOTE_REPO}"; then
-        echo "Remote repository integrity check passed"
-        REMOTE_INTEGRITY_STATUS="success"
-    else
-        echo "WARNING: Remote repository integrity check failed"
-        REMOTE_INTEGRITY_STATUS="failed"
-        # Remote failure is a warning only — does not fail the overall test
-    fi
-
-    # List latest remote archives for visibility
-    echo ""
-    echo "Latest remote archives:"
-    BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg list --last 3 "${BORG_REMOTE_REPO}" 2>/dev/null || true
-elif [ -n "${BORG_REMOTE_REPO}" ]; then
-    echo ""
-    echo "── Remote repository integrity check ──"
-    echo "Skipped — BORG_REMOTE_PASSPHRASE not available"
-fi
+# ── Remote (offsite Pi) repository integrity check ───────────────
+# Decoupled 2026-06-07. Previously this ran `borg check --verify-data` against
+# the offsite Pi repo over `borg serve`, which pulls every chunk (~2.74 TB)
+# across the internet to re-hash it client-side — bandwidth-bound, multi-hour,
+# and it held the Pi's repo lock long enough to fail the borg-pi-manage.sh
+# freshness/restore-test/check runs (persistent DOWN on the "offsite (backup-pi)"
+# healthcheck). The Pi is now checked SERVER-SIDE by borg-pi-manage.sh, which
+# runs `borg check` ON the Pi (reads from the Pi's own disk, no wire transfer).
+# This script therefore verifies only the LOCAL repo.
+REMOTE_INTEGRITY_STATUS="checked-by-borg-pi-manage"
 
 # ── Summary ──────────────────────────────────────────────────────
 
