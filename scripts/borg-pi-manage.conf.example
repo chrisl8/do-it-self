@@ -59,3 +59,13 @@ CLIENTS_MGMT=(
 # Path under which the passphrase secrets live. The infisical_passphrase_key
 # above is looked up at this path.
 INFISICAL_PATH="/borgbackup"
+
+# ── Bit-rot scan pacing ──────────────────────────────────────────
+# Per-client per-run time budget (seconds) for `check-bitrot`, which runs
+# `borg check --repository-only --max-duration=N`. borg persists progress, so
+# each daily run scans another slice and a full segment (bit-rot) pass completes
+# over many days. Pick this so a full pass lands roughly monthly and stays light
+# on the Pi's USB drive; passes simply stretch as the repos grow (the daily load
+# stays fixed). 1200s (20 min) gives the ~3 TB wintermute repo a ~monthly pass.
+# Only the repository check is time-boxed; check-archives (logical) runs whole.
+CHECK_BITROT_MAX_DURATION=1200
