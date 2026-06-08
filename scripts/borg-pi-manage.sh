@@ -22,9 +22,12 @@
 #   break-lock    release a stale repo lock left by a killed borg process
 #                 (e.g. the Pi was powered off mid-push). Manual recovery
 #                 only — run when you know no backup is actually in flight.
+#   smart         poll the Pi drive's SMART health (the Pi is inbound-only and
+#                 can't alert itself) and ping HC.io. Daily. Not client-scoped.
 #   all           prune + freshness (typical daily cron)
 #
 # Cron pattern (under chrisl8's user crontab, `crontab -e`):
+#   0 7  * * *  ~/containers/scripts/borg-pi-manage.sh smart
 #   0 8  * * *  ~/containers/scripts/borg-pi-manage.sh all
 #   0 10 * * *  ~/containers/scripts/borg-pi-manage.sh check-bitrot
 #   0 9  * * 0  ~/containers/scripts/borg-pi-manage.sh check-archives
@@ -334,6 +337,49 @@ cmd_break_lock_one() {
     return 0
 }
 
+# Drive SMART health — one drive on the Pi, not per-client, so this runs once
+# (not via run_for_all_clients). The Pi's 'smart-health' verb runs smartctl and
+# prints its output; we parse the output (smartctl's exit code is a bitmask we
+# don't rely on). No BORG_PASSPHRASE is needed for this verb, so pass empty.
+cmd_smart() {
+    echo ""
+    echo "── SMART health (backup-pi drive) ──"
+    local out
+    out=$(pi_borg "" "smart-health" 2>&1) || true
+    if ! printf '%s' "$out" | grep -q "SMART overall-health self-assessment"; then
+        echo "[ERROR] could not read SMART health from the Pi:"
+        echo "$out"
+        hc_fail "$HC_URL" "backup-pi: SMART query failed — $(printf '%s' "$out" | tail -1)"
+        return 1
+    fi
+    echo "$out"
+    local problems=()
+    if ! printf '%s' "$out" | grep -q "self-assessment test result: PASSED"; then
+        problems+=("overall-health!=PASSED")
+    fi
+    local pending uncorr realloc
+    pending=$(printf '%s' "$out" | awk '$1==197 {print $NF; exit}')
+    uncorr=$(printf '%s' "$out" | awk '$1==198 {print $NF; exit}')
+    realloc=$(printf '%s' "$out" | awk '$1==5 {print $NF; exit}')
+    if [[ "$pending" =~ ^[0-9]+$ ]] && [ "$pending" -gt 0 ]; then
+        problems+=("Current_Pending_Sector=$pending")
+    fi
+    if [[ "$uncorr" =~ ^[0-9]+$ ]] && [ "$uncorr" -gt 0 ]; then
+        problems+=("Offline_Uncorrectable=$uncorr")
+    fi
+    if [[ "$realloc" =~ ^[0-9]+$ ]] && [ "$realloc" -gt 0 ]; then
+        echo "[WARN] Reallocated_Sector_Ct=$realloc (not yet failing, but watch for growth)"
+    fi
+    if [ "${#problems[@]}" -gt 0 ]; then
+        echo "[ERROR] SMART problems detected: ${problems[*]}"
+        hc_fail "$HC_URL" "backup-pi SMART: ${problems[*]}"
+        return 1
+    fi
+    echo "[OK] SMART healthy (PASSED; pending=${pending:-?} uncorrectable=${uncorr:-?} reallocated=${realloc:-?})"
+    hc_success "$HC_URL"
+    return 0
+}
+
 run_for_all_clients() {
     local fn="$1"
     local rc=0
@@ -371,6 +417,7 @@ case "$CMD" in
     freshness)     run_command cmd_freshness_one "freshness" ;;
     restore-test)  run_command cmd_restore_test_one "restore-test" ;;
     break-lock)    run_command cmd_break_lock_one "break-lock" ;;
+    smart)          cmd_smart ;;
     all)
         # Daily cron path. Prune failures are noisy but acceptable as long
         # as freshness is OK; treat freshness as the authoritative deadman
@@ -379,12 +426,12 @@ case "$CMD" in
         run_command cmd_freshness_one "freshness"
         ;;
     "")
-        echo "Usage: $0 {prune|check|check-bitrot|check-archives|freshness|restore-test|break-lock|all}"
+        echo "Usage: $0 {prune|check|check-bitrot|check-archives|freshness|restore-test|break-lock|smart|all}"
         exit 2
         ;;
     *)
         echo "[ERROR] unknown subcommand: $CMD"
-        echo "Usage: $0 {prune|check|check-bitrot|check-archives|freshness|restore-test|break-lock|all}"
+        echo "Usage: $0 {prune|check|check-bitrot|check-archives|freshness|restore-test|break-lock|smart|all}"
         exit 2
         ;;
 esac
