@@ -7,8 +7,15 @@
 # stores the passphrases at rest.
 #
 # Subcommands:
-#   prune         prune + compact every configured client repo
-#   check         borg check every configured client repo (slow; weekly)
+#   prune          prune + compact every configured client repo
+#   check          FULL borg check (repository CRC + archives). Slow on Pi USB
+#                  storage (~hours per TB) — manual/occasional use only.
+#   check-bitrot   resumable repository-only (segment CRC / bit-rot) check,
+#                  time-boxed by CHECK_BITROT_MAX_DURATION. Run DAILY: each run
+#                  scans another slice and borg persists progress, so a full
+#                  bit-rot pass completes over ~a month without any multi-hour
+#                  slog — gentle on the Pi's drive.
+#   check-archives archives-only check (fast; logical/metadata integrity). Weekly.
 #   freshness     check newest-archive age per client; ping HC.io accordingly
 #   restore-test  extract a known file from each client's latest archive,
 #                 verify content, ping HC.io accordingly
@@ -18,9 +25,10 @@
 #   all           prune + freshness (typical daily cron)
 #
 # Cron pattern (under chrisl8's user crontab, `crontab -e`):
-#   0 4 * * *  ~/containers/scripts/borg-pi-manage.sh all
-#   0 5 * * 0  ~/containers/scripts/borg-pi-manage.sh check
-#   0 6 * * 0  ~/containers/scripts/borg-pi-manage.sh restore-test
+#   0 8  * * *  ~/containers/scripts/borg-pi-manage.sh all
+#   0 10 * * *  ~/containers/scripts/borg-pi-manage.sh check-bitrot
+#   0 9  * * 0  ~/containers/scripts/borg-pi-manage.sh check-archives
+#   30 8 * * 0  ~/containers/scripts/borg-pi-manage.sh restore-test
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,12 +44,23 @@ fi
 # shellcheck source=borg-pi-manage.conf.example
 . "${SCRIPT_DIR}/borg-pi-manage.conf"
 
+# Per-client per-run budget (seconds) for the resumable bit-rot scan. Defaulted
+# here so an older conf without the setting can't accidentally run an un-time-boxed
+# (i.e. full, multi-hour) repository check.
+CHECK_BITROT_MAX_DURATION="${CHECK_BITROT_MAX_DURATION:-1200}"
+
 mkdir -p "$(dirname "${LOG_FILE}")"
 
-# Lock — refuse to run concurrent invocations.
-exec 9>"${LOCK_FILE}"
+# Lock — refuse to run concurrent invocations. The integrity checks get their
+# OWN lock so a long-running check can never block the daily freshness/all
+# deadman (or vice-versa); everything else shares the default lock.
+LOCK_TARGET="${LOCK_FILE}"
+case "${1:-}" in
+    check|check-bitrot|check-archives) LOCK_TARGET="${LOCK_FILE}.check" ;;
+esac
+exec 9>"${LOCK_TARGET}"
 if ! flock -n 9; then
-    echo "[ERROR] Another borg-pi-manage.sh is already running" >&2
+    echo "[ERROR] Another borg-pi-manage.sh is already running (lock: ${LOCK_TARGET})" >&2
     exit 1
 fi
 
@@ -179,6 +198,47 @@ cmd_check_one() {
     return 0
 }
 
+cmd_check_bitrot_one() {
+    local pass
+    pass=$(load_secret "$C_INF_KEY") || {
+        echo "[ERROR] $C_NAME: could not load $C_INF_KEY from Infisical"
+        hc_fail "$HC_URL" "$C_NAME: Infisical fetch failed for $C_INF_KEY"
+        return 1
+    }
+    echo ""
+    echo "── bit-rot scan (repository-only, max ${CHECK_BITROT_MAX_DURATION}s) $C_NAME ──"
+    # Resumable partial repository check: each daily run scans another time-boxed
+    # slice and borg persists progress, so a full bit-rot pass completes over
+    # ~a month. rc 0 = slice OK (or pass complete); non-zero = actual corruption.
+    if pi_borg "$pass" "check $C_NAME repository-only ${CHECK_BITROT_MAX_DURATION}"; then
+        echo "[OK] $C_NAME: repository check slice completed (no corruption found)"
+    else
+        echo "[ERROR] $C_NAME: repository (bit-rot) check FAILED"
+        hc_fail "$HC_URL" "$C_NAME: borg repository (bit-rot) check failed"
+        return 1
+    fi
+    return 0
+}
+
+cmd_check_archives_one() {
+    local pass
+    pass=$(load_secret "$C_INF_KEY") || {
+        echo "[ERROR] $C_NAME: could not load $C_INF_KEY from Infisical"
+        hc_fail "$HC_URL" "$C_NAME: Infisical fetch failed for $C_INF_KEY"
+        return 1
+    }
+    echo ""
+    echo "── archive consistency check (archives-only) $C_NAME ──"
+    if pi_borg "$pass" "check $C_NAME archives-only"; then
+        echo "[OK] $C_NAME: archives-only check passed"
+    else
+        echo "[ERROR] $C_NAME: archives-only check FAILED"
+        hc_fail "$HC_URL" "$C_NAME: borg archives-only check failed"
+        return 1
+    fi
+    return 0
+}
+
 cmd_freshness_one() {
     local pass
     pass=$(load_secret "$C_INF_KEY") || {
@@ -305,7 +365,9 @@ run_command() {
 CMD="${1:-}"
 case "$CMD" in
     prune)         run_command cmd_prune_one "prune" ;;
-    check)         run_command cmd_check_one "check" ;;
+    check)          run_command cmd_check_one "check" ;;
+    check-bitrot)   run_command cmd_check_bitrot_one "check-bitrot" ;;
+    check-archives) run_command cmd_check_archives_one "check-archives" ;;
     freshness)     run_command cmd_freshness_one "freshness" ;;
     restore-test)  run_command cmd_restore_test_one "restore-test" ;;
     break-lock)    run_command cmd_break_lock_one "break-lock" ;;
@@ -317,12 +379,12 @@ case "$CMD" in
         run_command cmd_freshness_one "freshness"
         ;;
     "")
-        echo "Usage: $0 {prune|check|freshness|restore-test|break-lock|all}"
+        echo "Usage: $0 {prune|check|check-bitrot|check-archives|freshness|restore-test|break-lock|all}"
         exit 2
         ;;
     *)
         echo "[ERROR] unknown subcommand: $CMD"
-        echo "Usage: $0 {prune|check|freshness|restore-test|break-lock|all}"
+        echo "Usage: $0 {prune|check|check-bitrot|check-archives|freshness|restore-test|break-lock|all}"
         exit 2
         ;;
 esac

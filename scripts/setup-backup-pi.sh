@@ -740,8 +740,35 @@ case "$VERB" in
         exec borg compact --show-rc "$REPO_PATH"
         ;;
     check)
-        logger -t borg-manage "check $CLIENT_NAME ($REPO_PATH)"
-        exec borg check --show-rc "$REPO_PATH"
+        # ARG1 = mode: full | repository-only | archives-only  (default: full)
+        # ARG2 = max-duration seconds (integer; only honored with repository-only —
+        #        enables borg's resumable partial repository check so a slow USB
+        #        disk can be scanned for bit-rot in short daily slices instead of
+        #        one multi-hour slog).
+        CHECK_MODE="${ARG1:-full}"
+        CHECK_ARGS=(--show-rc)
+        case "$CHECK_MODE" in
+            full) ;;
+            archives-only) CHECK_ARGS+=(--archives-only) ;;
+            repository-only)
+                CHECK_ARGS+=(--repository-only)
+                if [[ -n "$ARG2" ]]; then
+                    if [[ ! "$ARG2" =~ ^[0-9]+$ ]]; then
+                        logger -t borg-manage "rejected: bad max-duration: $ARG2"
+                        echo "ERROR: max-duration must be an integer (seconds)" >&2
+                        exit 1
+                    fi
+                    CHECK_ARGS+=(--max-duration "$ARG2")
+                fi
+                ;;
+            *)
+                logger -t borg-manage "rejected: bad check mode: $CHECK_MODE"
+                echo "ERROR: invalid check mode (full|repository-only|archives-only)" >&2
+                exit 1
+                ;;
+        esac
+        logger -t borg-manage "check $CLIENT_NAME ($REPO_PATH) mode=$CHECK_MODE dur=${ARG2:-none}"
+        exec borg check "${CHECK_ARGS[@]}" "$REPO_PATH"
         ;;
     break-lock)
         # Release a stale repository lock left behind when a borg process was
