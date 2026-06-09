@@ -3,7 +3,7 @@ import { init, downloadBudget, runBankSync, shutdown } from "@actual-app/api";
 (async () => {
   await init({
     // Budget data will be cached locally here, in subdirectories for each file.
-    dataDir: `${process.env.HOME}/actual-budget-data-from-metatron`,
+    dataDir: `${process.env.HOME}/actual-budget-sync-data`,
     // This is the URL of your running server
     serverURL: `https://actual.${process.env.TS_DOMAIN}`,
     // This is the password you use to log into the server
