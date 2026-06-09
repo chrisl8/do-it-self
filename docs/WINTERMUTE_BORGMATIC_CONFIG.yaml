@@ -1,0 +1,136 @@
+# ~/.config/borgmatic/config.yaml
+# CachyOS desktop → Neuromancer (Tailscale)
+# Run as your user, not root.
+
+constants:
+    hostname: wintermute
+    backup_user: chris10            # change to your CachyOS username if different
+
+borg_exit_codes:
+    - code: 105
+      treat_as: warning
+
+source_directories:
+    - /home/chris10
+    - /etc
+    - /run/media/chris10/Matrix
+
+repositories:
+    - path: ssh://neuromancer-borg/mnt/22TB/borg/backups/wintermute
+      label: neuromancer
+    - path: ssh://pi-borg/mnt/backup/borg-wintermute
+      label: backup-pi
+
+# --- Encryption ---
+# Stored in a root-readable file so systemd --user can read it.
+# chmod 600. See setup notes for generation.
+encryption_passcommand: cat /home/chris10/.config/borgmatic/passphrase
+
+# --- Compression ---
+compression: zstd,3
+
+# --- Archive naming ---
+archive_name_format: '{hostname}-{now:%Y-%m-%dT%H-%M-%S}'
+match_archives: 'sh:{hostname}-*'
+
+# --- Exclusions ---
+exclude_caches: true              # honors CACHEDIR.TAG
+exclude_if_present:
+    - .nobackup                   # marker file — drop in any dir to skip it
+    - .nobak
+
+exclude_patterns:
+    # User caches and trash
+    - '/home/*/.cache'
+    - '/home/*/.local/share/Trash'
+    - '/home/*/.local/share/baloo'
+    - '/home/*/.local/share/tracker3'
+    - '/home/*/.thumbnails'
+
+    # Browser profile caches (the dirs that aren't covered by .cache)
+    - '/home/*/.mozilla/firefox/*/storage/default/*/cache'
+    - '/home/*/.mozilla/firefox/*/cache2'
+    - '/home/*/.config/google-chrome/*/Cache'
+    - '/home/*/.config/chromium/*/Cache'
+    - '/home/*/.config/BraveSoftware/*/Cache'
+
+    # Steam — game data is re-downloadable, save data lives in userdata
+    # (kept by exclusion of the parent dir not covering userdata explicitly)
+    - '/home/*/.steam/steam/steamapps/common'
+    - '/home/*/.steam/steam/steamapps/downloading'
+    - '/home/*/.steam/steam/steamapps/shadercache'
+    - '/home/*/.local/share/Steam/steamapps/common'
+    - '/home/*/.local/share/Steam/steamapps/downloading'
+    - '/home/*/.local/share/Steam/steamapps/shadercache'
+    # Lutris/Heroic if you use them
+    - '/home/*/Games'
+    - '/home/*/.var/app/com.valvesoftware.Steam'
+
+    # Flatpak per-app caches (keep configs, drop caches)
+    - '/home/*/.var/app/*/cache'
+    - '/home/*/.var/app/*/.cache'
+
+    # Distrobox / Podman container storage — reproducible from Containerfile
+    - '/home/*/.local/share/containers'
+
+    # Node / Rust / Python / Go / JVM build artifacts
+    - '*/node_modules'
+    - '*/target/debug'
+    - '*/target/release'
+    - '*/.venv'
+    - '*/__pycache__'
+    - '*/.pytest_cache'
+    - '*/.mypy_cache'
+    - '*/.ruff_cache'
+    - '*/.gradle'
+    - '*/build'
+    - '*/dist'
+
+    # System
+    - /var/cache
+    - /var/tmp
+    - /var/lib/pacman/sync
+    - /var/log/journal
+    - /var/lib/flatpak/repo
+    - /var/lib/systemd/coredump
+    - /tmp
+    - /lost+found
+    # any user-trash dir anywhere
+    - '*/.Trash-*'
+    # root BTRFS/snapper snapshots dir
+    - '/.snapshots'
+    # also matches /mnt/.snapshots etc, defensive
+    - '*/.snapshots'
+
+# --- Retention ---
+keep_daily: 7
+keep_weekly: 4
+keep_monthly: 6
+keep_yearly: 2
+
+# --- Consistency checks ---
+# Don't run on every backup — they're expensive over the wire.
+checks:
+    - name: repository
+      frequency: 1 week
+    - name: archives
+      frequency: 4 weeks
+
+commands:
+    - before: action
+      when: [create]
+      run:
+          - pacman -Qqe > /home/chris10/.config/borgmatic/pkglist-explicit.txt
+          - pacman -Qqm > /home/chris10/.config/borgmatic/pkglist-aur.txt
+          - flatpak list --app --columns=application > /home/chris10/.config/borgmatic/flatpak-list.txt 2>/dev/null || true
+
+    - after: error
+      run:
+          - logger -t borgmatic -p user.err "Borgmatic backup failed on {repository_label}"
+skip_actions:
+  - check
+# --- Optional monitoring ---
+# Uncomment when you set up Healthchecks.io or similar.
+# healthchecks:
+#     ping_url: https://hc-ping.com/YOUR-UUID
+#     verify_tls: true
