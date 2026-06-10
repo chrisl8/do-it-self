@@ -363,6 +363,11 @@ At that point, decide how to divvy up the two empty 2TB drives. Open options to 
 
 Controller-placement rule to honor when revisited: **every ZFS pool stays on trustworthy controllers** (Intel native or the new JMB585). The Marvell 88SE9172 carries only the HDD / non-pool disks — putting a mirror leg on it reintroduces the cache-flush-honesty risk the new card is meant to avoid. Update the [Confirmed current state](#confirmed-current-state-2026-06-09) table after any re-cabling.
 
+**Also decide then: relocate the Samsung SSDs off the 3 Gb/s ports, or leave them?** The Samsung 850/840 SSDs — boot mirror (`sdc`/`sdd`), Monitor (`sde` @ `/mnt/120`), Cache (`sdf` @ `/mnt/250`) — sit on the Intel **3 Gb/s** ports and cap ~275 MB/s (confirmed by the 2026-06-10 read sweep). The new card adds 6 Gb/s ports, so moving them becomes possible.
+- **Default: leave them.** The original reasoning still holds — boot/cache/monitor roles aren't bandwidth-bound, and a 6 Gb/s port is better spent on a *pool member* than on a drive whose job tops out well under 275 MB/s.
+- **Relocate only if the benchmark shows a starved role** — e.g. if `/mnt/250` Cache or `/mnt/120` Monitor turns out to do heavy sequential IO that the 3G cap is actually limiting. The Samsungs are genuinely *better* drives than the budget SPCC (at 6G they'd do ~500+), so if a future workload wants fast scratch/cache/DB space, they're the right candidates to promote to a 6G port — but promote based on a measured need, not on principle.
+- Rule of thumb: spend scarce 6 Gb/s ports on ZFS pool members and throughput-sensitive workloads first; a drive serving a role that's happy at 275 MB/s doesn't earn one.
+
 ## Deferred: benchmark all drives to inform data placement
 
 The current layout was chosen for **safety and redundancy, not speed** — the 4TB mirror is the safest home for the irreplaceable data, full stop. But the drives have never been characterized head-to-head, and at some point it's worth measuring **every drive in the box** to decide whether any data should be (re)distributed by speed tier.
@@ -371,5 +376,9 @@ What and why:
 - The new SPCC 4TB SSDs are budget DRAM-less QLC-class; their **sustained (post-SLC-cache) write** is the unknown. The ~50–80 MB/s seen during the migration is *not* a valid benchmark — it was small-file-bound (immich thumbnails), cross-drive (reading the old 2TB), and mirror-write-amplified. A clean `fio` run (sequential + small-random, read + sustained-write) is the only way to get real numbers.
 - Characterize the whole set: SPCC 4TB pool, the surviving PNY 2TB, the Samsung 840/850 SATA SSDs (`/mnt/250`, `/mnt/120`), and the 22TB HDD. Knowing the actual ceilings tells you where a latency- or throughput-sensitive workload (e.g. a database, a cache, scratch space) actually belongs vs. where it sits today by historical accident.
 - **Clean opportunity for the old 2TB:** after cutover and before wiping `sdh` in Phase H, it goes idle — benchmark it then, alongside the now-populated 4TB pool, for a direct old-vs-new comparison before it's decommissioned.
+
+- **First read-sweep data (2026-06-10, system live) — `sda` is the one to watch.** A QD1 raw read pass (`dd bs=1M iflag=direct`, 4 GiB/drive) over two runs: `sdb` (4TB) 412/387 MB/s steady; **`sda` (4TB, its mirror twin) 235/151 MB/s — consistently ~half, in *both* runs**; `sdh` (2TB PNY on Marvell) 386/390 (Marvell is **not** throttling bandwidth); `sdf` (Samsung 840, 3 Gb/s port) ~275 (the 3G link ceiling); 22TB HDD ~120–150. Numbers are noisy (live contention) and QD1 undersells SSDs, but the `sda`-vs-`sdb` gap repeated both runs and is suspicious for identical mirror twins. Follow-ups:
+  - `sudo smartctl -a /dev/sda` and `/dev/sdb` — compare reallocated/pending sectors, wear-leveling count, error log. These are budget QLC drives holding irreplaceable data, so a weaker `sda` matters.
+  - Re-run the read sweep **idle** (Phase H window). If `sda` is still ~half `sdb` with no contention, treat it as a marginal unit: make it the first replacement candidate and watch `zpool status` CKSUM.
 
 This is an optimization pass, not a correctness requirement — the data is safe and mirrored regardless. Revisit when there's a concrete "is X fast enough / where should X live" question, or opportunistically during the Phase H window.
