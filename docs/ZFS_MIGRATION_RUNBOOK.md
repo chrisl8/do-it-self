@@ -1,77 +1,78 @@
 # ZFS Migration Runbook — neuromancer
 
-Migration of neuromancer's primary container storage from a single 2TB mdadm+LVM+ext4 mirror to two ZFS mirror pools (4TB + 2TB). Adds bulk-growth headroom and on-disk integrity checking for irreplaceable data (immich, nextcloud, paperless, etc.).
+Migration of neuromancer's primary container storage from a single 2TB mdadm+LVM+ext4 mirror (`/mnt/2000`) to a **single encrypted ZFS mirror pool** on two repurposed 4TB SSDs. Adds bulk-growth headroom and on-disk integrity checking for irreplaceable data (immich, nextcloud, paperless, etc.).
+
+> **Status / history.** This runbook was originally written as a two-pool aspiration (4TB + 2TB mirrors) around a not-yet-purchased JMB585 SATA card. Reality intervened (see below), so the plan was revised on **2026-06-09** to a single encrypted 4TB pool. The two-pool design is deferred — see [Deferred: the 2TB drives and the new controller](#deferred-the-2tb-drives-and-the-new-controller).
+
+## What changed from the original plan
+
+| | Original aspiration | Actual plan (2026-06-09) |
+|---|---|---|
+| Controller | New SYBA/JMB585 PCIe SATA card for the 4TB drives | **Card not purchased yet.** Both 4TB SSDs landed on the Intel C200 native 6 Gb/s ports — *better* placement than planned |
+| 2TB tier | Healthy 2-disk PNY mirror → `tank-2tb` | **One PNY died, removed for RMA.** Survivor runs solo (degraded mdadm) on the Marvell, still serving `/mnt/2000` until cutover |
+| Topology | Two pools (4TB + 2TB) | **One pool** (`tank-4tb`) now; the 2TB tier is deferred until the RMA part and the new controller arrive |
+| Encryption | Undecided (leaning no) | **Yes** — native `aes-256-gcm`, keyfile on root. Benchmark showed no throughput cost on SATA; the RMA of a *dead, unwipeable* drive is the concrete threat it kills |
+| Datasets | Per-app datasets | **Hybrid** — dedicated datasets only for the DB + the big irreplaceables; everything else as plain dirs |
 
 ## Scope and goals
 
-- **Add headroom.** `/mnt/2000` was at 70% (1.3T used / 1.9T) and growing — primarily immich (696G) and nextcloud (278G). The 4TB pool absorbs the giants with room for years of growth.
+- **Add headroom.** `/mnt/2000` is at ~69% (1.2T used / 1.9T) and growing — primarily immich and nextcloud. The 4TB mirror lands the whole tree at ~32% full with years of growth.
 - **Add integrity checking.** ZFS scrubs detect bit-rot that mdadm cannot see. Especially valuable for photos/scans that sit untouched for years.
-- **Keep two pools as separate failure domains.** 4TB for bulk-growth data, 2TB for smaller mirror-worthy stuff (databases, secrets, code, notes). Each pool independently scrubable, replaceable, expandable.
-- **No on-host replication.** Mirror + borg-to-backup-pi covers the realistic failure modes. ZFS `syncoid` replication is a third belt that doesn't justify the operational cost for this setup.
-- **No change to `/mnt/22TB` (bulk HDD) or root.** Out of scope. The 22TB HDD at 82% is a separate problem requiring a bigger disk, not addressable by this migration.
+- **Restore redundancy.** The source is currently a **degraded, single-disk** mirror (`md1 [2/1]`). Getting the data onto the new 2-disk ZFS mirror restores fault tolerance — this is now a goal, not just a nicety.
+- **Encryption at rest.** Any data drive that fails and leaves for RMA/disposal carries unreadable data. The recently-dead 2TB SSD — being RMA'd *with* its data, unwipeable because it's dead — made this concrete.
+- **No on-host replication.** Mirror + borg (local on 22TB HDD + offsite to backup-pi) covers the realistic failure modes. ZFS `syncoid` replication is a third belt that doesn't justify the operational cost for this setup.
+- **No change to `/mnt/22TB` (bulk HDD) or root.** Out of scope. The 22TB HDD at ~83% is a separate problem requiring a bigger disk.
 
 ## Hardware
 
-### Decisions made
+### Confirmed current state (2026-06-09)
 
-| Item | Choice | Why not the alternative |
-|---|---|---|
-| PCIe SATA card | **SYBA SI-PEX40139** (JMB585 chipset, 5 native ports, PCIe 3.0 x2) | Cheap unbranded 4-port cards silently swap chipsets between batches (ASM1064 / ASM1061+port-multiplier / Marvell 88SE9215). Port multipliers can lie about cache flushes — dangerous under ZFS. JMB585 is the well-regarded "just works on Linux, doesn't lie" chip. Extra ~$18 over an unknown-chipset card is trivial insurance against CKSUM errors with no real cause. |
-| SSDs | **2x 4TB SATA SSD** (repurposed from wintermute) | Already owned. Wipe before use. |
-| Layout | **Two separate ZFS mirror pools** (4TB and 2TB) | RAID10 across all 4 disks would give ~6TB single pool with better perf but: (a) loses the independent-failure-domain property, (b) requires both old and new disks to be wiped and rebuilt simultaneously, (c) one pool corruption = all data gone. Two pools = staged migration, independent scrub cycles, can replace disk sets at different times. |
-| Filesystem | **ZFS** (not mdadm+ext4) | Bit-rot detection via scrub is the killer feature for irreplaceable data. Native snapshots replace ad-hoc backup scripts. Per-dataset properties (compression, recordsize, atime) tune per workload. Cost is operational overhead — accepted because the data being protected justifies it. |
-| Replication target | **None** (2TB is primary storage, not a replica) | Mirror + borg covers disk failure and catastrophic loss. `syncoid` only adds value for "logical corruption caught quickly" — narrow window, not worth the ongoing maintenance for a home server. |
+Verified via `lsblk`, `/dev/disk/by-id/`, and `/sys/block/*` controller mapping:
 
-### Current SATA topology (neuromancer, pre-migration)
+| Dev | Drive | Controller | Role |
+|---|---|---|---|
+| **sda** | **SPCC 4TB SSD** (serial `…0102594`) | **Intel C200 native, ata1, 6 Gb/s** | **New ZFS mirror leg** (currently NTFS `Backups`, to be wiped) |
+| **sdb** | **SPCC 4TB SSD** (serial `…0102580`) | **Intel C200 native, ata2, 6 Gb/s** | **New ZFS mirror leg** (currently NTFS `Matrix`, to be wiped) |
+| sdc | Samsung 850 250G | Intel C200 native | `md0` → `/` + `/boot` (boot mirror, healthy) |
+| sdd | Samsung 850 250G | Intel C200 native | `md0` → `/` + `/boot` |
+| sde | Samsung 850 120G | Intel C200 native | `/mnt/120` (Monitor) |
+| sdf | Samsung 840 PRO 238G | Intel C200 native | `/mnt/250` (Cache) |
+| sdg | ST22000NM 22TB HDD | Marvell 88SE9172 (add-in), ata7 | `/mnt/22TB` |
+| sdh | PNY 2TB SSD (survivor) | Marvell 88SE9172 (add-in), ata8 | `md1` (degraded) → `/mnt/2000`, decommissioned after cutover |
 
-This board has **two** SATA controllers, and the Intel chipset ports are **not all the same speed**. The Intel 6-Series/C200 PCH provides only **2× SATA 6 Gb/s** ports (ata1/ata2) and **4× SATA 3 Gb/s** ports (ata3–ata6) — a hardware limit of this PCH generation, not a BIOS setting. Captured from `lsblk` + `/sys/class/ata_port` link speeds:
+**Why this placement is good:** the new 4TB mirror sits entirely on the trustworthy Intel native controller at full 6 Gb/s — exactly where the busy pool belongs. The least-trusted controller (Marvell 88SE9172, cache-flush-honesty concerns) carries only the HDD and the lone 2TB, **neither of which is in a ZFS pool**. This preserves the controller-trust property the JMB585 purchase was originally meant to buy — achieved for free by the current cabling.
 
-| Dev | Drive | ATA port | Controller | Port max | Negotiated | Current use |
-|---|---|---|---|---|---|---|
-| sda | PNY 2TB SSD | ata1 | Intel C200 (chipset) | 6 Gb/s | 6.0 Gb/s | md1 → `/mnt/2000` (→ future tank-2tb) |
-| sdb | PNY 2TB SSD | ata2 | Intel C200 (chipset) | 6 Gb/s | 6.0 Gb/s | md1 → `/mnt/2000` (→ future tank-2tb) |
-| sdc | Samsung 850 233G | ata3 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | md0 → `/` + `/boot` |
-| sdd | Samsung 850 233G | ata4 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | md0 → `/` + `/boot` |
-| sde | Samsung 850 112G | ata5 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | `/mnt/120` (Monitor) |
-| sdf | Samsung 840 238G | ata6 | Intel C200 (chipset) | 3 Gb/s | 3.0 Gb/s | `/mnt/250` (Cache) |
-| sdg | ST22000NM 22TB HDD | ata7 | Marvell 88SE9172 (add-in) | 6 Gb/s | 6.0 Gb/s | `/mnt/22TB` |
-| — | (empty) | ata8 | Marvell 88SE9172 (add-in) | 6 Gb/s | — | free |
+The two 4TB drives are the same SPCC (Silicon Power) model from one batch (consecutive serials). Budget consumer SSDs + correlated batch-failure risk = **borg discipline matters more than ever; the mirror is not the backup.**
 
-**Why this layout is already correct (don't rearrange existing drives):**
-- The two PNY 2TB SSDs (future `tank-2tb` mirror) occupy the only two 6 Gb/s chipset ports — keep them there.
-- The 3 Gb/s-throttled drives are exactly the ones that don't care (boot/root mirror, cache, monitor); un-throttling them isn't worth a scarce 6 Gb/s port.
-- The 22TB HDD sits on the least-trusted controller (Marvell 88SE9172) — correct, because an HDD can't use 6 Gb/s anyway and this **keeps the flaky controller off every ZFS pool**, which is the same cache-flush-honesty concern that drove the JMB585 purchase.
+### CPU / encryption headroom
 
-**Where the new 4TB SSDs go:** both on the JMB585 card. All native 6 Gb/s ports are already taken, and `tank-4tb` is the busiest pool (immich/nextcloud), so it must not land on a 3 Gb/s port. This keeps both ZFS pools on trustworthy controllers (tank-2tb on Intel native, tank-4tb on JMB585). **Do not split the tank-4tb mirror across the JMB585 and the Marvell's free port** — putting a mirror leg on the 88SE9172 reintroduces the exact risk the card was bought to avoid.
+i7-2600K (Sandy Bridge), 4C/8T, **AES-NI present**. Measured `openssl speed -evp aes-256-gcm`:
 
-**Verify after install:**
-- `sudo lspci -vv -s <card> | grep LnkSta` → confirm `Width x2` (an x1 slot makes the two 4TB drives share ~985 MB/s; put the card in an x4-or-wider physical slot).
-- Re-check the 4TB drives negotiated **6.0 Gb/s** (a bad cable silently falls back to 3.0).
+- Single core: **~1.3 GB/s** at 4K–16K blocks
+- All 8 threads: ~6.1 GB/s
+- A single SATA SSD (the real bottleneck): **~0.55 GB/s**
 
-### Hardware purchase list
-
-- [ ] SYBA SI-PEX40139 PCIe SATA card — Amazon B07ST9CPND or equivalent JMB585 card (~$35)
-- [ ] 4x SATA cables if not included with card (card typically ships with some)
-- [ ] Verify chassis has 2 free 2.5" mounting locations or use adhesive/bracket mounts
+One core encrypts ~2.4× faster than one of these SSDs can move data, so **encryption costs no measurable sequential throughput** — the disk is always the bottleneck. Power: ~0 at idle (crypto only runs during active IO); ~5–8 W on a partial core during a sustained transfer; no fan change in normal use. **Scrubs cost nothing extra** — ZFS verifies the checksum/MAC over the *ciphertext* and does not decrypt during a scrub. (This "free" verdict holds *because we're on SATA*; on NVMe a single core would bottleneck.)
 
 ## Pre-migration preparation
 
-### 1. Verify backup health
+### 1. Verify backup health — PASSED 2026-06-09
 
-Critical — borg is the only safety net during the migration window.
+The source is a degraded single-disk mirror, so borg is the redundancy during the migration window. **Real borg topology** (the original runbook guessed wrong — there is no `webadmin@backup-pi:/borg-repos/...`):
+
+- **Local (primary) repo:** `/mnt/22TB/borg-repo` on neuromancer itself (no SSH).
+- **Offsite push:** `ssh://borg@backup-pi/mnt/backup/borg` (user `borg`, append-only, dedicated key via `BORG_RSH`).
+- Config lives in `scripts/borg-backup.conf`. All migration paths (`/mnt/2000/container-mounts/`, `/mnt/2000/Hyperion/`, `/mnt/2000/samba/`, `/mnt/2000/FastmailBackup/`) are in `BORG_BACKUP_PATHS`.
+
+Freshness check without passphrase or SSH — read the status JSON the backup writes:
 
 ```bash
-# Check most recent borg run for neuromancer
-ssh webadmin@backup-pi 'ls -lath /borg-repos/neuromancer/data/ | head -5'
-
-# Verify backup-coverage audit is green for everything being migrated
-# (use the web admin Backup Coverage page, or run the audit script directly)
-~/containers/scripts/backup-coverage-audit.sh --host neuromancer
+cat ~/containers/homepage/images/borg-status.json   # status, last_backup, integrity_status
 ```
 
-Do not proceed if any "must-migrate" container shows uncovered paths.
+Verified state at migration time: local repo fresh (~12h), 14 archives, 1.84 TB, 0 dump errors, **local integrity verified**; offsite push fresh (~9h). The `remote_integrity_status: "failed"` field is a **stale leftover** from the pre-2026-06-07 client-side `borg check --verify-data` approach (decoupled because it was bandwidth-bound and lock-conflicting); offsite integrity is now checked **server-side on the Pi** by `borg-pi-manage.sh` and reported via healthchecks.io. Not a live alarm; it self-corrects on the next `borg-restore-test.sh` run. The fresh, integrity-verified **local** repo on a separate physical disk is the restore source if `sdh` dies mid-migration.
 
-### 2. Document current state (snapshot for rollback reference)
+### 2. Document current state (rollback reference)
 
 ```bash
 mkdir -p ~/migration-snapshot
@@ -81,196 +82,176 @@ cat /proc/mdstat > ~/migration-snapshot/mdstat-before.txt
 sudo vgdisplay > ~/migration-snapshot/vgdisplay-before.txt
 sudo pvdisplay > ~/migration-snapshot/pvdisplay-before.txt
 cp ~/containers/user-config.yaml ~/migration-snapshot/user-config-before.yaml
-du -sh /mnt/2000/container-mounts/* > ~/migration-snapshot/sizes-before.txt
+sudo du -sh /mnt/2000/container-mounts/* > ~/migration-snapshot/sizes-before.txt
 ```
 
-### 3. Install ZFS
+## Phase A — Install ZFS
 
 ```bash
-sudo apt update
-sudo apt install zfsutils-linux
-zfs version  # confirm install
+sudo apt update && sudo apt install -y zfsutils-linux
+zfs version
 ```
 
 Ubuntu 24.04 ships ZFS in-tree; no DKMS needed.
 
-### 4. Wipe wintermute SSDs (do this on wintermute before pulling them)
+## Phase B — Wipe the two new 4TB SSDs
 
-Per disk:
+Using `/dev/disk/by-id/` so there is no chance of hitting the wrong disk (neither of these is the 2TB survivor `sdh` or the boot mirror):
+
 ```bash
-sudo wipefs -a /dev/sdX
-sudo sgdisk --zap-all /dev/sdX
+for id in ata-SPCC_Solid_State_Disk_SP20241213A0102594 \
+          ata-SPCC_Solid_State_Disk_SP20241213A0102580; do
+  sudo wipefs -a        /dev/disk/by-id/$id
+  sudo sgdisk --zap-all /dev/disk/by-id/$id
+done
 ```
 
-## Phase 1 — Hardware installation
-
-1. `~/containers/scripts/all-containers.sh --stop`
-2. `sudo systemctl poweroff`
-3. Install SYBA card in available PCIe slot (x4 or wider — x1 will work but bottleneck).
-4. Connect both 4TB SSDs to ports on the new card.
-5. Boot.
-6. Verify detection:
-   ```bash
-   lspci | grep -i sata    # should show JMicron JMB58x
-   lsblk                   # should show two new ~3.7T disks
-   dmesg | grep -i ahci    # check no errors
-   ```
-7. Note the device names assigned (likely `/dev/sdh` and `/dev/sdi` or similar). Use `/dev/disk/by-id/` paths for the pool — they survive device renames.
-   ```bash
-   ls -la /dev/disk/by-id/ | grep -i ata- | grep -v part
-   ```
-
-## Phase 2 — Create the 4TB pool
-
-### Pool creation
+## Phase C — Encryption key (and off-host copy)
 
 ```bash
-# Replace IDs with the actual /dev/disk/by-id/ paths for the two 4TB SSDs
+sudo install -d -m 700 /etc/zfs/keys
+sudo dd if=/dev/urandom of=/etc/zfs/keys/tank-4tb.key bs=32 count=1
+sudo chmod 400 /etc/zfs/keys/tank-4tb.key
+sudo base64 /etc/zfs/keys/tank-4tb.key   # → store in Infisical / password vault NOW
+# restore later with:  base64 -d > /etc/zfs/keys/tank-4tb.key
+```
+
+**Critical key-management discipline.** The key lives on the unencrypted root mirror *by design* — it protects data drives that **leave** the building for RMA, not the running host. But if the root disk dies and there is no off-host copy, the pool is unrecoverable. The off-host copy (above) closes the failure mode that encryption introduces. Do it before putting any data on the pool.
+
+## Phase D — Create the encrypted mirror
+
+```bash
 sudo zpool create \
-  -o ashift=12 \
-  -o autotrim=on \
-  -O compression=lz4 \
-  -O atime=off \
-  -O xattr=sa \
-  -O acltype=posixacl \
+  -o ashift=12 -o autotrim=on \
+  -O compression=lz4 -O atime=off -O xattr=sa -O acltype=posixacl \
+  -O encryption=aes-256-gcm -O keyformat=raw \
+  -O keylocation=file:///etc/zfs/keys/tank-4tb.key \
   -O mountpoint=/mnt/ssd-4tb \
   tank-4tb mirror \
-  /dev/disk/by-id/ata-SSD_MODEL_SERIAL_A \
-  /dev/disk/by-id/ata-SSD_MODEL_SERIAL_B
+  /dev/disk/by-id/ata-SPCC_Solid_State_Disk_SP20241213A0102594 \
+  /dev/disk/by-id/ata-SPCC_Solid_State_Disk_SP20241213A0102580
 
-zpool status tank-4tb
-zpool list tank-4tb
+zpool status tank-4tb   # both disks ONLINE, mirror-0, no errors
 ```
 
 **Property rationale:**
-- `ashift=12` — 4K sectors, required for modern SSDs; cannot be changed after pool creation
+- `ashift=12` — 4K sectors, required for modern SSDs; **immutable** after creation
 - `autotrim=on` — background TRIM keeps SSD perf consistent
-- `compression=lz4` — near-zero CPU cost, modest space win, sometimes *faster* than uncompressed due to reduced IO
-- `atime=off` — cuts unnecessary write amplification on SSDs
-- `xattr=sa` — stores xattrs in inodes instead of hidden dirs (faster, less fragmentation)
-- `acltype=posixacl` — needed if any container ever uses POSIX ACLs
+- `compression=lz4` — near-zero CPU, early-aborts on incompressible data (media), often *faster* than off due to reduced IO; the safe "no speed loss" choice
+- `atime=off` — cuts write amplification on SSDs
+- `xattr=sa` — xattrs in inodes (faster, less fragmentation)
+- `acltype=posixacl` — in case any container uses POSIX ACLs
+- `encryption=aes-256-gcm` + `keyformat=raw` + file keylocation — encrypted at rest, unattended boot via the root-disk keyfile. **Encryption is pool-wide; every dataset inherits the key.** Cannot be added later without a rebuild.
 
-### Create datasets (one per app)
+## Phase E — Hybrid dataset layout
+
+Datasets are not pre-sized — all draw from the shared pool free space. Dedicated datasets exist only where they earn it (independent snapshots/rollback for the irreplaceables; `recordsize=16K` matching InnoDB pages for the shared DB). The four child datasets mount **inside** `container-mounts`, which is what lets a single whole-tree rsync populate them transparently.
 
 ```bash
-# Top-level organizational dataset
-sudo zfs create tank-4tb/containers
-
-# Per-app datasets — bulk-growth tier going to 4TB pool
-for app in immich nextcloud jellyfin paperless-ngx dawarich; do
-  sudo zfs create tank-4tb/containers/$app
-done
-
-# Permissions (mirror current /mnt/2000/container-mounts ownership)
-sudo chown -R chrisl8:chrisl8 /mnt/ssd-4tb/containers
-sudo chmod 770 /mnt/ssd-4tb/containers/*
+sudo zfs create tank-4tb/container-mounts
+sudo zfs create tank-4tb/container-mounts/immich
+sudo zfs create tank-4tb/container-mounts/nextcloud
+sudo zfs create tank-4tb/container-mounts/paperless-ngx
+sudo zfs create -o recordsize=16K tank-4tb/container-mounts/mariadb
+zfs list -o name,used,recordsize,encryption,mountpoint
 ```
 
-### Per-dataset overrides
+Resulting layout:
 
-None required for the bulk-growth tier — defaults are correct for photo/file/metadata workloads. (If jellyfin's media library DB grows large, revisit `recordsize=16K` on its dataset.)
-
-## Phase 3 — Migrate giants to 4TB pool
-
-For each app in order: **immich → nextcloud → paperless-ngx → dawarich → jellyfin**.
-
-Do them one at a time. Each app's downtime is its own copy duration (immich will be the longest — ~hours for 696G over SATA).
-
-### Per-app procedure
-
-```bash
-# 1. Stop the container
-~/containers/scripts/all-containers.sh --stop --container <app>
-
-# 2. Copy data preserving everything
-sudo rsync -aHAX --info=progress2 --delete \
-  /mnt/2000/container-mounts/<app>/ \
-  /mnt/ssd-4tb/containers/<app>/
-
-# 3. Verify with a second rsync (should report nothing to do)
-sudo rsync -aHAXn --info=progress2 \
-  /mnt/2000/container-mounts/<app>/ \
-  /mnt/ssd-4tb/containers/<app>/
-
-# 4. Rename the old data (don't delete yet — keep as fallback)
-sudo mv /mnt/2000/container-mounts/<app> /mnt/2000/container-mounts/<app>.pre-zfs
-
-# 5. Bind-mount the new location at the old path so compose doesn't need editing yet
-sudo mkdir /mnt/2000/container-mounts/<app>
-sudo mount --bind /mnt/ssd-4tb/containers/<app> /mnt/2000/container-mounts/<app>
-
-# 6. Start the container, verify it works
-~/containers/scripts/all-containers.sh --start --container <app>
-# Check the app's UI, check logs, check writes go through
+```
+tank-4tb                                 /mnt/ssd-4tb                       (root; non-container dirs live here)
+tank-4tb/container-mounts                /mnt/ssd-4tb/container-mounts      (~49 apps as plain dirs)
+tank-4tb/container-mounts/immich         …/immich                          (default 128K — media-dominated)
+tank-4tb/container-mounts/nextcloud      …/nextcloud                       (default 128K)
+tank-4tb/container-mounts/paperless-ngx  …/paperless-ngx                   (default 128K)
+tank-4tb/container-mounts/mariadb        …/mariadb        recordsize=16K   (InnoDB page size)
 ```
 
-**Why bind-mounts here:** lets you migrate apps one at a time without touching the mount-priority logic in `user-config.yaml`. The compose file's path stays `/mnt/2000/container-mounts/<app>` and the kernel transparently redirects to `/mnt/ssd-4tb/...`. The "real" reconfiguration happens after Phase 5 when paths are updated in `user-config.yaml` and bind-mounts are removed.
+No manual `chown` — the migration `rsync -aHAX` preserves all ownership/ACLs/xattrs (including `samba`'s `scanner:sambashare`). `dawarich`, `jellyfin` (metadata), and the rest stay as plain dirs; promote any of them to a dataset later with `zfs create` if desired.
 
-### Database considerations
+## Phase E-gate — Reboot test the encryption auto-load (do BEFORE migrating data)
 
-For containers with databases (immich, nextcloud, paperless, dawarich):
-- **`rsync` is fine if the container is fully stopped** (which it is). The DB files are at rest.
-- If a DB sees corruption after the move, restore from the `.pre-zfs` directory and investigate before retrying.
-
-### Verification gate at end of Phase 3
-
-Before proceeding:
-- [ ] All migrated apps running, UIs responsive
-- [ ] At least 24h elapsed since each app started writing to new location (catches latent issues)
-- [ ] `zpool status tank-4tb` shows no errors
-- [ ] `zpool scrub tank-4tb && zpool wait tank-4tb && zpool status tank-4tb` — clean
-
-## Phase 4 — Snapshot before destructive step
+The boot cron (`system-cron-startup.sh`) launches containers at boot; they must **not** start before the pool is imported, decrypted, and mounted, or they will write into empty mountpoints.
 
 ```bash
-# Snapshot every dataset on the 4TB pool
-sudo zfs snapshot -r tank-4tb@pre-2tb-wipe
-
-# Confirm
-zfs list -t snapshot
+sudo reboot
+# after it comes back:
+zfs get keystatus,mounted tank-4tb       # expect: keystatus=available, mounted=yes  (no manual key load)
+zpool status tank-4tb                     # ONLINE, no errors
 ```
 
-Run a fresh borg backup:
+**Confirmed on this host (2026-06-09): the key does NOT auto-load out of the box.** Ubuntu 24.04's `zfs-load-key.service` is *masked* (the distro expects the `zfs-mount-generator` + a populated `/etc/zfs/zfs-list.cache/`, which doesn't exist by default), so after a plain reboot every dataset showed `keystatus=unavailable, mounted=no`. Fix with an explicit oneshot unit, then re-test with another reboot:
+
 ```bash
-~/containers/scripts/borg-backup.sh
+sudo tee /etc/systemd/system/zfs-load-key-tank.service >/dev/null <<'EOF'
+[Unit]
+Description=Load ZFS encryption key for tank-4tb
+DefaultDependencies=no
+After=zfs-import.target
+Before=zfs-mount.service
+Wants=zfs-import.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/zfs load-key -a
+[Install]
+WantedBy=zfs-mount.service
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable zfs-load-key-tank.service
+sudo mkdir -p /etc/exports.d   # else `zfs mount -a` prints "failed to lock /etc/exports.d/zfs.exports.lock" (cosmetic NFS-share noise)
 ```
 
-Wait for borg to complete and verify it shows up on backup-pi before proceeding.
+**Do not proceed to migration until a reboot brings the pool up decrypted and mounted unattended** — verify `zfs get -r keystatus,mounted tank-4tb` → `available`/`yes` and `systemctl status zfs-load-key-tank.service` → active (exited). The boot cron starts containers after `multi-user.target` (well after `zfs-mount.service`), so it naturally lands after the pool is mounted — but confirm nothing races ahead of it.
 
-## Phase 5 — Tear down 2TB mdadm+LVM, rebuild as ZFS
+## Phase F — Migrate `/mnt/2000` → the pool
 
-### Stop remaining containers using /mnt/2000
+**Scope:** everything under `/mnt/2000` *except* `lost+found/` (an ext4 fsck artifact ZFS doesn't use). That is: `container-mounts/`, `FastmailBackup/`, `Hyperion/`, `samba/`, `tailscale-state/`, `for-homepage/`.
+
+Because the child datasets are mounted at their natural paths, a single recursive rsync writes into them transparently — no per-app rsync needed.
+
+### Minimize downtime: pre-seed warm, then short stop-and-delta
 
 ```bash
-# Stop everything still using /mnt/2000
+# 1. Pre-seed while containers still run (data churns, that's fine — this is a warm copy)
+sudo rsync -aHAX --info=progress2 --delete --exclude '/lost+found' \
+  /mnt/2000/ /mnt/ssd-4tb/
+
+# 2. Stop everything for the short cutover window
 ~/containers/scripts/all-containers.sh --stop
 
-# Identify still-resident apps (everything except the .pre-zfs leftovers)
-ls /mnt/2000/container-mounts/ | grep -v pre-zfs
+# 3. Final delta rsync (only what changed since the warm copy — fast; DB files now at rest)
+sudo rsync -aHAX --info=progress2 --delete --exclude '/lost+found' \
+  /mnt/2000/ /mnt/ssd-4tb/
+
+# 4. Verify: a third dry-run should report nothing to transfer
+sudo rsync -aHAXn --info=progress2 --delete --exclude '/lost+found' \
+  /mnt/2000/ /mnt/ssd-4tb/
 ```
 
-### Move tier-2 apps to a holding area on the 4TB pool
+**Database note:** rsync is safe for the DB containers (immich/nextcloud/paperless/dawarich/mariadb) because they are fully stopped for the final delta — files are at rest. If a DB shows corruption after cutover, the old `/mnt/2000` is still intact (not wiped until Phase H) — fall back to it and investigate.
 
-These will land on the 2TB pool eventually, but use 4TB as a holding tank during the rebuild:
+## Phase G — Repoint the platform at the pool
 
 ```bash
-sudo zfs create tank-4tb/holding
-for app in mariadb infisical forgejo obsidian obsidian-babel-livesync caddy code; do
-  sudo rsync -aHAX --info=progress2 \
-    /mnt/2000/container-mounts/$app/ \
-    /mnt/ssd-4tb/holding/$app/
-done
+# Edit ~/containers/user-config.yaml: change mount[0] path from /mnt/2000 to /mnt/ssd-4tb
+#   (label e.g. "Primary SSD (4TB ZFS mirror, encrypted)").
+# The per-container path mount[0]/container-mounts/<app> now resolves to the pool.
+
+# Regenerate .env files so compose paths reflect the new mount[0]
+~/containers/scripts/generate-env.js
+
+# Tailscale node identity: TS_STATE_HOST_DIR points at <mount[0]>/tailscale-state/<container>
+#   — it follows mount[0] automatically once tailscale-state/ has been migrated (it has, Phase F).
+
+# Start everything back up via the platform script
+~/containers/scripts/all-containers.sh --start
 ```
 
-(Add/remove apps from the list based on what you've decided is tier-2 worth-mirroring vs tier-3 acceptable-on-old-storage.)
+Verify: all previously-running containers healthy in web-admin; spot-check immich/nextcloud/paperless UIs and that writes land on the pool (`zfs list` used-space grows).
 
-### Verification gate (do all three before wiping)
+## Phase H — Decommission the degraded 2TB and clean up
 
-- [ ] All tier-2 data copied to `/mnt/ssd-4tb/holding/` — verify sizes match
-- [ ] `tank-4tb@pre-2tb-wipe` snapshot exists (`zfs list -t snapshot`)
-- [ ] Borg backup completed within last few hours
-
-### Destroy mdadm + LVM, wipe disks
+**Only after a few days of clean running on the pool**, and with `/mnt/2000` confirmed no longer referenced anywhere:
 
 ```bash
 sudo umount /mnt/2000
@@ -278,130 +259,46 @@ sudo lvremove vg1/lv1
 sudo vgremove vg1
 sudo pvremove /dev/md1
 sudo mdadm --stop /dev/md1
-sudo mdadm --zero-superblock /dev/sda /dev/sdb
-sudo wipefs -a /dev/sda
-sudo wipefs -a /dev/sdb
-
-# Confirm
+sudo mdadm --zero-superblock /dev/sdh        # the surviving 2TB
+sudo wipefs -a /dev/sdh
+# remove the /mnt/2000 line from /etc/fstab
 lsblk
 ```
 
-Remove the `/mnt/2000` line from `/etc/fstab` (the new pool will mount via ZFS, not fstab).
+The freed 2TB (`sdh`) now sits idle on the Marvell port until the [deferred](#deferred-the-2tb-drives-and-the-new-controller) decision.
 
-### Create the 2TB ZFS pool
+## Execution notes — what actually happened (2026-06-09 → 06-10)
 
-```bash
-sudo zpool create \
-  -o ashift=12 \
-  -o autotrim=on \
-  -O compression=lz4 \
-  -O atime=off \
-  -O xattr=sa \
-  -O acltype=posixacl \
-  -O mountpoint=/mnt/ssd-2tb \
-  tank-2tb mirror \
-  /dev/disk/by-id/ata-OLD_SSD_A \
-  /dev/disk/by-id/ata-OLD_SSD_B
+The migration ran successfully with no data loss and no rollback. Deviations from the plan above and gotchas worth remembering:
 
-# Datasets for tier-2 apps
-sudo zfs create tank-2tb/containers
-for app in mariadb infisical forgejo obsidian obsidian-babel-livesync caddy code; do
-  sudo zfs create tank-2tb/containers/$app
-done
+- **Hardware:** the JMB585 card was never purchased; both 4TB SSDs landed on the Intel native 6 Gb/s ports (ata1/2), with the surviving 2TB + 22TB HDD on the Marvell. This is the *ideal* placement (ZFS pool on the trusted controller) and made the card unnecessary for now.
 
-# Per-dataset overrides
-sudo zfs set recordsize=16K tank-2tb/containers/mariadb  # InnoDB page size
-```
+- **Encryption auto-load needed a manual systemd unit** (see Phase E-gate) — `zfs-load-key.service` is masked on Ubuntu 24.04. The reboot gate caught it before any data moved.
 
-### Move tier-2 data from holding → 2TB pool
+- **Phase F was a single rsync, not warm-preseed + delta.** Containers were already stopped (cron disabled before the hardware move), so the source was at rest — one `rsync -aHAX --delete --exclude=/lost+found /mnt/2000/ /mnt/ssd-4tb/` did it. ~1.2 T in ~6–8 h, bottlenecked by the budget SPCC SSDs' sustained write (~50–80 MB/s), not CPU/encryption. A clean dry-run rsync (zero output) was the completeness gate.
+
+- **Repointing was far broader than `user-config.yaml`.** Container paths flip automatically (`all-containers.sh --start` re-runs `generate-env.js`), but many **non-container** references had to be fixed by hand. This was the bulk of the real work:
+  - **System services (root-owned):** `/etc/samba/smb.conf` (ScanHere, DeathStarPlans shares), `/etc/exports` (DeathStarPlans, Hyperion), `/etc/passwd` (the `scanner` user's home — fix via `usermod -d`), and **`/etc/sudoers.d/chrisl8`** — the landmine: its `NOPASSWD` `chmod/chown` rules hardcode the mount path, so leaving them on `/mnt/2000` would make the platform's mount-permission steps prompt for a password and hang the non-interactive `@reboot` cron. Validate with `visudo -cf` after editing. Reload with `systemctl restart smbd` + `exportfs -ra`.
+  - **Generated artifacts — fix the source, not the render:** `scripts/borg-backup.conf` is re-emitted by the web-admin's `writeBorgConf()` from `user-config.yaml`'s `borg:` block; `beszel/` + `homepage/` `compose.override.yaml` are rewritten by `regenerate-monitoring-mounts.js` from `mounts:` on every start. `caddy/mount-permissions.yaml` is a render of the `do-it-self-personal` module source (fix both the module source and the root render).
+  - **Personal cron scripts (`~`, outside the repo — easy to miss):** `imapbox-js/config.json5` (FastmailBackup + ScanHere/From Email), `Scripts/fastmail-notmuch-sync.sh`, `Scripts/updateWebstatsOnNeuromancer.sh`, `Scripts/obsidian2paperless.sh`, `Scripts/updateJellyfinFiles.sh`. Find them with `grep -rn /mnt/2000 ~ --include=*.sh --include=*.json5 ...`.
+
+- **Samba & NFS are *system* services, not containers.** They served the frozen `/mnt/2000` for ~8 h after the container cutover, but an mtime check confirmed **no writes** in that window, so nothing diverged.
+
+- **Retire-with-immutable-trap instead of a silent unmount.** Rather than leave `/mnt/2000` mounted as a quiet fallback, we made stragglers fail *loudly* during the soak: `sudo umount /mnt/2000 && sudo chattr +i /mnt/2000` (empty immutable mountpoint → ENOENT/EPERM instead of stale reads or docker auto-creating a tree on root), plus comment the fstab line. `umount` deletes nothing, so rollback = `chattr -i` + remount the LV. **This trap is what surfaced the personal-cron-script stragglers** — they'd otherwise have silently run against frozen data. (Phase H's teardown must `sudo chattr -i /mnt/2000` first.)
+
+- **Outcome:** all 131 containers came up healthy on the pool; pool held 0 errors throughout. Remaining work is the soak, then Phase H.
+
+## Phase I — Operational setup
+
+### Auto-snapshots (sanoid)
 
 ```bash
-for app in mariadb infisical forgejo obsidian obsidian-babel-livesync caddy code; do
-  sudo rsync -aHAX --info=progress2 \
-    /mnt/ssd-4tb/holding/$app/ \
-    /mnt/ssd-2tb/containers/$app/
-done
-
-# Verify, then clean up holding area
-sudo zfs destroy tank-4tb/holding
-```
-
-## Phase 6 — Cleanup and reconfiguration
-
-### Update user-config.yaml mount priorities
-
-Edit `~/containers/user-config.yaml`:
-
-```yaml
-mounts:
-  - path: /mnt/ssd-4tb         # was /mnt/2000 — bulk-growth tier (mount[0])
-    label: Primary SSD (4TB ZFS mirror)
-  - path: /mnt/22TB             # unchanged (mount[1])
-    label: Large HDD
-  - path: /mnt/ssd-2tb         # was implicit — tier-2 (mount[2])
-    label: Secondary SSD (2TB ZFS mirror)
-  - path: /mnt/250              # unchanged (mount[3])
-    label: Cache SSD
-  - path: /mnt/120              # unchanged (mount[4])
-    label: Monitor
-```
-
-For each tier-2 app, set `volume_mounts: data: 2` so they land on the new 2TB pool:
-
-```yaml
-mariadb:
-  enabled: true
-  volume_mounts:
-    data: 2
-# repeat for infisical, forgejo, obsidian, obsidian-babel-livesync, caddy, code
-```
-
-### Remove the bind-mounts and `.pre-zfs` fallback dirs
-
-```bash
-# Stop containers using bind-mounted paths
-~/containers/scripts/all-containers.sh --stop
-
-# Unmount the binds
-for app in immich nextcloud jellyfin paperless-ngx dawarich; do
-  sudo umount /mnt/2000/container-mounts/$app
-done
-
-# /mnt/2000 no longer exists — clean up the empty bind mount points if they remain
-# (they were on the old ext4 which is gone — N/A after Phase 5)
-
-# Regenerate .env files so compose paths reflect new mount[0]
-~/containers/scripts/generate-env.js  # or whatever the regenerate command is
-
-# Start everything back up via the platform script
-~/containers/scripts/all-containers.sh --start
-```
-
-### Delete the `.pre-zfs` fallback data (only after a few days of clean running)
-
-Wait at least 3-7 days with everything working before deleting. Once confident:
-```bash
-# On the 4TB pool — these would only exist if you kept them as a safety net
-# (after Phase 5 the old /mnt/2000 is gone, so this is mostly N/A)
-```
-
-## Phase 7 — Operational setup
-
-### Auto-snapshots with sanoid
-
-```bash
-sudo apt install sanoid
+sudo apt install -y sanoid
 sudo cp /usr/share/doc/sanoid/examples/sanoid.conf /etc/sanoid/sanoid.conf
 ```
 
-Edit `/etc/sanoid/sanoid.conf` — recommended starting point:
-
 ```ini
-[tank-4tb/containers]
-  use_template = production
-  recursive = yes
-
-[tank-2tb/containers]
+[tank-4tb/container-mounts]
   use_template = production
   recursive = yes
 
@@ -414,59 +311,65 @@ Edit `/etc/sanoid/sanoid.conf` — recommended starting point:
   autoprune = yes
 ```
 
-Sanoid timer is enabled by default on Ubuntu — confirm with `systemctl list-timers | grep sanoid`.
+Confirm the timer: `systemctl list-timers | grep sanoid`.
 
-### Scheduled scrubs
+### Scheduled scrub
 
 ```bash
-# Run monthly via cron (the first of each month at 3am)
-echo '0 3 1 * * root /usr/sbin/zpool scrub tank-4tb && /usr/sbin/zpool scrub tank-2tb' | sudo tee /etc/cron.d/zfs-scrub
+echo '0 3 1 * * root /usr/sbin/zpool scrub tank-4tb' | sudo tee /etc/cron.d/zfs-scrub
 ```
 
 ### Monitoring
 
-Add to whatever your existing health checks consume:
-- `zpool status -x` returns "all pools are healthy" when good; anything else is an alert
-- `zpool list -H -o name,health,frag,cap` for capacity/fragmentation tracking
+- `zpool status -x` → "all pools are healthy" when good; anything else alerts.
+- `zpool list -H -o name,health,frag,cap` for capacity/fragmentation tracking.
+- SMART monitoring on `sda`/`sdb` (budget batch-matched drives — watch them).
+- A ZFS pool-status card in web-admin is a reasonable follow-up (out of scope here).
 
-The web-admin dashboard could grow a ZFS pool status card — out of scope for this migration but worth noting.
+### Update the backup-coverage audit
 
-### Update backup-coverage audit
-
-The audit currently scans `/mnt/2000/container-mounts/*` — after migration this becomes `/mnt/ssd-4tb/containers/*` and `/mnt/ssd-2tb/containers/*`. Update `scripts/backup-coverage-audit.sh` (or wherever the mount enumeration lives) to read from `user-config.yaml`'s `mounts:` list rather than hardcoding `/mnt/2000`.
+`scripts/backup-coverage-audit.sh` (and `BORG_BACKUP_PATHS` / `BORG_CONTAINER_MOUNT_DIRS` in `borg-backup.conf`) currently reference `/mnt/2000/...`. After cutover these become `/mnt/ssd-4tb/...`. Update them to read from `user-config.yaml`'s `mounts:` list rather than hardcoding the path, and re-run the audit to confirm green.
 
 ## Rollback procedures
 
-### If 4TB pool fails during Phase 2-3
-
-- 4TB pool destruction: `sudo zpool destroy tank-4tb` then re-create with corrected params
-- Per-app rollback during Phase 3: `umount` the bind, `mv /mnt/2000/container-mounts/<app>.pre-zfs /mnt/2000/container-mounts/<app>`, restart container
-
-### If something fails during Phase 5 (after wiping 2TB)
-
-The 2TB is gone — recovery is from:
-1. Holding area on 4TB pool (`/mnt/ssd-4tb/holding/`) — still present until explicitly destroyed
-2. Snapshot `tank-4tb@pre-2tb-wipe` — covers the migrated tier-1 data
-3. Borg backups on backup-pi — covers everything
-
-### If a container misbehaves after migration
-
-The `.pre-zfs` dirs (kept until Phase 6 cleanup) are the fast path. If those are already gone, restore from borg.
+- **Pool creation/migration goes wrong (Phases B–G):** the old `/mnt/2000` is untouched until Phase H. `zpool destroy tank-4tb`, fix params, retry. Per-app issues: restart against the still-mounted `/mnt/2000`.
+- **Container misbehaves after cutover but before Phase H:** revert `mount[0]` in `user-config.yaml` to `/mnt/2000`, regenerate `.env`, restart. The original data is still live.
+- **After Phase H (2TB wiped):** recovery is from the integrity-verified local borg repo (`/mnt/22TB/borg-repo`) or offsite (`backup-pi`). This is why Phase H waits several days.
 
 ## Post-migration checklist
 
-- [ ] `zpool status` clean on both pools
-- [ ] `zfs list` shows expected dataset hierarchy
+- [ ] `zpool status` clean; `zfs list` shows the expected hierarchy
+- [ ] Reboot brings the pool up decrypted + mounted with no manual step
 - [ ] All previously-running containers up and healthy in web-admin
-- [ ] Backup coverage audit green for all containers
-- [ ] First scheduled scrub completes clean on both pools
-- [ ] Sanoid creating snapshots on schedule (check `zfs list -t snapshot | head`)
-- [ ] `df -h` shows expected free space distribution
-- [ ] Old `.pre-zfs` directories cleaned up (after 3-7 day soak)
-- [ ] This runbook updated with anything that surprised us during execution
+- [ ] Encryption key copy stored off-host (Infisical / vault)
+- [ ] Backup-coverage audit green against the new paths
+- [ ] First scheduled scrub completes clean
+- [ ] Sanoid creating snapshots on schedule
+- [ ] Old `/mnt/2000` decommissioned (Phase H) after the soak period
+- [ ] This runbook updated with anything that surprised us
 
-## Open questions / decisions deferred
+## Deferred: the 2TB drives and the new controller
 
-- **Jellyfin metadata move?** 75G of jellyfin config/metadata currently on `/mnt/2000`. Listed for migration to 4TB above, but if pool space gets tight in years, this is the first candidate to demote — metadata is regeneratable from media (just slow).
-- **Game saves on 2TB pool?** Valheim/Minecraft/Starbound saves are on `/mnt/2000` now (~70G combined). Not in either tier above. Decide whether to migrate to 2TB pool (mirror protection) or leave on `/mnt/250` (cheap, no mirror, accept loss risk).
-- **22TB HDD headroom.** At 82% and not addressed by this migration. Separate hardware purchase needed (likely a single larger HDD; mirroring 20TB+ HDDs is its own conversation).
+Revisit once **both** of these arrive:
+
+1. **The RMA replacement 2TB SSD** returns (pairing with the survivor `sdh`, freed in Phase H — two empty 2TB SSDs).
+2. **The new PCIe SATA card** (JMB585 / SYBA SI-PEX40139) is purchased and installed, adding trustworthy 6 Gb/s ports.
+
+At that point, decide how to divvy up the two empty 2TB drives. Open options to weigh then:
+
+- **Second mirror pool (`tank-2tb`)** — the original two-pool design: a separate failure domain for tier-2 data (databases, secrets, code, notes) with its own scrub/snapshot cadence. Needs the new card so both ZFS pools stay off the Marvell.
+- **Retire the 2TB tier entirely** — with the 4TB mirror at ~32%, a second pool may be unnecessary. Repurpose the 2TB drives elsewhere (cache, scratch, a non-critical mirror).
+- **Other uses** — `/mnt/250`-style cache, a dedicated DB pool, etc.
+
+Controller-placement rule to honor when revisited: **every ZFS pool stays on trustworthy controllers** (Intel native or the new JMB585). The Marvell 88SE9172 carries only the HDD / non-pool disks — putting a mirror leg on it reintroduces the cache-flush-honesty risk the new card is meant to avoid. Update the [Confirmed current state](#confirmed-current-state-2026-06-09) table after any re-cabling.
+
+## Deferred: benchmark all drives to inform data placement
+
+The current layout was chosen for **safety and redundancy, not speed** — the 4TB mirror is the safest home for the irreplaceable data, full stop. But the drives have never been characterized head-to-head, and at some point it's worth measuring **every drive in the box** to decide whether any data should be (re)distributed by speed tier.
+
+What and why:
+- The new SPCC 4TB SSDs are budget DRAM-less QLC-class; their **sustained (post-SLC-cache) write** is the unknown. The ~50–80 MB/s seen during the migration is *not* a valid benchmark — it was small-file-bound (immich thumbnails), cross-drive (reading the old 2TB), and mirror-write-amplified. A clean `fio` run (sequential + small-random, read + sustained-write) is the only way to get real numbers.
+- Characterize the whole set: SPCC 4TB pool, the surviving PNY 2TB, the Samsung 840/850 SATA SSDs (`/mnt/250`, `/mnt/120`), and the 22TB HDD. Knowing the actual ceilings tells you where a latency- or throughput-sensitive workload (e.g. a database, a cache, scratch space) actually belongs vs. where it sits today by historical accident.
+- **Clean opportunity for the old 2TB:** after cutover and before wiping `sdh` in Phase H, it goes idle — benchmark it then, alongside the now-populated 4TB pool, for a direct old-vs-new comparison before it's decommissioned.
+
+This is an optimization pass, not a correctness requirement — the data is safe and mirrored regardless. Revisit when there's a concrete "is X fast enough / where should X live" question, or opportunistically during the Phase H window.
