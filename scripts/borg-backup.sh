@@ -1,18 +1,20 @@
 #!/bin/bash
 # Main BorgBackup script — runs database dumps, creates archive, prunes, updates status
 # Intended to run via cron daily at 3:00 AM
-# Flags: --remote-only  skip DB dumps and local backup, run only the remote push
+# Flags: --remote-only  run DB dumps + offsite push only (no local archive)
 #        --skip-remote  run DB dumps + local archive, skip the remote push
-#        --skip-dumps   skip DB dumps
+#        --skip-dumps   skip DB dumps (e.g. when chained after a job that dumped)
 #
-# The daily backup is SPLIT into two cron jobs so the over-the-wire push to the
-# offsite Pi runs at a fixed safe overnight hour instead of "whenever the local
-# archive happens to finish" (a heavy-data day used to drift the push into the
-# recipients' daytime bandwidth and lock out borg-pi-manage.sh):
-#   <local job, late evening>   borg-backup.sh --skip-remote
-#   <push job,  ~02:30 Central>  borg-backup.sh --remote-only
-# They use separate lock files, log files, and healthchecks so they don't
-# collide or stomp each other's status. A flagless run still does it all at once.
+# The daily backup is SPLIT into two jobs run SERIALIZED (never concurrent) from a
+# single cron entry, REMOTE FIRST:
+#   borg-backup.sh --remote-only ; borg-backup.sh --skip-remote
+# Remote-first keeps the over-the-wire push in the early-night window so a heavy
+# data day can't drift it into the recipients' daytime bandwidth or lock out
+# borg-pi-manage.sh — and serializing them means the two jobs never thrash the
+# disk at once (which once overloaded the box into swap). The separator is `;`
+# (not `&&`) so the local archive still runs even if the offsite push fails. Each
+# job dumps its own DBs, so both copies get fresh dumps. They use separate lock
+# files, log files, and healthchecks. A flagless run still does it all in one pass.
 set -e
 
 # Re-exec as root if not already — needed to read all container mount files
@@ -32,7 +34,7 @@ SKIP_DUMPS=false
 SKIP_REMOTE=false
 while [ $# -gt 0 ]; do
     case "$1" in
-        --remote-only) REMOTE_ONLY=true; SKIP_DUMPS=true ;;
+        --remote-only) REMOTE_ONLY=true ;;
         --skip-remote) SKIP_REMOTE=true ;;
         --skip-dumps)  SKIP_DUMPS=true ;;
         *) echo "Unknown flag: $1"; exit 1 ;;
