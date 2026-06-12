@@ -319,6 +319,36 @@ containers:
         host_subpath: container-mounts/diun/script
         container_path: /script
     default_disabled: true
+  eurooffice:
+    description: Euro-Office Document Server (sovereign OnlyOffice fork) for Nextcloud
+    homepage_group: Productivity
+    tags: []
+    uses_tailscale: true
+    start_order: "012"
+    variables:
+      JWT_SECRET:
+        type: secret
+        required: true
+        description: JWT secret shared with the Nextcloud Euro-Office connector
+        auto_generate: true
+    volumes:
+      data:
+        var: VOL_EUROOFFICE_DATA
+        host_subpath: container-mounts/eurooffice/data
+        container_path: /var/www/onlyoffice/Data
+      log:
+        var: VOL_EUROOFFICE_LOG
+        host_subpath: container-mounts/eurooffice/log
+        container_path: /var/log/onlyoffice
+      cache:
+        var: VOL_EUROOFFICE_CACHE
+        host_subpath: container-mounts/eurooffice/cache
+        container_path: /var/lib/onlyoffice/documentserver/App_Data/cache/files
+      fonts:
+        var: VOL_EUROOFFICE_FONTS
+        host_subpath: container-mounts/eurooffice/fonts
+        container_path: /usr/share/fonts
+    default_disabled: true
   factorio:
     description: Factorio dedicated game server
     homepage_group: Gaming
