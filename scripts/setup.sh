@@ -124,6 +124,13 @@ else
   ok "Passwordless sudo for shutdown already configured"
 fi
 
+# ── Step 1c: Memory-pressure hardening ──────────────────────────────────
+# Host-level backstops (earlyoom, lower dirty ratios, ZFS ARC cap on ZFS hosts)
+# so a memory-hungry container can never deadlock the box in writeback reclaim
+# the way it did on 2026-06-12. Container-level mem_limits live in the module
+# compose files. Idempotent; ARC cap auto-skips on non-ZFS hosts.
+"${SCRIPT_DIR}/scripts/system-memory-hardening.sh"
+
 # ── Step 2: Docker ───────────────────────────────────────────────────────
 
 if ! command -v docker &>/dev/null; then
