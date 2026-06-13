@@ -568,6 +568,12 @@ if [[ ${START_ACTION} = true ]]; then
   if ! docker network inspect caddy-net &>/dev/null; then
     docker network create --label keep caddy-net
   fi
+  # Shared network so Nextcloud and the Euro-Office document server talk
+  # directly over the local bridge (no Tailscale hop) for file fetch/save +
+  # command service. The "keep" label exempts it from the prune below.
+  if ! docker network inspect office-shared &>/dev/null; then
+    docker network create --label keep office-shared
+  fi
 fi
 
 # Determine which containers are enabled (per registry + user-config).
