@@ -99,6 +99,7 @@ SUDOERS_CHOWN="/etc/sudoers.d/containers-chown"
 SUDOERS_CHMOD="/etc/sudoers.d/containers-chmod"
 SUDOERS_SHUTDOWN="/etc/sudoers.d/containers-shutdown"
 SUDOERS_RESOLVED="/etc/sudoers.d/containers-resolved"
+SUDOERS_NETWATCH="/etc/sudoers.d/containers-netwatch"
 CURRENT_USER=$(whoami)
 if [[ ! -f "$SUDOERS_CHOWN" ]]; then
   step "Configuring passwordless sudo for chown"
@@ -134,6 +135,18 @@ if [[ ! -f "$SUDOERS_RESOLVED" ]]; then
   ok "Passwordless sudo for systemd-resolved restart configured"
 else
   ok "Passwordless sudo for systemd-resolved restart already configured"
+fi
+# Narrow rule for the LAN watchdog: ONLY `nmcli device reconnect enp4s0`, not
+# nmcli in general. Lets system-network-watchdog.sh bounce the wired interface
+# from cron to recover a wedged gateway after a router reboot/IP conflict (see
+# that script's header).
+if [[ ! -f "$SUDOERS_NETWATCH" ]]; then
+  step "Configuring passwordless sudo for reconnecting enp4s0"
+  echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/nmcli device reconnect enp4s0" | sudo tee "$SUDOERS_NETWATCH" > /dev/null
+  sudo chmod 0440 "$SUDOERS_NETWATCH"
+  ok "Passwordless sudo for enp4s0 reconnect configured"
+else
+  ok "Passwordless sudo for enp4s0 reconnect already configured"
 fi
 
 # ── Step 1c: Memory-pressure hardening ──────────────────────────────────
