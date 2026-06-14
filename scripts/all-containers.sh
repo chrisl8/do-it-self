@@ -1183,9 +1183,37 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         COMPOSE_EXIT_CODE=$?
         set -e
         if [[ ${COMPOSE_EXIT_CODE} -ne 0 ]]; then
-          printf "${RED} - ${CONTAINER_DIR} FAILED to start (exit code ${COMPOSE_EXIT_CODE})${NC}\n"
-          FAILED_CONTAINERS+=("${CONTAINER_DIR}")
-          continue
+          # `docker compose up --wait` can time out while a dependency's
+          # healthcheck is still failing -- classically a gluetun VPN sidecar
+          # reconnecting after a network blip. When that happens, any app
+          # container gated on it via `depends_on: condition: service_healthy`
+          # is left in the `Created` state: compose made the container but never
+          # started it. Nothing ever starts a `Created` container on its own, so
+          # it sits dead until a human intervenes (this is exactly how
+          # secure-browser/browser got orphaned and escalated). Force-start any
+          # such orphans here: `docker compose start` ignores the
+          # service_healthy gate, and a gluetun-gated app shares the sidecar's
+          # network namespace -- with gluetun's kill-switch traffic stays
+          # blocked (not leaked) until the VPN recovers -- so the container can
+          # self-heal once the dependency comes back instead of escalating.
+          set +e
+          ORPHANED_CREATED=$(docker --log-level ERROR compose ps -a --format '{{.Name}}\t{{.Status}}' | awk -F'\t' '$2 ~ /^Created/ {print $1}')
+          if [[ -n "${ORPHANED_CREATED}" ]]; then
+            printf "${YELLOW} - ${CONTAINER_DIR} up timed out with containers stuck in Created (%s); force-starting so they can self-heal${NC}\n" "$(echo "${ORPHANED_CREATED}" | tr '\n' ' ')"
+            docker --log-level ERROR compose start
+          fi
+          # Re-check: only the containers STILL in Created after the force-start
+          # represent a real, unrecoverable failure (e.g. a bad image or a crash
+          # before the namespace is up). If we cleared them, the per-container
+          # healthcheck governs from here, so don't flag the project as failed.
+          STILL_CREATED=$(docker --log-level ERROR compose ps -a --format '{{.Name}}\t{{.Status}}' | awk -F'\t' '$2 ~ /^Created/ {print $1}')
+          set -e
+          if [[ -n "${STILL_CREATED}" ]]; then
+            printf "${RED} - ${CONTAINER_DIR} FAILED to start (exit code ${COMPOSE_EXIT_CODE})${NC}\n"
+            FAILED_CONTAINERS+=("${CONTAINER_DIR}")
+            continue
+          fi
+          printf "${YELLOW} - ${CONTAINER_DIR} up timed out (exit code ${COMPOSE_EXIT_CODE}) but no containers left in Created; continuing${NC}\n"
         fi
         if [[ ${CONTAINER_DIR} = "homepage" ]];then
           # Personal favicon overlay: if the user has dropped favicon files
