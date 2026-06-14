@@ -610,6 +610,46 @@ async function updateModules(args) {
         );
       }
 
+      // Backup-before-clobber: if the live root compose.yaml differs from the
+      // module's incoming version, the swap below overwrites local edits. Snapshot
+      // the old file first so a non-durable root edit (the recon recyclarr trap)
+      // is recoverable instead of silently lost. Best-effort: never abort the swap.
+      try {
+        const oldCompose = join(targetDir, "compose.yaml");
+        const newCompose = join(stagingDir, "compose.yaml");
+        if ((await fileExists(oldCompose)) && (await fileExists(newCompose))) {
+          const [oldText, newText] = await Promise.all([
+            readFile(oldCompose, "utf8"),
+            readFile(newCompose, "utf8"),
+          ]);
+          if (oldText !== newText) {
+            const backupDir = join(
+              process.env.HOME,
+              "logs",
+              "compose-clobber-backups",
+            );
+            await mkdir(backupDir, { recursive: true });
+            const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const backupPath = join(
+              backupDir,
+              `${containerName}-${stamp}.compose.yaml`,
+            );
+            await writeFile(backupPath, oldText);
+            console.warn(
+              `  ${containerName}: root compose.yaml differed from the module and was overwritten.`,
+            );
+            console.warn(`    Old copy backed up to ${backupPath}`);
+            console.warn(
+              `    If those edits were intentional, push them to the module: 'scripts/module.sh dev-sync ${containerName}'.`,
+            );
+          }
+        }
+      } catch (e) {
+        console.warn(
+          `  ${containerName}: compose backup-before-clobber failed (non-fatal): ${e.message}`,
+        );
+      }
+
       // Atomic swap. Between these two renames targetDir does not exist
       // but oldDir does — the recovery block at the top of the next run
       // restores it. Same-filesystem renames are atomic.

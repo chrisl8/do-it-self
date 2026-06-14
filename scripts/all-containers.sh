@@ -841,6 +841,26 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
       set -e
     fi
 
+    # Drift guard: the root compose.yaml is a gitignored RENDER of the module
+    # source (see docs/MODULES.md). Edits made HERE instead of in the module are
+    # silently overwritten on the next `module.sh update` -- the exact trap that
+    # lost the recon recyclarr service. Warn loudly on start so a non-durable
+    # root edit is caught now rather than vanishing later. Warn-only: never block
+    # startup. compose.override.yaml is a separate file and is not compared.
+    if [[ ${START_ACTION} = true ]]; then
+      MODULE_SRC=""
+      for MOD_DIR in "${SCRIPT_DIR}"/.modules/*/; do
+        if [[ -f "${MOD_DIR}${CONTAINER_DIR}/compose.yaml" ]]; then
+          MODULE_SRC="${MOD_DIR}${CONTAINER_DIR}/compose.yaml"
+          break
+        fi
+      done
+      if [[ -n "${MODULE_SRC}" ]] && ! diff -q "${MODULE_SRC}" "compose.yaml" >/dev/null 2>&1; then
+        printf "${YELLOW}  WARNING: ${CONTAINER_DIR}/compose.yaml differs from its module source -- the root copy is a gitignored render and will be OVERWRITTEN on the next module update.${NC}\n"
+        printf "${YELLOW}  Reconcile: 'scripts/module.sh dev-sync ${CONTAINER_DIR}' to push root edits into the module (or re-render if the module is newer). Source: ${MODULE_SRC#"${SCRIPT_DIR}"/}${NC}\n"
+      fi
+    fi
+
     if [[ ${RESTART_UNHEALTHY} = true ]];then
       # Check if any containers are unhealthy
       UNHEALTHY_COUNT=$(docker --log-level ERROR compose ps -a --format '{{.Status}}' | grep -c -v "(healthy)" || true)
@@ -886,6 +906,17 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         set -e
       fi
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
+      # Announce any orphan containers the --remove-orphans below will delete --
+      # a running container whose service is no longer in compose.yaml (e.g. a
+      # service dropped from a module update). Without this, such a container is
+      # removed silently; surfacing it means a clobbered service announces itself
+      # instead of just vanishing.
+      while IFS=$'\t' read -r ORPHAN_NAME ORPHAN_SVC; do
+        [[ -z "${ORPHAN_SVC}" ]] && continue
+        if ! grep -qE "^  ${ORPHAN_SVC}:" compose.yaml 2>/dev/null; then
+          printf "${YELLOW}  NOTE: removing orphan ${ORPHAN_NAME} -- service '${ORPHAN_SVC}' is no longer in ${CONTAINER_DIR}/compose.yaml. If unintended, it was likely dropped from the module; restore it there.${NC}\n"
+        fi
+      done < <(docker ps -a --filter "label=com.docker.compose.project=${CONTAINER_DIR}" --format '{{.Names}}\t{{.Label "com.docker.compose.service"}}' 2>/dev/null)
       # --remove-orphans clears containers no longer defined in compose.yaml
       # (e.g. a service dropped from a module update). Without it, a lingering
       # orphan keeps the project non-empty, which trips the `compose ps | wc -l
