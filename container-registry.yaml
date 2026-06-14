@@ -1196,6 +1196,10 @@ containers:
         var: VOL_RECON_SABNZBD_CONFIG
         host_subpath: container-mounts/recon/sabnzbd/config
         container_path: /config
+      recyclarr_config:
+        var: VOL_RECON_RECYCLARR_CONFIG
+        host_subpath: container-mounts/recon/recyclarr
+        container_path: /config
     default_disabled: true
   retroarch:
     description: RetroArch game emulator in the browser
