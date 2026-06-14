@@ -68,6 +68,15 @@ ERROR_COUNT=0
 # simply dropped). Override the threshold in healthcheck.conf if desired
 # (default 3 cycles ~= 45 minutes at the */15 cron).
 UNHEALTHY_STREAK_THRESHOLD="${UNHEALTHY_STREAK_THRESHOLD:-3}"
+# Suspension is NOT permanent. Once over threshold we skip the every-15-min
+# restart, but every UNHEALTHY_RETRY_INTERVAL cycles we let ONE attempt through.
+# Without this, a project that crossed the threshold while its root cause was
+# active (e.g. a DNS outage that left gluetun/ts sidecars unhealthy) stays
+# skip-listed forever -- it can't go healthy without a restart, but the restart
+# is suspended because it isn't healthy: a deadlock that only manual
+# intervention breaks. The periodic retry lets a since-cleared root cause
+# self-heal. (default 8 cycles ~= 2h at the */15 cron.)
+UNHEALTHY_RETRY_INTERVAL="${UNHEALTHY_RETRY_INTERVAL:-8}"
 STREAK_FILE="${HEALTH_STATE_DIR}/unhealthy-streaks.txt"
 SKIP_FILE="${HEALTH_STATE_DIR}/unhealthy-skip-list.txt"
 
@@ -110,9 +119,18 @@ done
 for STREAK_NAME in "${!STREAK[@]}"; do
   echo "${STREAK_NAME} ${STREAK[$STREAK_NAME]}" >> "${STREAK_FILE}"
   if (( STREAK[$STREAK_NAME] >= UNHEALTHY_STREAK_THRESHOLD )); then
-    echo "${STREAK_NAME}" >> "${SKIP_FILE}"
+    # Suspend the restart loop EXCEPT on a periodic retry cycle, so a project
+    # whose root cause has since cleared can still recover on its own. On a
+    # retry cycle we leave it OFF the skip-list, so --restart-unhealthy attempts
+    # one (recreating) --stop --start; if it's still broken it lands back here.
+    if (( STREAK[$STREAK_NAME] % UNHEALTHY_RETRY_INTERVAL == 0 )); then
+      SUSPEND_NOTE="auto-restart suspended; retrying once this cycle"
+    else
+      echo "${STREAK_NAME}" >> "${SKIP_FILE}"
+      SUSPEND_NOTE="auto-restart suspended"
+    fi
     echo ""
-    echo "ESCALATION: ${STREAK_NAME} has been unhealthy for ${STREAK[$STREAK_NAME]} consecutive checks -- not self-healing, needs attention (auto-restart suspended)"
+    echo "ESCALATION: ${STREAK_NAME} has been unhealthy for ${STREAK[$STREAK_NAME]} consecutive checks -- not self-healing, needs attention (${SUSPEND_NOTE})"
     echo ""
     ERROR_COUNT=$((ERROR_COUNT + 1))
   fi
