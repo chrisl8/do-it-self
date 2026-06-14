@@ -98,6 +98,7 @@ fi
 SUDOERS_CHOWN="/etc/sudoers.d/containers-chown"
 SUDOERS_CHMOD="/etc/sudoers.d/containers-chmod"
 SUDOERS_SHUTDOWN="/etc/sudoers.d/containers-shutdown"
+SUDOERS_RESOLVED="/etc/sudoers.d/containers-resolved"
 CURRENT_USER=$(whoami)
 if [[ ! -f "$SUDOERS_CHOWN" ]]; then
   step "Configuring passwordless sudo for chown"
@@ -122,6 +123,17 @@ if [[ ! -f "$SUDOERS_SHUTDOWN" ]]; then
   ok "Passwordless sudo for /usr/sbin/shutdown configured"
 else
   ok "Passwordless sudo for shutdown already configured"
+fi
+# Narrow rule for the DNS watchdog: ONLY `systemctl restart systemd-resolved`,
+# not systemctl in general. Lets system-dns-watchdog.sh bounce the resolver from
+# cron to recover the Tailscale/resolved DNS wedge (see that script's header).
+if [[ ! -f "$SUDOERS_RESOLVED" ]]; then
+  step "Configuring passwordless sudo for restarting systemd-resolved"
+  echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart systemd-resolved" | sudo tee "$SUDOERS_RESOLVED" > /dev/null
+  sudo chmod 0440 "$SUDOERS_RESOLVED"
+  ok "Passwordless sudo for systemd-resolved restart configured"
+else
+  ok "Passwordless sudo for systemd-resolved restart already configured"
 fi
 
 # ── Step 1c: Memory-pressure hardening ──────────────────────────────────
@@ -614,6 +626,7 @@ install_cron() {
 step "Installing system cron jobs"
 install_cron "@reboot" "${SCRIPT_DIR}/scripts/system-cron-startup.sh" "Start containers on boot"
 install_cron "*/15 * * * *" "${SCRIPT_DIR}/scripts/system-health-check.sh" "Health check every 15 minutes"
+install_cron "*/10 * * * *" "${SCRIPT_DIR}/scripts/system-dns-watchdog.sh" "DNS resolver watchdog every 10 minutes"
 install_cron "0 */6 * * *" "${SCRIPT_DIR}/scripts/kopia-backup-check.sh" "Kopia backup freshness check every 6 hours"
 
 # ── Step 13: End-to-end web admin reachability check ────────────────────
