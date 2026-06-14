@@ -886,7 +886,12 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         set -e
       fi
       printf "${BRIGHT_MAGENTA} - ${CONTAINER_DIR}${NC}\n"
-      docker --log-level ERROR compose down
+      # --remove-orphans clears containers no longer defined in compose.yaml
+      # (e.g. a service dropped from a module update). Without it, a lingering
+      # orphan keeps the project non-empty, which trips the `compose ps | wc -l
+      # -eq 1` gate below and silently skips `compose up` -- wedging the whole
+      # stack's startup on every restart.
+      docker --log-level ERROR compose down --remove-orphans
     fi
     if [[ ${START_ACTION} = true ]];then
       # Auto-clone any declared git_repos whose .git is missing. Runs on every
