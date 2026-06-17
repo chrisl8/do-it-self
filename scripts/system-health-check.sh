@@ -22,6 +22,15 @@ EXCLUDED_DEVICES_FOR_ERROR_COUNT=""
 HEALTH_STATE_DIR="${HOME}/.local/state/containers"
 mkdir -p "$HEALTH_STATE_DIR"
 
+# Local append-only alert log. healthchecks.io records WHEN we ping /fail but not
+# WHY (fail pings carry no body), and the cause text below is otherwise only
+# emailed via cron -> postfix -> Fastmail, leaving nothing reviewable on the box.
+# `note` mirrors a line to stdout (so cron still emails it) AND to ALERT_BUFFER,
+# which is persisted to ALERT_LOG (and sent as the /fail ping body) on failure.
+ALERT_LOG="${HOME}/logs/health-check-alerts.log"
+ALERT_BUFFER=""
+note() { echo "$1"; ALERT_BUFFER+="${1}"$'\n'; }
+
 # If you want to exclude some tailscale devices from being checked or flagging things as "down", then add it to a file called `excluded_devices.conf` in this directory
 # with contents that look like this:
 # EXCLUDED_DEVICES_FOR_EMAIL="my-computer1|my-computer2|my-phone"
@@ -130,7 +139,7 @@ for STREAK_NAME in "${!STREAK[@]}"; do
       SUSPEND_NOTE="auto-restart suspended"
     fi
     echo ""
-    echo "ESCALATION: ${STREAK_NAME} has been unhealthy for ${STREAK[$STREAK_NAME]} consecutive checks -- not self-healing, needs attention (${SUSPEND_NOTE})"
+    note "ESCALATION: ${STREAK_NAME} has been unhealthy for ${STREAK[$STREAK_NAME]} consecutive checks -- not self-healing, needs attention (${SUSPEND_NOTE})"
     echo ""
     ERROR_COUNT=$((ERROR_COUNT + 1))
   fi
@@ -156,8 +165,8 @@ DOCKER_ISSUES=$(/usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)")
 
 if [ -n "$DOCKER_ISSUES" ]; then
   echo ""
-  echo "Unhealthy containers detected:"
-  echo "$DOCKER_ISSUES"
+  note "Unhealthy containers detected:"
+  note "$DOCKER_ISSUES"
   echo ""
   ERROR_COUNT=$((ERROR_COUNT + 1))
 fi
@@ -196,8 +205,8 @@ if [ -e /usr/bin/tailscale ]; then
     TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EMAIL_EXCLUDE")
     if [ -n "$TAILSCALE_ISSUES" ]; then
       echo ""
-      echo "Tailscale issues detected:"
-      echo "$TAILSCALE_ISSUES"
+      note "Tailscale issues detected:"
+      note "$TAILSCALE_ISSUES"
       echo ""
       TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$ERROR_EXCLUDE")
       if [ -n "$TAILSCALE_ISSUES" ]; then
@@ -229,9 +238,9 @@ if command -v node &>/dev/null && \
       EXPIRY_DAYS=$(echo "$PREFLIGHT_JSON" | jq -r '.checks[] | select(.name == "Auth key expiry") | .expiresInDays // empty' 2>/dev/null)
       if [ -n "$EXPIRY_DAYS" ]; then
         echo ""
-        echo "Tailscale auth key expiry warning:"
-        echo "  Key expires in ${EXPIRY_DAYS} days. Mint a new one at:"
-        echo "  https://login.tailscale.com/admin/settings/keys"
+        note "Tailscale auth key expiry warning:"
+        note "  Key expires in ${EXPIRY_DAYS} days. Mint a new one at:"
+        note "  https://login.tailscale.com/admin/settings/keys"
         echo ""
         ERROR_COUNT=$((ERROR_COUNT + 1))
       fi
@@ -240,8 +249,19 @@ if command -v node &>/dev/null && \
 fi
 
 if [ $ERROR_COUNT -gt 0 ]; then
+  # Persist the cause locally (timestamped, append-only) so recent alerts stay
+  # reviewable on the box even after the cron email is gone.
+  mkdir -p "$(dirname "$ALERT_LOG")"
+  { printf '===== %s (%d issue(s)) =====\n' "$(date '+%F %T %Z')" "$ERROR_COUNT"
+    printf '%s\n' "$ALERT_BUFFER"; } >> "$ALERT_LOG"
+  # Keep the log bounded with a cheap self-trim.
+  if [ "$(wc -l < "$ALERT_LOG" 2>/dev/null || echo 0)" -gt 5000 ]; then
+    tail -n 2000 "$ALERT_LOG" > "${ALERT_LOG}.tmp" && mv "${ALERT_LOG}.tmp" "$ALERT_LOG"
+  fi
   if [ -n "$HEALTHCHECK_PING_KEY" ]; then
-    curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_PING_KEY/fail" > /dev/null
+    # Send the cause as the ping body so the healthchecks.io dashboard/API records
+    # WHY we failed, not just that we did (fail pings were previously bodyless).
+    curl -m 10 --retry 5 -s --data-raw "$ALERT_BUFFER" "https://hc-ping.com/$HEALTHCHECK_PING_KEY/fail" > /dev/null
   fi
   exit 1
 fi
