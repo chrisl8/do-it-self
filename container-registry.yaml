@@ -1366,6 +1366,11 @@ containers:
     homepage_group: Communication
     tags: []
     uses_tailscale: true
+    volumes:
+      config:
+        var: VOL_THELOUNGE_CONFIG
+        host_subpath: container-mounts/the-lounge/config
+        container_path: /config
     default_disabled: true
   trilium:
     description: Hierarchical note-taking application
