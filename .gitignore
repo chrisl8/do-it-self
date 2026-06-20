@@ -76,3 +76,6 @@ scripts/backup-coverage-acks/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# config-defaults clobber-guard state (hashes of last-installed defaults)
+.config-defaults-state/

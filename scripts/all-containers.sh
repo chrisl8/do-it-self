@@ -1147,8 +1147,17 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         # directory gets its files copied to the matching paths. Files in
         # config-personal/ take precedence, so users can override defaults
         # without touching git-tracked files.
+        #
+        # Clobber guard (dpkg-conffile model): only overwrite an existing
+        # target while it still matches the content we last wrote there. If the
+        # live file has diverged — edited by the user, or rewritten by the app
+        # at runtime (as The Lounge does with config.js) — we refuse to replace
+        # it with the packaged default and emit a notice instead. The "what we
+        # last installed" hashes live at the repo root, outside the ephemeral
+        # container dirs, so a module re-render can't lose them.
         if [[ -d "config-defaults" ]] && [[ "${CONTAINER_DIR}" != "homepage" ]]; then
           set +e
+          state_base="${SCRIPT_DIR}/.config-defaults-state/${CONTAINER_DIR}"
           while IFS= read -r -d '' default_file; do
             rel_path="${default_file#config-defaults/}"
             target_dir="$(dirname "$rel_path")"
@@ -1158,16 +1167,33 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             else
               source_file="$default_file"
             fi
-            # Skip if destination already matches — handles the case where
-            # a container has taken ownership of the file (e.g. CouchDB
-            # UID 5984) but the content is already what we want.
-            if [[ -f "$rel_path" ]] && cmp -s "$source_file" "$rel_path"; then
+            state_file="${state_base}/${rel_path}.sha256"
+            record_state() { mkdir -p "$(dirname "$state_file")"; sha256sum "$source_file" | cut -d' ' -f1 > "$state_file"; }
+            # Nothing there yet: seed it and record what we wrote.
+            if [[ ! -f "$rel_path" ]]; then
+              if cp "$source_file" "$rel_path" 2>/dev/null; then record_state; else
+                printf "${YELLOW}  warning: could not seed %s in %s (destination owned by another user — manual resync required)${NC}\n" "$rel_path" "${CONTAINER_DIR}" >&2
+              fi
               continue
             fi
-            if ! cp "$source_file" "$rel_path" 2>/dev/null; then
-              printf "${YELLOW}  warning: could not update %s in %s (destination owned by another user — manual resync required)${NC}\n" "$rel_path" "${CONTAINER_DIR}" >&2
+            # Already byte-identical to the source — keep the state marker fresh.
+            if cmp -s "$source_file" "$rel_path"; then record_state; continue; fi
+            # Target differs from the source. Safe to update only if the live
+            # file is unchanged since we last wrote it (i.e. the packaged
+            # default genuinely moved); otherwise leave the local copy alone.
+            target_hash="$(sha256sum "$rel_path" | cut -d' ' -f1)"
+            applied_hash=""
+            [[ -f "$state_file" ]] && applied_hash="$(cat "$state_file" 2>/dev/null)"
+            if [[ -n "$applied_hash" && "$target_hash" == "$applied_hash" ]]; then
+              if cp "$source_file" "$rel_path" 2>/dev/null; then record_state; else
+                printf "${YELLOW}  warning: could not update %s in %s (destination owned by another user — manual resync required)${NC}\n" "$rel_path" "${CONTAINER_DIR}" >&2
+              fi
+            else
+              printf "${YELLOW}  notice: %s in %s differs from the packaged default and looks locally modified — leaving it untouched (not clobbering).${NC}\n" "$rel_path" "${CONTAINER_DIR}" >&2
+              printf "${YELLOW}          adopt default: rm '%s/%s'  |  keep yours: cp it into '%s/config-personal/%s'${NC}\n" "${CONTAINER_DIR}" "$rel_path" "${CONTAINER_DIR}" "$rel_path" >&2
             fi
           done < <(find config-defaults -type f -print0)
+          unset -f record_state 2>/dev/null
           set -e
         fi
 
