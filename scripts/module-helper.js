@@ -5,6 +5,9 @@
 //
 // Usage: node module-helper.js <subcommand> [args...]
 // Subcommands: add-source, remove-source, install, uninstall, update, list, regenerate-registry, dev-sync
+//   update [<module>] [--no-restart]   update modules; by default recreates
+//     re-rendered running containers so their bind mounts pick up the new
+//     directory inode. --no-restart skips that (you restart them yourself).
 //
 // See docs/MODULES.md for the full design.
 
@@ -479,8 +482,57 @@ const PRESERVE_ON_UPDATE = [
   "images",
 ];
 
+// Recreate every re-rendered container that is currently running, so its
+// bind mounts re-resolve to the new directory inode produced by the atomic
+// rename swap in updateModules(). A running container keeps pointing at the
+// old (now-deleted) inode and silently gets stale/empty mounts otherwise --
+// the bug that broke DIUN's /notif/diunUpdate.sh notification script.
+//
+// `all-containers.sh --start` alone is a no-op on an already-running
+// container (it only acts when the project has zero running containers), so
+// we use the --stop --start pair the script documents as the reliable
+// single-container restart. Stopped/disabled containers are skipped: they
+// pick up the new inode on their next normal start anyway.
+async function restartReRenderedContainers(containerNames) {
+  const allContainersScript = join(__dirname, "all-containers.sh");
+  for (const name of containerNames) {
+    const targetDir = join(CONTAINERS_DIR, name);
+    let running = false;
+    try {
+      const ids = exec("docker --log-level ERROR compose ps -q", {
+        cwd: targetDir,
+      });
+      running = ids.length > 0;
+    } catch (e) {
+      console.warn(
+        `  ${name}: could not determine running state (${e.message}); skipping auto-restart. Restart manually if needed: scripts/all-containers.sh --stop --start --container ${name}`,
+      );
+      continue;
+    }
+    if (!running) continue;
+    console.log(
+      `  ${name}: running with a re-rendered folder -- recreating to refresh bind mounts...`,
+    );
+    try {
+      execFileSync(
+        allContainersScript,
+        ["--stop", "--start", "--container", name],
+        { stdio: "inherit" },
+      );
+    } catch (e) {
+      console.error(
+        `  ${name}: auto-restart failed (${e.message}). Run manually: scripts/all-containers.sh --stop --start --container ${name}`,
+      );
+    }
+  }
+}
+
 async function updateModules(args) {
-  const specificModule = args[0] || null;
+  // --no-restart leaves re-rendered running containers alone (they keep
+  // stale bind mounts until manually restarted); default is to recreate them.
+  const noRestart = args.includes("--no-restart");
+  const positional = args.filter((a) => !a.startsWith("--"));
+  const specificModule = positional[0] || null;
   const installed = await readInstalledModules();
   const moduleNames = specificModule
     ? [specificModule]
@@ -492,6 +544,8 @@ async function updateModules(args) {
   }
 
   let anyUpdated = false;
+  // Container folders re-rendered this run (new inode); restarted at the end.
+  const reRendered = [];
   const registry = await readRegistry();
 
   for (const name of moduleNames) {
@@ -657,6 +711,7 @@ async function updateModules(args) {
       await rename(stagingDir, targetDir);
       await rm(oldDir, { recursive: true, force: true });
 
+      reRendered.push(containerName);
       console.log(`  ${containerName}: updated.`);
     }
 
@@ -668,9 +723,21 @@ async function updateModules(args) {
   await writeInstalledModules(installed);
 
   if (anyUpdated) {
-    console.log(
-      "Update complete. Restart affected containers with all-containers.sh --start.",
-    );
+    if (reRendered.length && !noRestart) {
+      console.log(
+        "Recreating any re-rendered containers that are running (refreshes stale bind mounts)...",
+      );
+      await restartReRenderedContainers(reRendered);
+      console.log(
+        "Update complete. Re-rendered running containers were restarted automatically.",
+      );
+    } else if (reRendered.length) {
+      console.log(
+        `Update complete. --no-restart given: restart re-rendered containers yourself to refresh bind mounts (e.g. scripts/all-containers.sh --stop --start --container ${reRendered[0]}).`,
+      );
+    } else {
+      console.log("Update complete.");
+    }
   } else {
     console.log("All modules are up to date.");
   }
