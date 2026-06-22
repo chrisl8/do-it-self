@@ -561,6 +561,40 @@ verify_mount_permission() {
   fi
 }
 
+# Remove a container's entry from a pending-update tracking file. This is
+# pure bookkeeping that runs AFTER the real update work (pull/build) has
+# already succeeded, so a write failure here must NEVER abort the run (we
+# are under `set -e`) and leave the container stopped mid-deploy.
+#
+# DIUN auto-creates its /script bind-mount dir as root:root (it runs as
+# root), but this script runs as the host user (uid 1000). `sed -i` stages
+# its temp file in the target's DIRECTORY, so it fails with "Permission
+# denied" on a root-owned dir -- which previously killed the whole script
+# before --start. We instead rewrite the file in place (needs write on the
+# file only, not its dir), fall back to sudo, and warn rather than abort.
+clear_container_from_tracking_file() {
+  local file="$1" entry="$2"
+  [[ -n "${file}" && -e "${file}" ]] || return 0
+  # `|| true`: grep -v exits 1 when it filters out *every* line (empty
+  # result), which would otherwise trip `set -e` and abort the deploy.
+  local remaining
+  remaining=$(grep -v "^${entry}\$" "${file}" 2>/dev/null || true)
+  if [[ -z "${remaining}" ]]; then
+    if [[ -e "${file}" ]]; then
+      echo "${file} would be empty, deleting..."
+      rm -f "${file}" 2>/dev/null || sudo rm -f "${file}" 2>/dev/null || \
+        printf "${YELLOW}  WARNING: could not remove tracking file ${file} (continuing)${NC}\n"
+    fi
+    return 0
+  fi
+  if ! printf '%s\n' "${remaining}" > "${file}" 2>/dev/null; then
+    if ! printf '%s\n' "${remaining}" | sudo tee "${file}" >/dev/null 2>&1; then
+      printf "${YELLOW}  WARNING: could not update tracking file ${file} (continuing)${NC}\n"
+    fi
+  fi
+  return 0
+}
+
 cd "${SCRIPT_DIR}" || exit
 
 # Ensure the shared caddy-net Docker network exists for caddy + web services
@@ -1040,20 +1074,8 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           # actual "update" work; a later --wait timeout (common on multi-
           # container stacks where one healthcheck is slow) does not mean the
           # update failed, so it should not leave the entry stuck in the file.
-          if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
-            sed -i "/^${CONTAINER_DIR}\$/d" "${CONTAINER_LIST_FILE}"
-            if [[ ! -s "$CONTAINER_LIST_FILE" ]]; then
-                echo "$CONTAINER_LIST_FILE file is empty, deleting..."
-                rm -rf "$CONTAINER_LIST_FILE"
-            fi
-          fi
-          if [[ -n "${DIUN_UPDATE_FILE}"  && -e "${DIUN_UPDATE_FILE}" ]]; then
-            sed -i "/^${CONTAINER_DIR}\$/d" "${DIUN_UPDATE_FILE}"
-            if [[ ! -s "$DIUN_UPDATE_FILE" ]]; then
-                echo "$DIUN_UPDATE_FILE file is empty, deleting..."
-                rm -rf "$DIUN_UPDATE_FILE"
-            fi
-          fi
+          clear_container_from_tracking_file "${CONTAINER_LIST_FILE}" "${CONTAINER_DIR}"
+          clear_container_from_tracking_file "${DIUN_UPDATE_FILE}" "${CONTAINER_DIR}"
         fi
 
         INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
