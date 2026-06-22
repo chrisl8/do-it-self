@@ -59,6 +59,21 @@ containers:
     homepage_group: Tools
     tags: []
     default_disabled: true
+  archive:
+    description: Read-only web browser for the canonical ZFS archive (PII, login required)
+    homepage_group: Productivity
+    tags: []
+    uses_tailscale: true
+    volumes:
+      data:
+        var: VOL_ARCHIVE_DATA
+        host_subpath: archive
+        container_path: /data/root
+      hist:
+        var: VOL_ARCHIVE_HIST
+        host_subpath: container-mounts/archive/hist
+        container_path: /cfg/hist
+    default_disabled: true
   beszel:
     description: Server monitoring dashboard
     homepage_group: System Monitoring
@@ -1094,6 +1109,25 @@ containers:
         host_subpath: container-mounts/quicken/data
         container_path: /data
     default_disabled: true
+  recoll:
+    description: Full-text search over the read-only archive (Recoll + web UI)
+    homepage_group: Productivity
+    tags: []
+    uses_tailscale: true
+    volumes:
+      archive:
+        var: VOL_RECOLL_ARCHIVE
+        host_subpath: archive
+        container_path: /data/archive
+      index:
+        var: VOL_RECOLL_INDEX
+        host_subpath: container-mounts/recoll
+        container_path: /data/index
+    default_disabled: true
+    cron_jobs:
+      - schedule: "30 3 * * *"
+        script: reindex.sh
+        description: Nightly incremental Recoll reindex of the archive
   recon:
     description: Media acquisition stack (Sonarr, Radarr, SABnzbd, etc.)
     homepage_group: Media
