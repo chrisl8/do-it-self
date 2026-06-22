@@ -335,6 +335,23 @@ function buildEnvForContainer(registry, userConfig, containerName) {
   if (containerDef.uses_tailscale) {
     const basePath = getMountPath(mounts, 0);
     env.TS_STATE_HOST_DIR = join(basePath, "tailscale-state", containerName);
+    // Stacks that run more than one Tailscale node (e.g. a sidecar with a
+    // different egress) declare the extras in container-registry.yaml as
+    // `tailscale_extra_nodes: [name, ...]`. Each gets its own identity dir at
+    // <mount[0]>/tailscale-state/<name>/, exposed as TS_STATE_HOST_DIR_<NAME>.
+    // Block-list syntax only (the registry parser reads flow `[a, b]` as a
+    // string); the guard makes a flow-syntax slip a no-op instead of emitting
+    // one bogus var per character.
+    const extraNodes = Array.isArray(containerDef.tailscale_extra_nodes)
+      ? containerDef.tailscale_extra_nodes
+      : [];
+    for (const node of extraNodes) {
+      env[`TS_STATE_HOST_DIR_${node.toUpperCase()}`] = join(
+        basePath,
+        "tailscale-state",
+        node,
+      );
+    }
   }
 
   return { env, errors };

@@ -1099,6 +1099,8 @@ containers:
     homepage_group: Media
     tags: []
     uses_tailscale: true
+    tailscale_extra_nodes:
+      - lazylibrarian
     start_order: z110
     required_accounts:
       - name: WireGuard VPN provider

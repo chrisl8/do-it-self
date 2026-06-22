@@ -77,6 +77,30 @@ containers:
     # ...
 ```
 
+### Multiple Tailscale nodes in one stack
+
+`uses_tailscale: true` provisions a single node identity dir, exposed to
+compose as `TS_STATE_HOST_DIR` (at `<mount[0]>/tailscale-state/<container>/`).
+A stack that runs **more than one** Tailscale sidecar — for example a service
+that needs a different egress than the rest of the stack (off-VPN while the
+others stay behind a gluetun VPN) — declares the extra nodes:
+
+```yaml
+  recon:
+    uses_tailscale: true            # primary node -> TS_STATE_HOST_DIR
+    tailscale_extra_nodes:          # each gets its own identity dir
+      - lazylibrarian
+```
+
+(Use block-list syntax as shown — the registry parser reads flow lists like
+`[lazylibrarian]` as a plain string, not a list.)
+
+Each extra node `N` is provisioned at `<mount[0]>/tailscale-state/N/` and
+exposed as `TS_STATE_HOST_DIR_<N_UPPERCASE>` (e.g.
+`TS_STATE_HOST_DIR_LAZYLIBRARIAN`), which the extra ts sidecar mounts at
+`/var/lib/tailscale`. The mechanism is additive — single-node stacks are
+unaffected.
+
 ### Declaring external account requirements
 
 Containers that depend on an external account (a Spotify Developer app, a
