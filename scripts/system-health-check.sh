@@ -198,21 +198,98 @@ if [ -e /usr/bin/tailscale ]; then
   ERROR_EXCLUDE="$EMAIL_EXCLUDE"
   [ -n "$EXCLUDED_DEVICES_FOR_ERROR_COUNT" ] && ERROR_EXCLUDE="${ERROR_EXCLUDE}|${EXCLUDED_DEVICES_FOR_ERROR_COUNT}"
 
+  # First pass plus a 15s re-probe: `tailscale status` frequently reports a peer
+  # offline for a few seconds during a coordination refresh, so a single sample
+  # is not trustworthy. EMAIL_EXCLUDE drops peers we don't own / can't fix.
   TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EMAIL_EXCLUDE")
   if [ -n "$TAILSCALE_ISSUES" ]; then
     # Wait 15 seconds and check again as often there are transient issues with tailscale status reporting
     sleep 15
     TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$EMAIL_EXCLUDE")
-    if [ -n "$TAILSCALE_ISSUES" ]; then
-      echo ""
-      note "Tailscale issues detected:"
-      note "$TAILSCALE_ISSUES"
-      echo ""
-      TAILSCALE_ISSUES=$(/usr/bin/tailscale status | grep offline | grep -vE "$ERROR_EXCLUDE")
-      if [ -n "$TAILSCALE_ISSUES" ]; then
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-      fi
+  fi
+
+  # --- Tailscale offline-streak gating ------------------------------------
+  # A momentary loss of THIS host's tailscaled map-poll (the control-plane
+  # long-poll; journal warnable `not-in-map-poll`) freezes every peer's
+  # "last seen" clock, so a single cycle can show many peers "offline" at once
+  # even though nothing is actually down -- they all self-heal within a cycle.
+  # Paging on that is crying wolf. So, exactly like the container UNHEALTHY_STREAK
+  # logic above, only count a peer as a real error once it has been offline for
+  # TAILSCALE_OFFLINE_STREAK_THRESHOLD *consecutive* cycles (default 2 ~= 30m at
+  # the */15 cron; override in healthcheck.conf). Per-peer counters live in
+  # HEALTH_STATE_DIR and reset the instant a peer returns. Every raw observation
+  # -- paged or not -- is appended to TS_TREND_LOG so the underlying blip pattern
+  # stays diagnosable, alongside the WAN reachability logger that records which
+  # network layer blipped.
+  TAILSCALE_OFFLINE_STREAK_THRESHOLD="${TAILSCALE_OFFLINE_STREAK_THRESHOLD:-2}"
+  TS_STREAK_FILE="${HEALTH_STATE_DIR}/tailscale-offline-streaks.txt"
+  TS_TREND_LOG="${HOME}/logs/tailscale-offline-trend.log"
+
+  if [ -n "$TAILSCALE_ISSUES" ]; then
+    # Record every observation (append-only, self-trimmed) regardless of whether
+    # it will page -- this is the raw data set for diagnosing the recurring blips.
+    mkdir -p "$(dirname "$TS_TREND_LOG")"
+    { printf '===== %s =====\n' "$(date '+%F %T %Z')"
+      printf '%s\n' "$TAILSCALE_ISSUES"; } >> "$TS_TREND_LOG"
+    if [ "$(wc -l < "$TS_TREND_LOG" 2>/dev/null || echo 0)" -gt 5000 ]; then
+      tail -n 2000 "$TS_TREND_LOG" > "${TS_TREND_LOG}.tmp" && mv "${TS_TREND_LOG}.tmp" "$TS_TREND_LOG"
     fi
+  fi
+
+  # Error-eligible offline peers = those not on the error-exclude list, keyed by
+  # hostname (column 2 of `tailscale status`).
+  TS_ERROR_NAMES=$(printf '%s\n' "$TAILSCALE_ISSUES" | grep -vE "$ERROR_EXCLUDE" | awk 'NF{print $2}')
+
+  declare -A TS_STREAK
+  if [[ -e "${TS_STREAK_FILE}" ]]; then
+    while read -r TS_NAME TS_COUNT; do
+      [[ -n "${TS_NAME}" ]] && TS_STREAK["${TS_NAME}"]="${TS_COUNT}"
+    done < "${TS_STREAK_FILE}"
+  fi
+
+  declare -A TS_OFFLINE_NOW
+  while read -r TS_NAME; do
+    [[ -n "${TS_NAME}" ]] && TS_OFFLINE_NOW["${TS_NAME}"]=1
+  done < <(printf '%s\n' "$TS_ERROR_NAMES")
+
+  # Reset counters for peers that recovered or dropped off the list; increment
+  # the still-offline ones.
+  for TS_NAME in "${!TS_STREAK[@]}"; do
+    [[ -z "${TS_OFFLINE_NOW[$TS_NAME]:-}" ]] && unset 'TS_STREAK[$TS_NAME]'
+  done
+  for TS_NAME in "${!TS_OFFLINE_NOW[@]}"; do
+    TS_STREAK["${TS_NAME}"]=$(( ${TS_STREAK[$TS_NAME]:-0} + 1 ))
+  done
+
+  # Persist counters and collect any peer that has crossed the threshold.
+  : > "${TS_STREAK_FILE}"
+  TS_SUSTAINED=""
+  for TS_NAME in "${!TS_STREAK[@]}"; do
+    echo "${TS_NAME} ${TS_STREAK[$TS_NAME]}" >> "${TS_STREAK_FILE}"
+    if (( TS_STREAK[$TS_NAME] >= TAILSCALE_OFFLINE_STREAK_THRESHOLD )); then
+      TS_SUSTAINED+="  ${TS_NAME} (offline ${TS_STREAK[$TS_NAME]} consecutive checks)"$'\n'
+    fi
+  done
+  [[ -s "${TS_STREAK_FILE}" ]] || rm -f "${TS_STREAK_FILE}"
+
+  # Only NOW -- past the streak threshold -- treat it as a real, page-worthy
+  # error, and enrich the alert with on-box diagnostics so the page explains
+  # which layer is at fault without a human having to dig.
+  if [ -n "$TS_SUSTAINED" ]; then
+    echo ""
+    note "Tailscale peers offline past ${TAILSCALE_OFFLINE_STREAK_THRESHOLD} consecutive checks (sustained -- not a momentary blip):"
+    note "$TS_SUSTAINED"
+    NETCHECK_OUT=$(/usr/bin/tailscale netcheck 2>/dev/null | grep -iE 'DERP|IPv4:|UDP:|MappingVaries|PortMapping|latency' | head -12)
+    if [ -n "$NETCHECK_OUT" ]; then
+      note "tailscale netcheck:"
+      note "$NETCHECK_OUT"
+    fi
+    if [ -f "${HOME}/logs/wan-reachability.log" ]; then
+      note "recent WAN reachability (gw=LAN wan=internet ctrl=tailscale control plane):"
+      note "$(tail -n 12 "${HOME}/logs/wan-reachability.log")"
+    fi
+    echo ""
+    ERROR_COUNT=$((ERROR_COUNT + 1))
   fi
 fi
 
