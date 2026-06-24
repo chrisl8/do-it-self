@@ -85,6 +85,28 @@ let updateAllInFlight = false;
 let startAllChildProcess = null;
 let startAllAborted = false;
 
+// Global FIFO serializer for all-containers.sh --stop/--start operations.
+// Starting/stopping/updating a stack runs scripts/all-containers.sh, which
+// drives the shared host docker daemon, image pulls, git-repo updates and
+// start-order logic; two of these must never run at once or they race over the
+// same resources. Every Dashboard "Restart"/"Update" click and every batch
+// (Update All / Start All) item funnels through this one promise chain, so the
+// work runs strictly one at a time in arrival order. The backend is a single
+// PM2 process (ecosystem.config.js -> instances: 1), so this in-memory chain is
+// authoritative across every connected browser window: a second window's click
+// queues behind the first instead of running alongside it.
+let stackOpChain = Promise.resolve();
+function runStackOpExclusive(task) {
+  const result = stackOpChain.then(task, task);
+  // Swallow the result so one task's rejection can't wedge every later op; the
+  // returned `result` still rejects/resolves for the caller that enqueued it.
+  stackOpChain = result.then(
+    () => {},
+    () => {},
+  );
+  return result;
+}
+
 // Children spawned from the backend get an explicit, minimal env rather than
 // inheriting process.env. This prevents variables intended for the web-admin's
 // own compose.yaml substitution (e.g. TS_STATE_HOST_DIR, HOMEPAGE_GROUP) from
@@ -173,22 +195,23 @@ async function processUpdateQueue() {
       `[Update All] Upgrading ${stackName} (${status.completed.length + 1} of ${status.total})...`,
     );
 
-    const { child, promise } = spawnTracked(
-      scriptPath,
-      [
-        "--stop",
-        "--start",
-        "--no-wait",
-        "--container",
-        stackName,
-        "--update-git-repos",
-        "--get-updates",
-      ],
-      600000,
-    );
-
-    updateAllChildProcess = child;
-    const { exitCode, output } = await promise;
+    const { exitCode, output } = await runStackOpExclusive(() => {
+      const { child, promise } = spawnTracked(
+        scriptPath,
+        [
+          "--stop",
+          "--start",
+          "--no-wait",
+          "--container",
+          stackName,
+          "--update-git-repos",
+          "--get-updates",
+        ],
+        600000,
+      );
+      updateAllChildProcess = child;
+      return promise;
+    });
     updateAllChildProcess = null;
 
     activeStacks.delete(stackName);
@@ -304,14 +327,15 @@ async function processStartAllQueue() {
       `[Start All] Starting ${stackName} (${progressIdx} of ${status.total})...`,
     );
 
-    const { child, promise } = spawnTracked(
-      scriptPath,
-      ["--start", "--no-wait", "--container", stackName],
-      600000,
-    );
-
-    startAllChildProcess = child;
-    const { exitCode, output } = await promise;
+    const { exitCode, output } = await runStackOpExclusive(() => {
+      const { child, promise } = spawnTracked(
+        scriptPath,
+        ["--start", "--no-wait", "--container", stackName],
+        600000,
+      );
+      startAllChildProcess = child;
+      return promise;
+    });
     startAllChildProcess = null;
 
     activeStacks.delete(stackName);
@@ -2190,18 +2214,6 @@ async function webserver() {
           operation: "restart",
         });
 
-        const scriptPath = join(
-          os.homedir(),
-          "containers/scripts/all-containers.sh",
-        );
-        const child = spawn(scriptPath, [
-          "--stop",
-          "--start",
-          "--no-wait",
-          "--container",
-          stackName,
-        ]);
-
         ws.send(
           JSON.stringify({
             type: "dockerStackRestartStarted",
@@ -2209,59 +2221,87 @@ async function webserver() {
           }),
         );
 
-        let output = "";
-        child.stdout.on("data", (data) => {
-          output += data.toString();
-        });
-        child.stderr.on("data", (data) => {
-          output += data.toString();
-        });
+        // Serialize the actual start/stop behind any other in-flight stack op
+        // (see runStackOpExclusive). Until the lock frees, this request sits
+        // queued with an "in_progress" status; it is already reserved in
+        // activeStacks above so a duplicate click on the same stack is rejected.
+        runStackOpExclusive(
+          () =>
+            new Promise((resolve) => {
+              const scriptPath = join(
+                os.homedir(),
+                "containers/scripts/all-containers.sh",
+              );
+              const child = spawn(scriptPath, [
+                "--stop",
+                "--start",
+                "--no-wait",
+                "--container",
+                stackName,
+              ]);
 
-        child.on("error", (err) => {
-          activeStacks.delete(stackName);
-          console.error(`Failed to spawn restart for ${stackName}:`, err);
-          updateStatus(`restartStatus.${stackName}`, {
-            status: "failed",
-            operation: "restart",
-            output: "",
-            error: err.message,
-          });
-        });
+              let output = "";
+              child.stdout.on("data", (data) => {
+                output += data.toString();
+              });
+              child.stderr.on("data", (data) => {
+                output += data.toString();
+              });
 
-        child.on("close", (code) => {
-          activeStacks.delete(stackName);
-          ws.send(
-            JSON.stringify({
-              type: "dockerStackRestartResult",
-              success: code === 0,
-              stackName,
-              output,
-              error: code !== 0 ? `Script exited with code ${code}` : null,
+              child.on("error", (err) => {
+                activeStacks.delete(stackName);
+                console.error(`Failed to spawn restart for ${stackName}:`, err);
+                updateStatus(`restartStatus.${stackName}`, {
+                  status: "failed",
+                  operation: "restart",
+                  output: "",
+                  error: err.message,
+                });
+                resolve();
+              });
+
+              child.on("close", (code) => {
+                activeStacks.delete(stackName);
+                ws.send(
+                  JSON.stringify({
+                    type: "dockerStackRestartResult",
+                    success: code === 0,
+                    stackName,
+                    output,
+                    error:
+                      code !== 0 ? `Script exited with code ${code}` : null,
+                  }),
+                );
+                console.log(
+                  `Restart completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
+                );
+                if (code === 0) {
+                  updateStatus(`restartStatus.${stackName}`, undefined);
+                } else {
+                  updateStatus(`restartStatus.${stackName}`, {
+                    status: "failed",
+                    operation: "restart",
+                    output,
+                    error:
+                      code !== 0 ? `Script exited with code ${code}` : null,
+                  });
+                }
+                getFormattedDockerContainers()
+                  .then((containers) => {
+                    updateStatus("docker.running", containers.running);
+                    updateStatus("docker.stacks", containers.stacks);
+                    statusEmitter.emit("update");
+                  })
+                  .catch((err) => {
+                    console.error(
+                      "Error refreshing containers after restart:",
+                      err,
+                    );
+                  });
+                resolve();
+              });
             }),
-          );
-          console.log(
-            `Restart completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
-          );
-          if (code === 0) {
-            updateStatus(`restartStatus.${stackName}`, undefined);
-          } else {
-            updateStatus(`restartStatus.${stackName}`, {
-              status: "failed",
-              operation: "restart",
-              output,
-              error: code !== 0 ? `Script exited with code ${code}` : null,
-            });
-          }
-          getFormattedDockerContainers()
-            .then((containers) => {
-              updateStatus("docker.running", containers.running);
-              updateStatus("docker.stacks", containers.stacks);
-              statusEmitter.emit("update");
-            })
-            .catch((err) => {
-              console.error("Error refreshing containers after restart:", err);
-            });
-        });
+        );
       } else if (message.type === "restartDockerStackWithUpgrade") {
         const stackName = message.payload?.stackName;
         if (!stackName) {
@@ -2299,20 +2339,6 @@ async function webserver() {
           operation: "upgrade",
         });
 
-        const scriptPath = join(
-          os.homedir(),
-          "containers/scripts/all-containers.sh",
-        );
-        const child = spawn(scriptPath, [
-          "--stop",
-          "--start",
-          "--no-wait",
-          "--container",
-          stackName,
-          "--update-git-repos",
-          "--get-updates",
-        ]);
-
         ws.send(
           JSON.stringify({
             type: "dockerStackRestartStarted",
@@ -2321,60 +2347,90 @@ async function webserver() {
           }),
         );
 
-        let output = "";
-        child.stdout.on("data", (data) => {
-          output += data.toString();
-        });
-        child.stderr.on("data", (data) => {
-          output += data.toString();
-        });
+        // Serialize the actual update behind any other in-flight stack op (see
+        // runStackOpExclusive). Until the lock frees, this request sits queued
+        // with an "in_progress" status; it is already reserved in activeStacks
+        // above so a duplicate click on the same stack is rejected.
+        runStackOpExclusive(
+          () =>
+            new Promise((resolve) => {
+              const scriptPath = join(
+                os.homedir(),
+                "containers/scripts/all-containers.sh",
+              );
+              const child = spawn(scriptPath, [
+                "--stop",
+                "--start",
+                "--no-wait",
+                "--container",
+                stackName,
+                "--update-git-repos",
+                "--get-updates",
+              ]);
 
-        child.on("error", (err) => {
-          activeStacks.delete(stackName);
-          console.error(`Failed to spawn upgrade for ${stackName}:`, err);
-          updateStatus(`restartStatus.${stackName}`, {
-            status: "failed",
-            operation: "upgrade",
-            output: "",
-            error: err.message,
-          });
-        });
+              let output = "";
+              child.stdout.on("data", (data) => {
+                output += data.toString();
+              });
+              child.stderr.on("data", (data) => {
+                output += data.toString();
+              });
 
-        child.on("close", (code) => {
-          activeStacks.delete(stackName);
-          ws.send(
-            JSON.stringify({
-              type: "dockerStackRestartResult",
-              success: code === 0,
-              stackName,
-              operation: "upgrade",
-              output,
-              error: code !== 0 ? `Script exited with code ${code}` : null,
+              child.on("error", (err) => {
+                activeStacks.delete(stackName);
+                console.error(`Failed to spawn upgrade for ${stackName}:`, err);
+                updateStatus(`restartStatus.${stackName}`, {
+                  status: "failed",
+                  operation: "upgrade",
+                  output: "",
+                  error: err.message,
+                });
+                resolve();
+              });
+
+              child.on("close", (code) => {
+                activeStacks.delete(stackName);
+                ws.send(
+                  JSON.stringify({
+                    type: "dockerStackRestartResult",
+                    success: code === 0,
+                    stackName,
+                    operation: "upgrade",
+                    output,
+                    error:
+                      code !== 0 ? `Script exited with code ${code}` : null,
+                  }),
+                );
+                console.log(
+                  `Upgrade completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
+                );
+                if (code === 0) {
+                  updateStatus(`restartStatus.${stackName}`, undefined);
+                } else {
+                  updateStatus(`restartStatus.${stackName}`, {
+                    status: "failed",
+                    operation: "upgrade",
+                    output,
+                    error:
+                      code !== 0 ? `Script exited with code ${code}` : null,
+                  });
+                }
+                getFormattedDockerContainers()
+                  .then((containers) => {
+                    updateStatus("docker.running", containers.running);
+                    updateStatus("docker.stacks", containers.stacks);
+                    statusEmitter.emit("update");
+                  })
+                  .catch((err) => {
+                    console.error(
+                      "Error refreshing containers after update:",
+                      err,
+                    );
+                  });
+                resolve();
+              });
             }),
-          );
-          console.log(
-            `Upgrade completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
-          );
-          if (code === 0) {
-            updateStatus(`restartStatus.${stackName}`, undefined);
-          } else {
-            updateStatus(`restartStatus.${stackName}`, {
-              status: "failed",
-              operation: "upgrade",
-              output,
-              error: code !== 0 ? `Script exited with code ${code}` : null,
-            });
-          }
-          getFormattedDockerContainers()
-            .then((containers) => {
-              updateStatus("docker.running", containers.running);
-              updateStatus("docker.stacks", containers.stacks);
-              statusEmitter.emit("update");
-            })
-            .catch((err) => {
-              console.error("Error refreshing containers after update:", err);
-            });
-        });
+        );
       } else if (message.type === "clearRestartStatus") {
         const stackName = message.payload?.stackName;
         if (stackName) {
