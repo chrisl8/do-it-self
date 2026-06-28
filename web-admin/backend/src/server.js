@@ -2473,10 +2473,17 @@ async function webserver() {
             ? new Set(requestedStacks)
             : null;
           const queue = Object.entries(containers.stacks)
+            // Skip disabled stacks even if they are running with a pending
+            // update. all-containers.sh only acts on enabled containers, so
+            // asking it to update a disabled one is a guaranteed no-op that
+            // surfaces as a confusing "failed (exit code 1)" in the batch
+            // (e.g. the running-but-disabled filez stack).
             .filter(([name, info]) =>
-              requestedSet
-                ? requestedSet.has(name) && info.hasPendingUpdates
-                : info.hasPendingUpdates,
+              info.isDisabled
+                ? false
+                : requestedSet
+                  ? requestedSet.has(name) && info.hasPendingUpdates
+                  : info.hasPendingUpdates,
             )
             .sort(([, a], [, b]) =>
               (a.sortOrder || "z999").localeCompare(
