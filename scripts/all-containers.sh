@@ -729,6 +729,21 @@ if [[ -n "${SKIP_CONTAINER_LIST_FILE}" && -f "${SKIP_CONTAINER_LIST_FILE}" ]]; t
   fi
 fi
 
+# If filtering left nothing to act on -- e.g. the requested --container is
+# disabled (only enabled containers are added to CONTAINER_LIST above), or a
+# skip-list/list-file excluded everything -- there is no work to do. Bail out
+# cleanly here. Otherwise we fall through to the readarray blocks below where
+# `printf '%s\0' "${CONTAINER_LIST[@]}"` on an EMPTY array still emits one
+# empty record, which sort/xargs turn into a single empty element. That empty
+# element then trips the main loop's " - is not a valid container directory"
+# branch and exits 1 -- a confusing false failure (this is exactly how an
+# "Update All" of the disabled-but-running filez stack reported a bogus
+# failure from the web admin).
+if [[ ${#CONTAINER_LIST[@]} -eq 0 ]]; then
+  printf "${YELLOW}No matching enabled containers to act on; nothing to do.${NC}\n"
+  exit 0
+fi
+
 if [[ ${START_ACTION} = true && ${STOP_ACTION} = true ]];then
   if [[ ${GET_UPDATES} = true ]];then
     printf "${YELLOW}Pulling updates and rebuilding ${RESTART_LIST_TEXT}${NC}\n\n"
