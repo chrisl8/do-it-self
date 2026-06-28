@@ -142,6 +142,16 @@ pi_borg() {
         "${PI_USER}@${PI_HOST}" "$@"
 }
 
+# ── Reachability gate ────────────────────────────────────────────
+# Returns 0 if the Pi's SSH port is answering, 1 if the host is unreachable.
+# A plain TCP connect to port 22 cleanly distinguishes a network/host outage
+# (blip, Pi powered off) from an actual borg/repo problem. Without this, every
+# per-client borg call below would just exit non-zero on an outage and get
+# mislabeled as "corruption" / "check failed" / "backup too old".
+pi_reachable() {
+    timeout 12 bash -c "exec 3<>/dev/tcp/${PI_HOST}/22" 2>/dev/null
+}
+
 # ── Per-client iteration ─────────────────────────────────────────
 # Each entry: <name> <repo_path> <fresh_h> <hc_fresh> <hc_rt> <inf_key> <rt_path> <rt_expected>
 parse_client() {
@@ -409,6 +419,24 @@ run_command() {
 }
 
 CMD="${1:-}"
+
+# Every real subcommand talks to the Pi over SSH. Detect an unreachable Pi
+# once, up front, and fail with an accurate reason instead of letting the
+# per-client borg calls mislabel a network/host outage as repo corruption.
+case "$CMD" in
+    prune|check|check-bitrot|check-archives|freshness|restore-test|break-lock|smart|all)
+        if ! pi_reachable; then
+            echo "[ERROR] backup-pi unreachable over SSH (tcp ${PI_HOST}:22) — skipping '$CMD'."
+            hc_fail "$HC_URL" "backup-pi unreachable (tcp:22) — '$CMD' skipped, repos NOT verified"
+            echo ""
+            echo "=========================================="
+            echo "borg-pi-manage.sh $* — aborted (Pi unreachable) $(date)"
+            echo "=========================================="
+            exit 1
+        fi
+        ;;
+esac
+
 case "$CMD" in
     prune)         run_command cmd_prune_one "prune" ;;
     check)          run_command cmd_check_one "check" ;;
