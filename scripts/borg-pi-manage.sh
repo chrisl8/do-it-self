@@ -29,7 +29,7 @@
 # Cron pattern (under chrisl8's user crontab, `crontab -e`):
 #   0 7  * * *  ~/containers/scripts/borg-pi-manage.sh smart
 #   0 8  * * *  ~/containers/scripts/borg-pi-manage.sh all
-#   0 10 * * *  ~/containers/scripts/borg-pi-manage.sh check-bitrot
+#   0 12 * * *  ~/containers/scripts/borg-pi-manage.sh check-bitrot
 #   0 9  * * 0  ~/containers/scripts/borg-pi-manage.sh check-archives
 #   30 8 * * 0  ~/containers/scripts/borg-pi-manage.sh restore-test
 set -euo pipefail
