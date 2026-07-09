@@ -11,12 +11,10 @@ export PM2_HOME="$HOME/.pm2"
 # In cron, PATH is minimal, so we search common installation directories
 NODE_PATH=""
 SEARCH_PATHS=(
+    "$HOME/.local/share/fnm/aliases/default/bin"
     "$HOME/.nvm/versions/node"/*/bin
     "$HOME/.local/share/fnm"/*/bin
     "$HOME/.fnm"/current/bin
-    "$HOME/n/bin"
-    "/usr/local/n/bin"
-    "/opt/n/bin"
 )
 
 for dir in "${SEARCH_PATHS[@]}"; do

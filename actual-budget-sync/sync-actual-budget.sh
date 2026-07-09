@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-export PATH="${HOME}/n/bin:${PATH}"
+export PATH="${HOME}/.local/share/fnm/aliases/default/bin:${PATH}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FAILURE_THRESHOLD=6
