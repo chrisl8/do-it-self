@@ -293,12 +293,21 @@ if [ -e /usr/bin/tailscale ]; then
   fi
 fi
 
-# Check Tailscale auth key expiry. Uses the preflight helper to query the
-# Tailscale API for the key's expiration date. The preflight surfaces an
-# advisory once the key is within 14 days of expiry (also shown in the web
-# admin); here we only ALARM -- page healthchecks.io + email -- once it is
-# within AUTH_KEY_EXPIRY_ALARM_DAYS (default 10), and then at most once per
-# 24h so it does not nag every 15-minute cycle for days on end.
+# Check Tailscale credential expiry. Uses the preflight helper to query the
+# Tailscale API for each credential's expiration. The preflight surfaces an
+# advisory once a credential -- the auth key (TS_AUTHKEY) OR the API access
+# token (TS_API_TOKEN) -- is within 14 days of expiry (also shown in the web
+# admin). Here we ALARM -- page healthchecks.io + email -- in two cases,
+# throttled to at most once per 24h so it does not nag every 15-minute cycle:
+#   1. A credential is expiring within TS_CRED_EXPIRY_ALARM_DAYS (default 10),
+#      so the active alarm leads the passive dashboard hint by a few days.
+#   2. A credential is ALREADY expired or rejected (HTTP 401). This case used
+#      to go SILENT -- the advisory only exists while a key is still valid --
+#      which is exactly when every container start/update is broken and the
+#      loudest alarm is warranted. We keep paging daily until it is fixed.
+# Both credentials matter: an expired TS_API_TOKEN was invisible before (its
+# expiry can't be read once it starts 401ing) yet takes the whole platform's
+# start/update path down with it.
 PREFLIGHT_SCRIPT="$(dirname "$0")/lib/tailscale-preflight.js"
 INFISICAL_CRED_FILE="${HOME}/credentials/infisical.env"
 if command -v node &>/dev/null && \
@@ -315,25 +324,48 @@ if command -v node &>/dev/null && \
   if [ -n "${TS_API_TOKEN:-}" ]; then
     PREFLIGHT_JSON=$(TS_API_TOKEN="$TS_API_TOKEN" TS_AUTHKEY="${TS_AUTHKEY:-}" node "$PREFLIGHT_SCRIPT" --json 2>/dev/null) || true
     if [ -n "$PREFLIGHT_JSON" ]; then
-      EXPIRY_DAYS=$(echo "$PREFLIGHT_JSON" | jq -r '.checks[] | select(.name == "Auth key expiry") | .expiresInDays // empty' 2>/dev/null)
-      # Only ALARM within the (narrower) alarm window. The preflight already
-      # gates its advisory at <=14 days; we narrow the active page/email to
-      # <=10 so the passive dashboard hint can lead the alarm.
-      AUTH_KEY_EXPIRY_ALARM_DAYS="${AUTH_KEY_EXPIRY_ALARM_DAYS:-10}"
-      if [[ "$EXPIRY_DAYS" =~ ^[0-9]+$ ]] && (( EXPIRY_DAYS <= AUTH_KEY_EXPIRY_ALARM_DAYS )); then
-        # Throttle: without this the warning fires every */15 cycle (~96x/day)
-        # for up to AUTH_KEY_EXPIRY_ALARM_DAYS days. Warn at most once per 24h via
-        # a stamp in HEALTH_STATE_DIR -- loud enough to act on, not a nag.
-        EXPIRY_STAMP="${HEALTH_STATE_DIR}/auth-key-expiry-last-warned"
+      # The preflight gates its advisory at <=14 days; we narrow the active
+      # page/email to <=TS_CRED_EXPIRY_ALARM_DAYS so the passive dashboard hint
+      # leads the alarm. (AUTH_KEY_EXPIRY_ALARM_DAYS honored for back-compat.)
+      TS_CRED_EXPIRY_ALARM_DAYS="${TS_CRED_EXPIRY_ALARM_DAYS:-${AUTH_KEY_EXPIRY_ALARM_DAYS:-10}}"
+      # Case 1: credentials still valid but expiring within the alarm window.
+      EXPIRING=$(echo "$PREFLIGHT_JSON" | jq -r --argjson d "$TS_CRED_EXPIRY_ALARM_DAYS" '
+        .checks[]
+        | select(.advisory == true and .credential != null
+                 and (.expiresInDays != null)
+                 and (.expiresInDays >= 0) and (.expiresInDays <= $d))
+        | "  \(.credential) expires in \(.expiresInDays) day(s)"' 2>/dev/null)
+      # Case 2: credentials already expired or rejected (hard failure, not an
+      # advisory). This is the case that previously went silent.
+      EXPIRED=$(echo "$PREFLIGHT_JSON" | jq -r '
+        .checks[]
+        | select((.ok == false) and (.advisory != true) and (.credential != null))
+        | "  \(.credential): \(.message)"' 2>/dev/null | sort -u)
+      if [ -n "$EXPIRING" ] || [ -n "$EXPIRED" ]; then
+        # Throttle: without this the warning fires every */15 cycle (~96x/day).
+        # Warn at most once per 24h via a stamp in HEALTH_STATE_DIR -- loud
+        # enough to act on, not a nag.
+        EXPIRY_STAMP="${HEALTH_STATE_DIR}/ts-credential-expiry-last-warned"
         NOW_EPOCH=$(date +%s)
         LAST_WARNED=0
         [[ -f "$EXPIRY_STAMP" ]] && LAST_WARNED=$(cat "$EXPIRY_STAMP" 2>/dev/null || echo 0)
         [[ "$LAST_WARNED" =~ ^[0-9]+$ ]] || LAST_WARNED=0
         if (( NOW_EPOCH - LAST_WARNED >= 86400 )); then
           echo ""
-          note "Tailscale auth key expiry warning:"
-          note "  Key expires in ${EXPIRY_DAYS} days. Mint a new one at:"
-          note "  https://login.tailscale.com/admin/settings/keys"
+          if [ -n "$EXPIRED" ]; then
+            note "Tailscale credential EXPIRED or INVALID -- container starts/updates will fail:"
+            while IFS= read -r line; do [ -n "$line" ] && note "$line"; done <<< "$EXPIRED"
+          fi
+          if [ -n "$EXPIRING" ]; then
+            note "Tailscale credential expiring soon:"
+            while IFS= read -r line; do [ -n "$line" ] && note "$line"; done <<< "$EXPIRING"
+          fi
+          note "  Renew at: https://login.tailscale.com/admin/settings/keys"
+          if [ -n "${TS_DOMAIN:-}" ]; then
+            note "  Then paste it into the web admin: https://admin.${TS_DOMAIN}/container-config#shared-secrets"
+          else
+            note "  Then paste it into the web admin: Configuration -> Global Settings (shared secrets)"
+          fi
           echo ""
           echo "$NOW_EPOCH" > "$EXPIRY_STAMP"
           ERROR_COUNT=$((ERROR_COUNT + 1))

@@ -80,13 +80,16 @@ function tailscaleApi(path, token) {
 
 // ─── Auth key parsing ────────────────────────────────────────────────
 
-// Tailscale credentials accepted by the sidecar's TS_AUTHKEY env var
-// come in two formats:
-//   "tskey-auth-<keyID>-<secret>"        legacy auth key
-//   "tskey-client-<clientID>-<secret>"   OAuth client credential
-// Both can carry trailing query parameters like "?ephemeral=false".
-// Extracts the ID portion so we can look the key up via the API.
-// Returns { id, kind: "auth" | "client" } or null on failure.
+// Tailscale credentials come in these formats, all "-"-delimited with an
+// optional trailing query string ("?ephemeral=false"):
+//   "tskey-auth-<keyID>-<secret>"        device auth key   (TS_AUTHKEY)
+//   "tskey-client-<clientID>-<secret>"   OAuth client cred  (TS_AUTHKEY)
+//   "tskey-api-<keyID>-<secret>"         API access token   (TS_API_TOKEN)
+// Extracts the ID portion so we can look the key up via the API. Notably an
+// API access token can look up its OWN metadata (GET /keys/<its-own-id>), which
+// is how we proactively warn before TS_API_TOKEN expires -- otherwise its
+// expiry is invisible until every API call starts returning 401.
+// Returns { id, kind: "auth" | "client" | "api" } or null on failure.
 function parseKeyId(authKey) {
   if (!authKey || typeof authKey !== "string") return null;
   // Strip any trailing query parameters first.
@@ -98,6 +101,9 @@ function parseKeyId(authKey) {
   } else if (stripped.startsWith("tskey-client-")) {
     kind = "client";
     prefix = "tskey-client-";
+  } else if (stripped.startsWith("tskey-api-")) {
+    kind = "api";
+    prefix = "tskey-api-";
   } else {
     return null;
   }
@@ -138,6 +144,20 @@ function isKeyValid(keyData) {
   return { ok: true, expires, expiresInDays };
 }
 
+// Capability-agnostic expiry extractor. isKeyValid() gates on the
+// devices.create capability (only present on auth keys), so it can't be used
+// for API access tokens. This just reads the `expires` timestamp any key
+// metadata carries. Returns { expires, expiresInDays, expired }.
+function computeExpiry(keyData) {
+  if (!keyData?.expires)
+    return { expires: null, expiresInDays: null, expired: false };
+  const exp = new Date(keyData.expires);
+  if (isNaN(exp.getTime()))
+    return { expires: null, expiresInDays: null, expired: false };
+  const expiresInDays = Math.floor((exp - new Date()) / (1000 * 60 * 60 * 24));
+  return { expires: keyData.expires, expiresInDays, expired: exp < new Date() };
+}
+
 // ─── Checks ──────────────────────────────────────────────────────────
 
 async function checkAclTag(token) {
@@ -164,10 +184,12 @@ async function checkAclTag(token) {
       return {
         name: "ACL tag:container",
         ok: false,
+        credential: "TS_API_TOKEN",
         message:
           "TS_API_TOKEN was rejected by Tailscale (HTTP " +
           err.statusCode +
-          "). Verify the token is valid and has admin access.",
+          "). The API access token is expired or invalid.",
+        fix: "Generate a new API access token and update it in the web admin.",
         fixUrl: KEYS_ADMIN_URL,
       };
     }
@@ -176,6 +198,24 @@ async function checkAclTag(token) {
       ok: false,
       message: `Failed to fetch ACL: ${err.message}`,
     };
+  }
+}
+
+// Look up the API access token's OWN expiry so we can warn before it lapses.
+// An API token can read its own key metadata (GET /keys/<its-own-id>). If the
+// token is already expired the lookup 401s -- but that case is already caught
+// loudly by checkAclTag above, so here we simply return null and stay quiet.
+// Returns { expires, expiresInDays, expired } or null when unknown.
+async function getApiTokenExpiry(token) {
+  const parsed = parseKeyId(token);
+  if (!parsed || parsed.kind !== "api") return null;
+  try {
+    const key = await tailscaleApi(`/tailnet/-/keys/${parsed.id}`, token);
+    return computeExpiry(key);
+  } catch {
+    // 404 (token not listed under /keys) or 401 (already expired -- surfaced
+    // elsewhere). Either way we can't proactively warn; stay silent.
+    return null;
   }
 }
 
@@ -385,18 +425,23 @@ async function main() {
   const authKey = process.env.TS_AUTHKEY;
   const domain = process.env.TS_DOMAIN;
 
-  const EXPIRY_WARNING_DAYS = 14;
+  // Days-before-expiry at which the advisory starts showing. Overridable via
+  // env so system-health-check.sh can tune it and tests can force it.
+  const EXPIRY_WARNING_DAYS = Number(process.env.TS_EXPIRY_WARNING_DAYS) || 14;
 
   const checks = [];
   checks.push(await checkAclTag(token));
   const authKeyResult = await checkAuthKey(token, authKey);
+  authKeyResult.credential = "TS_AUTHKEY";
   checks.push(authKeyResult);
 
-  // If the key is valid but expiring soon, add an advisory warning.
-  // This is separate from the auth key check itself (which only fails on
-  // expired/invalid keys). The advisory surfaces in the web admin as a
-  // persistent banner and in system-health-check.sh as a healthchecks.io
-  // failure so the user gets notified even when not on the dashboard.
+  // Expiry advisories. These are separate from the validity checks above
+  // (which only fail on already-expired/invalid keys). Each surfaces in the
+  // web admin as a persistent banner and in system-health-check.sh as a
+  // healthchecks.io failure, so the user is warned BEFORE a credential lapses
+  // -- even when not looking at the dashboard. Both TS credentials are covered:
+  // the auth key and the API access token (whose expiry is otherwise invisible
+  // until it starts 401ing and takes every container start/update down with it).
   if (
     authKeyResult.ok &&
     authKeyResult.expiresInDays !== null &&
@@ -406,10 +451,29 @@ async function main() {
       name: "Auth key expiry",
       ok: false,
       advisory: true,
-      message: `Your auth key expires in ${authKeyResult.expiresInDays} day${authKeyResult.expiresInDays === 1 ? "" : "s"} (${authKeyResult.expires}). Mint a new one before it expires.`,
+      credential: "TS_AUTHKEY",
+      message: `Your auth key (TS_AUTHKEY) expires in ${authKeyResult.expiresInDays} day${authKeyResult.expiresInDays === 1 ? "" : "s"} (${authKeyResult.expires}). Mint a new one before it expires.`,
       fixUrl: KEYS_ADMIN_URL,
       expiresInDays: authKeyResult.expiresInDays,
       expires: authKeyResult.expires,
+    });
+  }
+
+  const apiExpiry = await getApiTokenExpiry(token);
+  if (
+    apiExpiry &&
+    apiExpiry.expiresInDays !== null &&
+    apiExpiry.expiresInDays <= EXPIRY_WARNING_DAYS
+  ) {
+    checks.push({
+      name: "API token expiry",
+      ok: false,
+      advisory: true,
+      credential: "TS_API_TOKEN",
+      message: `Your API access token (TS_API_TOKEN) expires in ${apiExpiry.expiresInDays} day${apiExpiry.expiresInDays === 1 ? "" : "s"} (${apiExpiry.expires}). Generate a new one before it expires -- once it lapses, every container start and update fails.`,
+      fixUrl: KEYS_ADMIN_URL,
+      expiresInDays: apiExpiry.expiresInDays,
+      expires: apiExpiry.expires,
     });
   }
 

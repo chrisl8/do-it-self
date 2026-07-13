@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -271,7 +271,9 @@ function SharedVarsSection({ registry, userConfig, onSave, saving }) {
   };
 
   return (
-    <Box sx={{ mb: 3 }}>
+    // id is the deep-link target for the credential-expiry banner's
+    // "Update in Web Admin" link (/container-config#shared-secrets).
+    <Box id="shared-secrets" sx={{ mb: 3, scrollMarginTop: "80px" }}>
       <Box
         sx={{
           display: "flex",
@@ -634,6 +636,16 @@ function ContainerConfig({
   } = useContainerConfig();
 
   const { uninstallContainer } = useModules();
+
+  // When deep-linked with #shared-secrets (from the credential-expiry banner's
+  // "Update in Web Admin" link), scroll the shared-secrets section into view
+  // once the config has finished loading and the element exists.
+  useEffect(() => {
+    if (loading) return;
+    if (window.location.hash !== "#shared-secrets") return;
+    const el = document.getElementById("shared-secrets");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [loading]);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   const [moduleDialog, setModuleDialog] = useState({
