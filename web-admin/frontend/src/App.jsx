@@ -24,6 +24,7 @@ import Browse from "./Browse";
 import Sources from "./Sources";
 import MediaStaging from "./MediaStaging";
 import BorgNotConfiguredBanner from "./BorgNotConfiguredBanner";
+import CredentialWarningBanner from "./CredentialWarningBanner";
 import useDockerStatus from "./hooks/useDockerStatus";
 
 const routes = [
@@ -148,6 +149,9 @@ const App = () => {
     <BrowserRouter>
       <Navigation />
       <BorgNotConfiguredBanner />
+      <CredentialWarningBanner
+        tailscalePreflightStatus={tailscalePreflightStatus}
+      />
       <Routes>
         <Route path="/" element={<Navigate to="/docker-status" replace />} />
         <Route
