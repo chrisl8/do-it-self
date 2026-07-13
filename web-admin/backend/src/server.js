@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { spawn } from "child_process";
 import { readFile, writeFile, unlink, chmod, mkdir } from "fs/promises";
-import { unlinkSync, existsSync } from "fs";
+import { unlinkSync, existsSync, statSync } from "fs";
 import http from "http";
 import os from "os";
 import getFormattedDockerContainers from "./dockerStatus.js";
@@ -164,6 +164,56 @@ function spawnTracked(command, args, timeoutMs) {
   return { child, promise };
 }
 
+// all-containers.sh --get-updates redirects ALL of its output into a daily log
+// file (exec >> ~/logs/container-updates-<date>.log 2>&1) when it has no TTY --
+// which is exactly the case for the child processes we spawn here. That means
+// child.stdout is empty and a failed upgrade would otherwise be reported to the
+// user with a blank output box. To recover the real output, we snapshot the log
+// file's size just before spawning, then read the slice appended during the run
+// and use it as the failure output.
+function updateLogPath() {
+  const now = new Date();
+  const stamp =
+    `${now.getFullYear()}` +
+    `${String(now.getMonth() + 1).padStart(2, "0")}` +
+    `${String(now.getDate()).padStart(2, "0")}`;
+  return join(os.homedir(), "logs", `container-updates-${stamp}.log`);
+}
+
+// Byte offset of the current daily log, captured before a --get-updates spawn.
+function updateLogCapturePoint() {
+  const path = updateLogPath();
+  try {
+    return { path, offset: statSync(path).size };
+  } catch {
+    // No log yet today -- the run will create it, so start from the beginning.
+    return { path, offset: 0 };
+  }
+}
+
+// Read the portion of the daily log appended since the capture point. Returns
+// the trailing MAX_UPDATE_LOG_TAIL bytes (the error is always at the end) so a
+// large verbose run can't flood the WebSocket message or the UI.
+const MAX_UPDATE_LOG_TAIL = 16 * 1024;
+async function readUpdateLogTail(capture) {
+  try {
+    // Re-derive the path at read time; if the run crossed midnight the script
+    // is writing to a new dated file, in which case read that one whole.
+    const currentPath = updateLogPath();
+    const path = currentPath === capture.path ? capture.path : currentPath;
+    const offset = path === capture.path ? capture.offset : 0;
+    const buf = await readFile(path);
+    const slice = buf.subarray(offset);
+    const tail =
+      slice.length > MAX_UPDATE_LOG_TAIL
+        ? slice.subarray(slice.length - MAX_UPDATE_LOG_TAIL)
+        : slice;
+    return tail.toString("utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
 async function processUpdateQueue() {
   const scriptPath = join(os.homedir(), "containers/scripts/all-containers.sh");
   const status = getStatus().updateAllStatus;
@@ -195,6 +245,7 @@ async function processUpdateQueue() {
       `[Update All] Upgrading ${stackName} (${status.completed.length + 1} of ${status.total})...`,
     );
 
+    const logCapture = updateLogCapturePoint();
     const { exitCode, output } = await runStackOpExclusive(() => {
       const { child, promise } = spawnTracked(
         scriptPath,
@@ -240,17 +291,21 @@ async function processUpdateQueue() {
       console.log(
         `[Update All] ${stackName} failed (exit code ${exitCode}), pausing`,
       );
+      // The child's stdout is empty under --get-updates (output is redirected
+      // to the daily log), so recover the real error from the log slice.
+      const failureOutput =
+        output.trim() || (await readUpdateLogTail(logCapture));
       status.status = "paused";
       status.current = null;
       status.failed = {
         stackName,
         error: `Script exited with code ${exitCode}`,
-        output,
+        output: failureOutput,
       };
       updateStatus(`restartStatus.${stackName}`, {
         status: "failed",
         operation: "upgrade",
-        output,
+        output: failureOutput,
         error: `Script exited with code ${exitCode}`,
       });
       updateStatus("updateAllStatus", { ...status });
@@ -2358,6 +2413,9 @@ async function webserver() {
                 os.homedir(),
                 "containers/scripts/all-containers.sh",
               );
+              // Snapshot the daily log before the run; --get-updates redirects
+              // the script's output there instead of to the child's stdout.
+              const logCapture = updateLogCapturePoint();
               const child = spawn(scriptPath, [
                 "--stop",
                 "--start",
@@ -2388,15 +2446,21 @@ async function webserver() {
                 resolve();
               });
 
-              child.on("close", (code) => {
+              child.on("close", async (code) => {
                 activeStacks.delete(stackName);
+                // stdout is empty under --get-updates; on failure recover the
+                // real output from the slice of the log written by this run.
+                const finalOutput =
+                  code === 0
+                    ? output
+                    : output.trim() || (await readUpdateLogTail(logCapture));
                 ws.send(
                   JSON.stringify({
                     type: "dockerStackRestartResult",
                     success: code === 0,
                     stackName,
                     operation: "upgrade",
-                    output,
+                    output: finalOutput,
                     error:
                       code !== 0 ? `Script exited with code ${code}` : null,
                   }),
@@ -2410,7 +2474,7 @@ async function webserver() {
                   updateStatus(`restartStatus.${stackName}`, {
                     status: "failed",
                     operation: "upgrade",
-                    output,
+                    output: finalOutput,
                     error:
                       code !== 0 ? `Script exited with code ${code}` : null,
                   });
