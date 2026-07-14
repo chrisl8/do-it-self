@@ -9,7 +9,7 @@ Three cron jobs are installed by `setup.sh`:
 | Schedule | Script | What it does |
 |----------|--------|--------------|
 | `@reboot` | `system-cron-startup.sh` | Stops orphaned containers from a hard shutdown, starts all enabled containers, starts web admin via PM2, runs `post-startup-hook.sh` if present |
-| `*/15 * * * *` | `system-health-check.sh` | Restarts unhealthy containers, checks Tailscale device connectivity, warns if the TS auth key expires within 14 days, pings healthchecks.io |
+| `*/15 * * * *` | `system-health-check.sh` | Restarts unhealthy containers, ensures web admin is up, runs `post-health-hook.sh` if present (self-heals non-container services), checks Tailscale device connectivity, warns if the TS auth key expires within 14 days, pings healthchecks.io |
 | `0 */6 * * *` | `kopia-backup-check.sh` | Checks Kopia backup freshness against per-host thresholds |
 
 If BorgBackup is configured (`setup-borg-backup.sh`), two more are added:
@@ -165,6 +165,29 @@ Check PM2 status:
 pm2 status
 ```
 
+### Non-container PM2 services (e.g. Metatron, Kryten) aren't running
+
+PM2 is a single shared daemon with **no owner**: at boot, `system-cron-startup.sh`
+starts web admin, then `post-startup-hook.sh` starts each personal app's PM2
+processes (via that app's own `start-pm2.sh`). Nothing runs `pm2 resurrect` and
+there is no PM2 systemd unit, so the `dump.pm2` file is written but never read —
+recovery comes from **re-running the start scripts**, not from the dump.
+
+That's fine at boot, but a mid-life PM2 daemon death (the whole daemon getting
+SIGTERM'd — e.g. the last login/tmux session logging out while user *linger* is
+disabled) kills every app, and only web admin has a `*/15` re-ensure. Non-container
+apps would then stay down until the next reboot.
+
+`post-health-hook.sh` closes that gap: it runs every health-check cycle and calls
+each app's `ensure-running.sh` (in the app's own repo — e.g. `~/Metatron/ensure-running.sh`,
+`~/Kryten/ensure-running.sh`). Those are **presence-based** (restart only apps
+pm2 reports as missing or not `online`), silent when healthy, and deliberately do
+**not** run `pm2 save` (a partial save would clobber the boot-owned dump). Net
+effect: a killed app is back within ≤15 minutes instead of at the next reboot.
+
+To recover immediately instead of waiting for the cycle, run the app's script
+directly, e.g. `~/Metatron/ensure-running.sh` or `~/Metatron/start-pm2.sh`.
+
 ### Tailscale devices showing offline
 
 The health check script reports offline Tailscale devices. Transient blips are normal — it waits 15 seconds and rechecks before alerting.
@@ -196,3 +219,4 @@ These are all gitignored — create them on your system if needed:
 | `scripts/kopia-host-thresholds.json` | Per-host backup age limits |
 | `scripts/borg-backup.conf` | BorgBackup paths, passphrases, remote settings |
 | `scripts/post-startup-hook.sh` | Custom commands to run after boot (must be executable) |
+| `scripts/post-health-hook.sh` | Custom commands to run every health-check cycle (`*/15`) — used to self-heal non-container PM2 services (must be executable) |
