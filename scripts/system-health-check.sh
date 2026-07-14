@@ -160,6 +160,16 @@ fi
 # Ensure web-admin is running (idempotent - does nothing if already running)
 "${HOME}/containers/scripts/start-web-admin.sh" start
 
+# Optional hook for personal / site-specific service supervision. Mirrors
+# post-startup-hook.sh at boot: keeps app-specific re-ensure logic (and quirks
+# like authbind) OUT of this generic health check. Runs every cycle so
+# non-container services (e.g. pm2 apps) that died mid-life are restarted the
+# same way web-admin is above. Gitignored -- create it on your system if needed.
+POST_HEALTH_HOOK="${HOME}/containers/scripts/post-health-hook.sh"
+if [[ -x "$POST_HEALTH_HOOK" ]]; then
+  "$POST_HEALTH_HOOK"
+fi
+
 # Check for unhealthy containers
 DOCKER_ISSUES=$(/usr/bin/docker ps -a | tail -n +2 | grep -v "(healthy)")
 

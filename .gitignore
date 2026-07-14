@@ -57,6 +57,7 @@ scripts/borg-backup.conf
 scripts/healthcheck.conf
 scripts/excluded_devices.conf
 scripts/post-startup-hook.sh
+scripts/post-health-hook.sh
 scripts/kopia-backup-check.conf
 scripts/borg-inbound-check.conf
 scripts/kopia-host-thresholds.json
