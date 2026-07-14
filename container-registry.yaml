@@ -548,6 +548,11 @@ containers:
     start_order: "002"
     monitor_all_mounts: true
     protected: true
+    variables:
+      HOMEPAGE_VAR_FASTMAIL_TOKEN:
+        type: secret
+        required: false
+        description: Fastmail JMAP bearer token for the mailbox widget (Fastmail Settings -> Privacy & Security -> Connected apps & API tokens)
     git_repos:
       dashboard-icons:
         url: https://github.com/homarr-labs/dashboard-icons.git
