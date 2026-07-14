@@ -1130,7 +1130,7 @@ containers:
         container_path: /data/index
     default_disabled: true
     cron_jobs:
-      - schedule: "30 3 * * *"
+      - schedule: 30 3 * * *
         script: reindex.sh
         description: Nightly incremental Recoll reindex of the archive
   recon:
@@ -1138,8 +1138,6 @@ containers:
     homepage_group: Media
     tags: []
     uses_tailscale: true
-    tailscale_extra_nodes:
-      - lazylibrarian
     start_order: z110
     required_accounts:
       - name: WireGuard VPN provider
@@ -1407,11 +1405,6 @@ containers:
     homepage_group: Communication
     tags: []
     uses_tailscale: true
-    volumes:
-      config:
-        var: VOL_THELOUNGE_CONFIG
-        host_subpath: container-mounts/the-lounge/config
-        container_path: /config
     default_disabled: true
   trilium:
     description: Hierarchical note-taking application
