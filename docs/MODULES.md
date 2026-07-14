@@ -272,7 +272,7 @@ The platform resolves container configuration by merging three layers:
 
 1. **Module's `module.yaml`** — the author's defaults. Defines what the container IS: its description, category, volumes, variables, default_disabled state, tailscale usage, cron jobs, host dependencies.
 
-2. **`container-registry.yaml`** — the static catalog: a tracked, committed merged view of every container schema across all known modules. The web admin, `generate-env.js`, and `all-containers.sh` read it. It is **not** regenerated on install/uninstall; it ships as part of the platform repo, and install/uninstall only update `installed-modules.yaml` (below). Users should not hand-edit this file. The platform maintainer rebuilds it via `scripts/module.sh regenerate-registry` when module catalogs change, then commits the result.
+2. **`container-registry.yaml`** — the static catalog: a tracked, committed merged view of every container schema across all known modules. The web admin, `generate-env.js`, and `all-containers.sh` read it. It is **not** regenerated on install/uninstall; it ships as part of the platform repo, and install/uninstall only update `installed-modules.yaml` (below). Users should not hand-edit this file. The platform maintainer rebuilds it via `scripts/module.sh regenerate-registry` when module catalogs change, then commits the result. Regenerate sources every entry from a module's `module.yaml`, plus the platform containers, plus any container listed in `installed-modules.yaml:personal_containers` (whose schema it carries forward verbatim from the current registry — see "Personal containers" below). Any registry entry that matches none of those three is genuinely orphaned; regenerate drops it and prints a loud warning naming it, so schemas are never lost silently.
 
 3. **`user-config.yaml`** — the user's overrides. Defines how they USE the container: enabled/disabled, variable values, volume mount assignments, category overrides, any field they want to customize. User-controlled, never overwritten by module updates.
 
@@ -285,6 +285,8 @@ Users can create containers directly in `~/containers/` without any module. They
 - Or manually add an entry to `user-config.yaml`
 
 Personal containers are listed in `installed-modules.yaml` under `personal_containers: [...]` and are never touched by module install/update/uninstall. (Historically they were tagged `source: personal` in `container-registry.yaml`; that field has been removed in favor of tracking install state in one place.)
+
+Because a personal container's schema lives directly in `container-registry.yaml` and in no `module.yaml`, `regenerate-registry` preserves it **only** while its name is in `personal_containers`. If you hand-add a container to the registry but forget to list it under `personal_containers`, the next regenerate will drop it (with a warning). `installed-modules.yaml` is per-host and gitignored, so this preservation happens on the maintainer's own host — the committed registry therefore carries the maintainer's personal-container schemas as inert, default-disabled catalog entries for everyone else, which is harmless.
 
 ## Module catalog
 

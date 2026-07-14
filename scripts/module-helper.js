@@ -880,6 +880,35 @@ async function regenerateRegistry() {
     }
   }
 
+  // Preserve personal containers verbatim from the existing registry. These
+  // are first-class per `installed-modules.yaml:personal_containers` (see
+  // getContainerSource) but live in NO module manifest -- their schema is
+  // hand-authored (or written by the web admin's "Add Custom Container" UI)
+  // directly into the registry. Without this, regenerate silently deletes
+  // them (as it did to archive/recoll before this was added). Module- and
+  // platform-sourced entries win over a personal entry of the same name.
+  const installed = await readInstalledModules();
+  const personalNames = installed.personal_containers || [];
+  let personalPreserved = 0;
+  for (const name of personalNames) {
+    if (newRegistry.containers[name]) continue; // already provided by a module
+    const existing = registry.containers?.[name];
+    if (existing) {
+      const { source: _drop, ...rest } = existing;
+      newRegistry.containers[name] = rest;
+      personalPreserved++;
+    }
+  }
+
+  // Guardrail: loudly report any container in the OLD registry that the new
+  // one drops. After the preservation passes above, a dropped entry belongs
+  // to no module, is not a platform container, and is not in
+  // personal_containers -- i.e. it is genuinely orphaned and its schema is
+  // about to be lost. Surface it instead of deleting it silently.
+  const dropped = Object.keys(registry.containers || {}).filter(
+    (name) => !newRegistry.containers[name],
+  );
+
   // Sort containers alphabetically
   const sorted = {};
   for (const key of Object.keys(newRegistry.containers).sort()) {
@@ -890,8 +919,16 @@ async function regenerateRegistry() {
   await writeRegistry(newRegistry);
   const total = Object.keys(newRegistry.containers).length;
   console.log(
-    `Registry rebuilt from module catalogs: ${total} containers from ${moduleCount} modules.`,
+    `Registry rebuilt: ${total} containers from ${moduleCount} modules` +
+      (personalPreserved ? `, ${personalPreserved} personal preserved.` : "."),
   );
+  if (dropped.length) {
+    console.warn(
+      `\n!! WARNING: removed ${dropped.length} registry entr${dropped.length === 1 ? "y" : "ies"} present in no module, not a platform container, and not in installed-modules.yaml:personal_containers:\n` +
+        dropped.map((n) => `     - ${n}`).join("\n") +
+        `\n   If any of these is a real personal container, add it to personal_containers (or a module) and re-run before committing.\n`,
+    );
+  }
   console.log(
     "This is a maintainer-side tool; commit the result to the platform repo.",
   );
