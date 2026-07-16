@@ -1,5 +1,29 @@
 # Infisical CLI/Server Version Coupling — and how to upgrade the server
 
+## STATUS: server upgrade COMPLETED 2026-07-16
+
+neuromancer's server was upgraded **v0.132.2 → v0.162.7** and the CLI hold was
+lifted (CLI now tracks current). Both proven against the live server: it serves
+`/api/v3` (old CLIs) AND `/api/v4` (current CLIs), on-boot migrations ran clean,
+and secret injection works end-to-end. The coupling risk below is now guarded,
+not pinned — the `all-containers.sh` export-fail guard (commit 4dba111) catches
+any future mismatch loudly instead of blanking secrets.
+
+**Tag trap (cost real confusion):** the `-postgres` suffix was DROPPED upstream
+between v0.140 and v0.150 — plain `vX.Y.Z` images ARE the Postgres build. The old
+pin was `v0.132.2-postgres`; the current tag is `v0.162.7` (no suffix). Do not
+append `-postgres` to modern tags — it 404s on Docker Hub.
+
+**Confirmed compat:** PostgreSQL 14 and Redis 7 are supported upstream ("versions
+14 and up"), so `postgres:14-alpine` / `redis:7-alpine` needed no change — the
+upgrade was an app image-tag bump, not a DB migration.
+
+The procedure below is retained as reference (for deepthought or a future major
+bump). It has been reconciled with what was actually done: minimal-disruption
+(recreate only the infisical project; the other ~117 containers were left running
+and untouched), pg_dump as the primary rollback (the ZFS snapshot reverts the
+whole shared dataset, so it is a last resort only).
+
 ## TL;DR
 
 The Infisical **CLI** (apt, auto-updating third-party repo) and the Infisical
