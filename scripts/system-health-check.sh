@@ -1,7 +1,12 @@
 #!/bin/bash
 
 ALL_CONTAINERS_IS_RUNNING=false
-if pgrep -f all-containers.sh > /dev/null; then
+# Match a shell actually EXECUTING the script (`bash <path>/all-containers.sh`),
+# not any process whose command line merely mentions the name. A bare
+# `pgrep -f all-containers.sh` also matches an editor, a tail, or an interactive
+# shell that references the path, which would silently skip the whole health
+# check (no restart, no ping) while someone works on the box.
+if pgrep -f 'bash [^ ]*all-containers\.sh' > /dev/null; then
   ALL_CONTAINERS_IS_RUNNING=true
 fi
 
