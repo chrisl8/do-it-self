@@ -1148,8 +1148,24 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           source "${HOME}/credentials/infisical.env"
           export INFISICAL_TOKEN INFISICAL_API_URL
           INFISICAL_ARGS="--token=${INFISICAL_TOKEN} --projectId=${INFISICAL_PROJECT_ID} --env=prod --domain=${INFISICAL_API_URL}"
+          # Infisical is up, so a non-zero exit here means the secrets pipeline
+          # itself is broken -- not that a path is empty, which still exits 0.
+          # (A CLI newer than the pinned server switches to an API version the
+          # server doesn't route; see docs/INFISICAL_UPGRADE_RUNBOOK.md.) Every
+          # ${VAR} would then resolve to a blank string and every container
+          # would start with empty passwords, so stop before that happens.
           # shellcheck disable=SC2086
-          eval "$(infisical export ${INFISICAL_ARGS} --path="/shared" --format=dotenv-export 2>/dev/null)"
+          SHARED_SECRETS="$(infisical export ${INFISICAL_ARGS} --path="/shared" --format=dotenv-export 2>/dev/null)"
+          INFISICAL_EXPORT_EXIT=$?
+          if [[ ${INFISICAL_EXPORT_EXIT} -ne 0 ]] && [[ "${SKIP_PREFLIGHT:-}" != "true" ]]; then
+            set -e
+            printf "${RED}Infisical is running but 'infisical export' failed (exit ${INFISICAL_EXPORT_EXIT}).${NC}\n"
+            printf "${RED}Every secret would be blank. Check that the infisical CLI and server${NC}\n"
+            printf "${RED}API versions match -- apt upgrading the CLI past the pinned server does this.${NC}\n"
+            printf "${RED}See docs/INFISICAL_UPGRADE_RUNBOOK.md. Override with SKIP_PREFLIGHT=true.${NC}\n"
+            exit 1
+          fi
+          eval "${SHARED_SECRETS}"
           INFISICAL_AVAILABLE=true
         fi
         set -e
