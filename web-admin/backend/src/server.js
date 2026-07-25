@@ -54,6 +54,7 @@ import {
   getItemsForUI as getMediaStagingItems,
   getSeasonsForUI as getMediaStagingSeasons,
   getEpisodesForUI as getMediaStagingEpisodes,
+  getSizeForUI as getMediaStagingSize,
   getPosterResponse as getMediaStagingPoster,
   getStaged as getMediaStagingStaged,
   deleteStaged as deleteMediaStagingStaged,
@@ -2106,6 +2107,20 @@ app.get("/api/media-staging/episodes", async (req, res) => {
   try {
     res.json({
       episodes: await getMediaStagingEpisodes(library, seriesId, seasonId),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/media-staging/size", async (req, res) => {
+  const { library, seriesId, seasonId } = req.query;
+  if (!library || !seriesId) {
+    return res.status(400).json({ error: "library and seriesId are required" });
+  }
+  try {
+    res.json({
+      sizeBytes: await getMediaStagingSize(library, seriesId, seasonId),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

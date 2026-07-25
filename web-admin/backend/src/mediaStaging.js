@@ -493,6 +493,14 @@ async function getEpisodesForUI(libraryName, seriesId, seasonId) {
   return out;
 }
 
+// Total bytes for a whole series (or one season). The item lists don't carry
+// this — it needs an episode query — so the UI asks for it lazily when the
+// user actually ticks a series/season box.
+async function getSizeForUI(libraryName, seriesId, seasonId) {
+  const { server, userId } = await withLibraryContext(libraryName);
+  return jf.sumSeriesBytes(server, { seriesId, seasonId, userId });
+}
+
 async function getPosterResponse(itemId) {
   const cfg = await readConfig();
   if (!cfg) throw new Error("media staging not configured");
@@ -864,6 +872,7 @@ export {
   getItemsForUI,
   getSeasonsForUI,
   getEpisodesForUI,
+  getSizeForUI,
   getPosterResponse,
   getStaged,
   deleteStaged,
