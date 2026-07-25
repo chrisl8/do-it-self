@@ -128,14 +128,29 @@ const MovieRow = ({ item, libraryName, isSelected, toggle }) => {
           {item.mapError ? ` · unmappable: ${item.mapError}` : ""}
         </Typography>
       </Box>
-      <WatchedBadge played={item.played} />
-      {item.staged && <Chip label="Staged" size="small" color="success" />}
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        sx={{ flexShrink: 0 }}
+      >
+        <WatchedBadge played={item.played} />
+        {item.staged && <Chip label="Staged" size="small" color="success" />}
+      </Stack>
     </Stack>
   );
 };
 
 // ── Episode row ─────────────────────────────────────────────────
-const EpisodeRow = ({ episode, seriesId, libraryName, isSelected, toggle }) => {
+const EpisodeRow = ({
+  episode,
+  seriesId,
+  seasonId,
+  libraryName,
+  isSelected,
+  toggle,
+  parentSelected,
+}) => {
   const key = `episode:${episode.id}`;
   const label =
     (episode.indexNumber != null ? `E${episode.indexNumber} · ` : "") +
@@ -149,12 +164,16 @@ const EpisodeRow = ({ episode, seriesId, libraryName, isSelected, toggle }) => {
     >
       <Checkbox
         size="small"
-        checked={isSelected(key)}
-        disabled={episode.staged}
+        // A selected season/series already includes this episode — show it
+        // ticked so the parent checkbox visibly does something.
+        checked={parentSelected || isSelected(key)}
+        disabled={episode.staged || parentSelected}
         onChange={() =>
           toggle(key, {
             libraryName,
             kind: "episode",
+            seriesId,
+            seasonId,
             payload: {
               libraryName,
               kind: "episode",
@@ -181,7 +200,14 @@ const EpisodeRow = ({ episode, seriesId, libraryName, isSelected, toggle }) => {
 };
 
 // ── Season row ──────────────────────────────────────────────────
-const SeasonRow = ({ season, seriesId, libraryName, isSelected, toggle }) => {
+const SeasonRow = ({
+  season,
+  seriesId,
+  libraryName,
+  isSelected,
+  toggle,
+  parentSelected,
+}) => {
   const [open, setOpen] = useState(false);
   const [episodes, setEpisodes] = useState(null);
   const [error, setError] = useState(null);
@@ -212,12 +238,15 @@ const SeasonRow = ({ season, seriesId, libraryName, isSelected, toggle }) => {
       <Stack direction="row" alignItems="center" spacing={1} sx={{ pl: 2 }}>
         <Checkbox
           size="small"
-          checked={isSelected(key)}
-          disabled={season.staged}
+          checked={parentSelected || isSelected(key)}
+          disabled={season.staged || parentSelected}
           onChange={() =>
             toggle(key, {
               libraryName,
               kind: "season",
+              seriesId,
+              seasonId: season.id,
+              needsSize: true,
               payload: {
                 libraryName,
                 kind: "season",
@@ -229,10 +258,17 @@ const SeasonRow = ({ season, seriesId, libraryName, isSelected, toggle }) => {
             })
           }
         />
-        <Typography variant="body2" sx={{ flex: 1 }}>
+        <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
           {season.name}
         </Typography>
-        {season.staged && <Chip label="Staged" size="small" color="success" />}
+        {season.staged && (
+          <Chip
+            label="Staged"
+            size="small"
+            color="success"
+            sx={{ flexShrink: 0 }}
+          />
+        )}
         <IconButton size="small" onClick={expand}>
           {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         </IconButton>
@@ -252,9 +288,11 @@ const SeasonRow = ({ season, seriesId, libraryName, isSelected, toggle }) => {
               key={ep.id}
               episode={ep}
               seriesId={seriesId}
+              seasonId={season.id}
               libraryName={libraryName}
               isSelected={isSelected}
               toggle={toggle}
+              parentSelected={parentSelected || isSelected(key)}
             />
           ))
         )}
@@ -299,6 +337,8 @@ const SeriesRow = ({ item, libraryName, isSelected, toggle }) => {
             toggle(key, {
               libraryName,
               kind: "series",
+              seriesId: item.id,
+              needsSize: true,
               payload: { libraryName, kind: "series", seriesId: item.id },
               label: item.name,
               sizeBytes: null,
@@ -315,8 +355,17 @@ const SeriesRow = ({ item, libraryName, isSelected, toggle }) => {
             whole series
           </Typography>
         </Box>
-        <WatchedBadge unplayed={item.unplayedItemCount} />
-        {item.staged && <Chip label="Staged" size="small" color="success" />}
+        {/* flexShrink stops the chips from being squeezed to zero width and
+            overlapping the title on narrow (phone) screens. */}
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1}
+          sx={{ flexShrink: 0 }}
+        >
+          <WatchedBadge unplayed={item.unplayedItemCount} />
+          {item.staged && <Chip label="Staged" size="small" color="success" />}
+        </Stack>
         <IconButton size="small" onClick={expand}>
           {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         </IconButton>
@@ -340,6 +389,7 @@ const SeriesRow = ({ item, libraryName, isSelected, toggle }) => {
                 libraryName={libraryName}
                 isSelected={isSelected}
                 toggle={toggle}
+                parentSelected={isSelected(key)}
               />
             ))
           )}
@@ -711,20 +761,85 @@ const MediaStaging = () => {
   };
 
   const isSelected = useCallback((key) => selected.has(key), [selected]);
-  const toggle = useCallback((key, obj) => {
-    setSelected((prev) => {
-      const next = new Map(prev);
-      if (next.has(key)) next.delete(key);
-      else next.set(key, obj);
-      return next;
+
+  // Series and season sizes aren't in the item listings (they need an episode
+  // query), so fetch on demand and patch the entry once it lands.
+  const resolveSize = useCallback(async (key, obj) => {
+    const params = new URLSearchParams({
+      library: obj.libraryName,
+      seriesId: obj.seriesId,
     });
+    if (obj.seasonId) params.set("seasonId", obj.seasonId);
+    try {
+      const data = await fetchJson(`/api/media-staging/size?${params}`);
+      setSelected((prev) => {
+        const cur = prev.get(key);
+        if (!cur) return prev; // deselected while we were fetching
+        const next = new Map(prev);
+        next.set(key, { ...cur, sizeBytes: data.sizeBytes, needsSize: false });
+        return next;
+      });
+    } catch {
+      // Size is cosmetic — the copy itself doesn't depend on it.
+      setSelected((prev) => {
+        const cur = prev.get(key);
+        if (!cur) return prev;
+        const next = new Map(prev);
+        next.set(key, { ...cur, needsSize: false });
+        return next;
+      });
+    }
   }, []);
+
+  const toggle = useCallback(
+    (key, obj) => {
+      const adding = !selected.has(key);
+      setSelected((prev) => {
+        const next = new Map(prev);
+        if (next.has(key)) {
+          next.delete(key);
+          return next;
+        }
+        next.set(key, obj);
+        // A whole series/season already covers everything under it — drop the
+        // redundant child selections so the count and total stay honest.
+        if (obj.kind === "series") {
+          for (const [k, v] of next) {
+            if (k !== key && v.seriesId === obj.seriesId) next.delete(k);
+          }
+        } else if (obj.kind === "season") {
+          for (const [k, v] of next) {
+            if (k !== key && v.seasonId === obj.seasonId) next.delete(k);
+          }
+        }
+        return next;
+      });
+      if (adding && obj.needsSize) resolveSize(key, obj);
+    },
+    [selected, resolveSize],
+  );
 
   const selectedTotal = useMemo(
     () =>
       Array.from(selected.values()).reduce(
         (acc, s) => acc + (typeof s.sizeBytes === "number" ? s.sizeBytes : 0),
         0,
+      ),
+    [selected],
+  );
+
+  // A series/season size still in flight; the shown total is meaningless until
+  // it lands.
+  const sizing = useMemo(
+    () => Array.from(selected.values()).some((s) => s.needsSize),
+    [selected],
+  );
+  // Some selection has no size at all (Jellyfin didn't report one), so the
+  // total is a floor rather than an exact figure.
+  const sizeUnknown = useMemo(
+    () =>
+      Array.from(selected.values()).some(
+        (s) => typeof s.sizeBytes !== "number",
       ),
     [selected],
   );
@@ -848,7 +963,11 @@ const MediaStaging = () => {
           disabled={selected.size === 0}
           onClick={doCopy}
         >
-          Copy {selected.size} selected ({formatBytes(selectedTotal)})
+          Copy {selected.size} selected (
+          {sizing
+            ? "sizing…"
+            : `${sizeUnknown ? "≥ " : ""}${formatBytes(selectedTotal)}`}
+          )
         </Button>
         {selected.size > 0 && (
           <Button onClick={() => setSelected(new Map())}>Clear</Button>
