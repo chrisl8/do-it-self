@@ -821,6 +821,28 @@ containers:
         host_subpath: container-mounts/minecraft/data
         container_path: /data
     default_disabled: true
+  minecraft-java:
+    description: Minecraft Java Edition server (Fabric) with auto-backup sidecar
+    homepage_group: Gaming
+    tags: []
+    uses_tailscale: true
+    start_order: z101
+    variables:
+      RCON_PASSWORD:
+        type: secret
+        required: true
+        auto_generate: true
+        description: RCON password shared by the server and its backup sidecar (internal only)
+    volumes:
+      data:
+        var: VOL_MINECRAFT_JAVA_DATA
+        host_subpath: container-mounts/minecraft-java/data
+        container_path: /data
+      backups:
+        var: VOL_MINECRAFT_JAVA_BACKUPS
+        host_subpath: container-mounts/minecraft-java/backups
+        container_path: /backups
+    default_disabled: true
   netdata:
     description: Real-time server performance monitoring
     homepage_group: System Monitoring
