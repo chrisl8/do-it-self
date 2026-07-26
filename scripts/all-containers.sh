@@ -866,7 +866,35 @@ if [[ ${START_ACTION} = true ]] && \
   fi
 fi
 
+# Per-container Infisical secrets have to be eval'd into this shell so that
+# `docker compose` can substitute ${VAR} in compose.yaml. That makes them sticky:
+# eval writes into the shell, nothing removes them, and every container processed
+# afterwards inherits the union of everything before it. Since compose prefers the
+# shell environment over the project .env file, a leftover value silently wins over
+# the correct one, and secret names are far from unique across containers --
+# API_KEY alone is defined by six paths (actual-budget-api, changedetection,
+# dawarich, immich, jellyfin, paperless), and MYSQL_ROOT_PASSWORD, JWT_SECRET,
+# WIREGUARD_PRIVATE_KEY, KOPIA_PASSWORD and a dozen more are each defined by two.
+# A container whose compose.yaml references a name its own Infisical path does not
+# define would quietly pick up whichever container ran before it.
+#
+# So track exactly what we injected and drop it again before the next container.
+# Nothing in /shared is redefined by a container path (verified), so clearing
+# these can never strip a shared value.
+INJECTED_SECRET_KEYS=""
+clear_container_secrets() {
+  local secret_key
+  for secret_key in ${INJECTED_SECRET_KEYS}; do
+    unset "${secret_key}"
+  done
+  INJECTED_SECRET_KEYS=""
+}
+
 for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
+  # Clear at the top of the iteration rather than the bottom: the loop body has
+  # several `continue` paths (mount filter, bind-mount pre-flight, start failure)
+  # that would skip a trailing cleanup and leak the secrets onward anyway.
+  clear_container_secrets
   CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
   if [[ -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] && [[ -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]];then
 
@@ -1285,7 +1313,12 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         if [[ "${INFISICAL_AVAILABLE}" = "true" ]]; then
           printf "${YELLOW}  Injecting secrets via Infisical...${NC}\n"
           # shellcheck disable=SC2086
-          eval "$(infisical export ${INFISICAL_ARGS} --path="/${CONTAINER_DIR}" --format=dotenv-export 2>/dev/null)"
+          CONTAINER_SECRETS="$(infisical export ${INFISICAL_ARGS} --path="/${CONTAINER_DIR}" --format=dotenv-export 2>/dev/null)"
+          # Record the names before eval'ing so clear_container_secrets() can take
+          # them back out again at the top of the next iteration.
+          INJECTED_SECRET_KEYS="$(printf '%s\n' "${CONTAINER_SECRETS}" | sed -n 's/^export \([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p')"
+          eval "${CONTAINER_SECRETS}"
+          unset CONTAINER_SECRETS
         fi
         # Pre-flight: catch the failure mode where compose.yaml bind-mounts a
         # host file that's missing or has been turned into an empty directory
@@ -1407,6 +1440,13 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     exit 1
   fi
 done
+
+# Don't let the last container's secrets outlive the loop into the post-start
+# chores, or into anything this shell goes on to spawn. A long-lived process
+# started from a shell in this state inherits a frozen copy of them and hands it
+# to every child it ever creates -- that is how PM2's daemon ended up holding a
+# stale DB_PASSWORD that later overrode infisical's own .env.
+clear_container_secrets
 
 if [[ ${NO_WAIT} = false ]];then
   printf "${YELLOW}Waiting for all containers to report healthy on final pass...${NC}\n\n"
