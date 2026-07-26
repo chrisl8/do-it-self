@@ -1160,9 +1160,22 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
           if [[ ${INFISICAL_EXPORT_EXIT} -ne 0 ]] && [[ "${SKIP_PREFLIGHT:-}" != "true" ]]; then
             set -e
             printf "${RED}Infisical is running but 'infisical export' failed (exit ${INFISICAL_EXPORT_EXIT}).${NC}\n"
-            printf "${RED}Every secret would be blank. Check that the infisical CLI and server${NC}\n"
-            printf "${RED}API versions match -- apt upgrading the CLI past the pinned server does this.${NC}\n"
-            printf "${RED}See docs/INFISICAL_UPGRADE_RUNBOOK.md. Override with SKIP_PREFLIGHT=true.${NC}\n"
+            printf "${RED}Every secret would be blank, so stopping here.${NC}\n"
+            # "running" above only means the container exists and has not exited
+            # -- a crash-looping Infisical satisfies it. Distinguish the two
+            # causes, because they send you to completely different places: a
+            # dead API is a broken/restarting server, while a live API that
+            # refuses the CLI is the version-coupling trap.
+            if ! curl -sf -o /dev/null --max-time 5 "${INFISICAL_API_URL}/api/status"; then
+              printf "${RED}Cause: the Infisical API at ${INFISICAL_API_URL} is not answering.${NC}\n"
+              printf "${RED}The container is running but not serving -- check 'docker logs infisical'${NC}\n"
+              printf "${RED}for a crash loop (e.g. a wrong DB password) rather than a version issue.${NC}\n"
+            else
+              printf "${RED}Cause: the API is answering but rejected the CLI, so the infisical CLI${NC}\n"
+              printf "${RED}and server API versions likely disagree -- apt upgrading the CLI past${NC}\n"
+              printf "${RED}the pinned server does this. See docs/INFISICAL_UPGRADE_RUNBOOK.md.${NC}\n"
+            fi
+            printf "${RED}Override with SKIP_PREFLIGHT=true.${NC}\n"
             exit 1
           fi
           eval "${SHARED_SECRETS}"
