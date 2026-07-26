@@ -115,12 +115,36 @@ else
   ADMIN_EMAIL="admin@infisical.local"
   ADMIN_PASSWORD=$(openssl rand -hex 16)
 
+  # Persist the generated password BEFORE bootstrapping. Bootstrapping is one-shot:
+  # once an instance is set up, `--ignore-if-bootstrapped` exits 0 printing NOTHING
+  # and cannot re-issue a token. Writing the password only at the end (as this
+  # script used to) means any failure in between strands the instance with an admin
+  # password that was never recorded -- unrecoverable short of destroying the
+  # database. Keep these breadcrumbs until the real credentials file is written.
+  BOOTSTRAP_STATE="${HOME}/credentials/infisical-bootstrap-state.env"
+  BOOTSTRAP_RAW="${HOME}/credentials/infisical-bootstrap-raw.json"
+  BOOTSTRAP_ERR="${HOME}/credentials/infisical-bootstrap.err"
+  (
+    umask 077
+    cat > "$BOOTSTRAP_STATE" << EOF
+# Written before 'infisical bootstrap' so a mid-flight failure stays recoverable.
+# Safe to delete once ${CRED_FILE} exists.
+INFISICAL_ADMIN_EMAIL=${ADMIN_EMAIL}
+INFISICAL_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+EOF
+  )
+
+  # Capture stdout ONLY. The CLI prints "A new release of infisical is available"
+  # to stderr, and the old `2>&1` folded that banner into the JSON, so the parse
+  # below failed on every host whose CLI was not the very newest -- which is most
+  # of them. The failure was silent because the token then came back empty.
   BOOTSTRAP_OUTPUT=$(infisical bootstrap \
     --domain="http://localhost:8085" \
     --email="$ADMIN_EMAIL" \
     --password="$ADMIN_PASSWORD" \
     --organization="Self-Hosted" \
-    --ignore-if-bootstrapped 2>&1)
+    --ignore-if-bootstrapped 2> "$BOOTSTRAP_ERR") || true
+  ( umask 077; printf '%s' "$BOOTSTRAP_OUTPUT" > "$BOOTSTRAP_RAW" )
 
   # Extract the machine identity token
   IDENTITY_TOKEN=$(echo "$BOOTSTRAP_OUTPUT" | node -e "
@@ -131,9 +155,26 @@ else
   " 2>/dev/null)
 
   if [[ -z "$IDENTITY_TOKEN" ]]; then
-    printf "${RED}Failed to extract identity token from bootstrap output.${NC}\n"
-    echo "Bootstrap output:"
-    echo "$BOOTSTRAP_OUTPUT"
+    printf "${RED}Failed to obtain a machine identity token from bootstrap.${NC}\n"
+    if [[ -z "${BOOTSTRAP_OUTPUT//[[:space:]]/}" ]]; then
+      # The distinguishing symptom: success and "already done" both exit 0, but
+      # only the latter prints nothing at all.
+      printf "${RED}Bootstrap returned no output, which means this instance was ALREADY${NC}\n"
+      printf "${RED}set up. --ignore-if-bootstrapped exits 0 silently in that case and cannot${NC}\n"
+      printf "${RED}re-issue a token. Either:${NC}\n"
+      printf "${RED}  - log in with the admin credentials saved at${NC}\n"
+      printf "${RED}    %s and create a machine identity by hand, or${NC}\n" "$BOOTSTRAP_STATE"
+      printf "${RED}  - stop the stack, delete the Postgres data directory, and re-run this${NC}\n"
+      printf "${RED}    script to bootstrap a genuinely clean instance.${NC}\n"
+    else
+      printf "${RED}Could not parse the bootstrap response. Raw output:${NC}\n"
+      echo "$BOOTSTRAP_OUTPUT"
+      if [[ -s "$BOOTSTRAP_ERR" ]]; then
+        printf "${RED}stderr:${NC}\n"
+        cat "$BOOTSTRAP_ERR"
+      fi
+    fi
+    printf "${RED}Admin credentials from this run are preserved at %s${NC}\n" "$BOOTSTRAP_STATE"
     exit 1
   fi
 
@@ -204,6 +245,10 @@ INFISICAL_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 EOF
   chmod 600 "$CRED_FILE"
   printf "${GREEN}Saved credentials to %s${NC}\n" "$CRED_FILE"
+
+  # The real credentials file now exists, so the pre-bootstrap breadcrumbs are
+  # redundant copies of the same secrets -- drop them.
+  rm -f "$BOOTSTRAP_STATE" "$BOOTSTRAP_RAW" "$BOOTSTRAP_ERR"
 fi
 
 printf "${GREEN}Infisical secret manager ready.${NC}\n"
