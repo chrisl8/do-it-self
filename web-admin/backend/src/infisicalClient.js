@@ -5,16 +5,36 @@
 //   Folders: POST /api/v1/folders
 //   Secrets: GET/POST/PATCH/DELETE /api/v3/secrets/raw
 
-import { readFile } from "fs/promises";
+import { readFile, stat } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 
 const CRED_FILE = join(homedir(), "credentials", "infisical.env");
 
 let cachedCreds = null;
+let cachedCredsMtimeMs = 0;
 
 async function loadCredentials() {
-  if (cachedCreds) return cachedCreds;
+  // Re-read whenever the file changes rather than caching for the process
+  // lifetime. These credentials do get rotated -- setup-infisical.sh rewrites
+  // them, and a root-key rotation replaces the machine identity token and the
+  // project ID outright. Caching them forever meant this process kept using a
+  // token for a project that no longer existed, failing every lookup until
+  // somebody thought to restart it. The symptom pointed nowhere near the cause:
+  // isAvailable() returned false, validateContainer() swallowed it and skipped
+  // the /shared merge, and the Configuration page reported TS_AUTHKEY and
+  // friends "missing" for every container. Happened for real on 2026-07-26.
+  // A stat per call is far cheaper than the API request it guards.
+  let mtimeMs = 0;
+  try {
+    ({ mtimeMs } = await stat(CRED_FILE));
+  } catch {
+    // File is unreadable or gone -- drop the cache rather than keep serving
+    // credentials that no longer have any backing.
+    clearCache();
+    return null;
+  }
+  if (cachedCreds && mtimeMs === cachedCredsMtimeMs) return cachedCreds;
   try {
     const content = await readFile(CRED_FILE, "utf8");
     const creds = {};
@@ -25,7 +45,11 @@ async function loadCredentials() {
       creds[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
     }
     if (!creds.INFISICAL_TOKEN || !creds.INFISICAL_PROJECT_ID) return null;
+    // These are different credentials, so the availability answer below was
+    // about the old token and old project and says nothing about these.
+    clearCache();
     cachedCreds = creds;
+    cachedCredsMtimeMs = mtimeMs;
     return creds;
   } catch {
     return null;
@@ -34,6 +58,9 @@ async function loadCredentials() {
 
 export function clearCache() {
   cachedCreds = null;
+  cachedCredsMtimeMs = 0;
+  cachedAvailability = null;
+  cachedAt = 0;
 }
 
 // Real connectivity check: credentials exist AND the Infisical API is
@@ -45,13 +72,18 @@ const CACHE_TTL_OK = 30000;
 const CACHE_TTL_FAIL = 5000;
 
 export async function isAvailable() {
+  // Load credentials BEFORE consulting the TTL cache. loadCredentials() stats
+  // the file and, if it changed, clears this cache -- so a rotation invalidates
+  // the probe immediately instead of leaving a stale verdict standing for the
+  // rest of the TTL. Checking the TTL first would skip that entirely, since an
+  // early return means loadCredentials() never runs.
+  const creds = await loadCredentials();
   const now = Date.now();
   if (cachedAvailability !== null) {
     const ttl = cachedAvailability ? CACHE_TTL_OK : CACHE_TTL_FAIL;
     if (now - cachedAt < ttl) return cachedAvailability;
   }
 
-  const creds = await loadCredentials();
   if (!creds) {
     cachedAvailability = false;
     cachedAt = now;
