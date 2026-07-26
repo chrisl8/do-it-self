@@ -1341,6 +1341,32 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
             FAILED_CONTAINERS+=("${CONTAINER_DIR}")
             continue
           fi
+          # Clearing the Created orphans is not by itself success. A container
+          # that boots, dies, and is restarted by `restart: on-failure` is never
+          # in Created -- it is "Restarting", or "Up N seconds" on its umpteenth
+          # attempt -- so the check above waves it through and the whole run
+          # reports success while the service is hard down. That is how an
+          # infisical crash-loop (wrong DB password) was reported as a
+          # successful upgrade, leaving every later container to start against a
+          # dead secret store. Treat a container that is restarting, has already
+          # exited, or has accumulated restarts as a real start failure; the
+          # gluetun case above is unaffected because those containers were in
+          # Created and are merely waiting on a healthcheck, not looping.
+          set +e
+          CRASH_LOOPING=""
+          while IFS=$'\t' read -r CL_NAME CL_STATUS; do
+            [[ -z "${CL_NAME}" ]] && continue
+            CL_RESTARTS=$(docker --log-level ERROR inspect "${CL_NAME}" --format '{{.RestartCount}}' 2>/dev/null)
+            if [[ "${CL_STATUS}" =~ ^(Restarting|Exited|Dead) ]] || [[ ${CL_RESTARTS:-0} -gt 0 ]]; then
+              CRASH_LOOPING+="${CL_NAME} (${CL_STATUS}, ${CL_RESTARTS:-0} restarts) "
+            fi
+          done < <(docker --log-level ERROR compose ps -a --format '{{.Name}}\t{{.Status}}')
+          set -e
+          if [[ -n "${CRASH_LOOPING}" ]]; then
+            printf "${RED} - ${CONTAINER_DIR} FAILED to start (exit code ${COMPOSE_EXIT_CODE}): crash-looping: ${CRASH_LOOPING}${NC}\n"
+            FAILED_CONTAINERS+=("${CONTAINER_DIR}")
+            continue
+          fi
           printf "${YELLOW} - ${CONTAINER_DIR} up timed out (exit code ${COMPOSE_EXIT_CODE}) but no containers left in Created; continuing${NC}\n"
         fi
         if [[ ${CONTAINER_DIR} = "homepage" ]];then
