@@ -2389,13 +2389,16 @@ async function webserver() {
                 os.homedir(),
                 "containers/scripts/all-containers.sh",
               );
-              const child = spawn(scriptPath, [
-                "--stop",
-                "--start",
-                "--no-wait",
-                "--container",
-                stackName,
-              ]);
+              // childEnv(), not process.env: docker compose prefers shell env
+              // over the project .env, so any leaked var silently overrides the
+              // target container's own setting. PM2 hands this process a frozen
+              // env full of generically-named secrets (DB_PASSWORD, ...), and a
+              // stale DB_PASSWORD leaking here is what crash-looped infisical.
+              const child = spawn(
+                scriptPath,
+                ["--stop", "--start", "--no-wait", "--container", stackName],
+                { env: childEnv() },
+              );
 
               let output = "";
               child.stdout.on("data", (data) => {
@@ -2518,15 +2521,21 @@ async function webserver() {
               // Snapshot the daily log before the run; --get-updates redirects
               // the script's output there instead of to the child's stdout.
               const logCapture = updateLogCapturePoint();
-              const child = spawn(scriptPath, [
-                "--stop",
-                "--start",
-                "--no-wait",
-                "--container",
-                stackName,
-                "--update-git-repos",
-                "--get-updates",
-              ]);
+              // See the restart handler above: childEnv() keeps PM2's frozen,
+              // secret-laden env from overriding the target container's .env.
+              const child = spawn(
+                scriptPath,
+                [
+                  "--stop",
+                  "--start",
+                  "--no-wait",
+                  "--container",
+                  stackName,
+                  "--update-git-repos",
+                  "--get-updates",
+                ],
+                { env: childEnv() },
+              );
 
               let output = "";
               child.stdout.on("data", (data) => {
