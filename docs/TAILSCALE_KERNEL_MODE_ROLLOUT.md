@@ -285,6 +285,26 @@ than blind at boot. Otherwise the cleanest answer is to leave the fleet alone.
 
 Separate work item. Findings should eventually graduate to `docs/NETWORK_TUNING.md`.
 
+## Read this before starting: what the box is actually required to do
+
+**Design target: 2-5 people doing one or two things at a time.** Not 10 concurrent users, not
+everything at once. Heavy scheduled jobs (the 23:00 borg run) are deliberately placed in
+windows when nobody is using the box — if that ever stopped being true, the fix is to move the
+schedule, not to tune the network stack.
+
+Everything below is an optimization list with **no current problem to point at**. Measured
+2026-07-27 with two real Valheim players connected: CPU pressure `some avg10=1.99`, memory
+pressure `0.00`, load 1.82 at 11 days uptime, NIC counters clean (0 errors / 0 drops /
+0 missed over 11 days). Valheim held a 1h24m continuous session with zero `timeout detected`
+events and a steady `Connections 2`.
+
+So: **do not start this audit on general principle.** Start it when there is a specific
+complaint — a stutter, a slow sync, a transfer that takes longer than it should — and let that
+complaint pick the candidate. The ranked list below is a menu for when something hurts, not a
+backlog to burn down. This document has already had its top-ranked item measure to zero
+(see the STOP section above); treat the rest with the same suspicion until a symptom points
+at one.
+
 **No network tuning of any kind has ever been applied to this host.** Every buffer, offload
 and congestion setting is stock Ubuntu, with one exception (`fq_codel`, set deliberately for
 bufferbloat in 2024). The NIC is **2.5GbE** (RTL8125B / `r8169`, linked at 2500Mb/s full),
