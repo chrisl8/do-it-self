@@ -356,6 +356,15 @@ and that number is now unrecoverable.
    ~36 idle sidecars at ~27-38 MB RSS each is ~1.1 GiB of RSS spent on being nodes, on a host
    with a livelock history.
 
+   **This host already has one data point, and it points the same way.** The Euro-Office
+   perf fix (2026-06-13) found Nextcloud <-> doc-server traffic was routing out through the
+   Tailscale sidecars and TLS even though both containers sit on the same host. Putting them
+   on a shared docker bridge (`office-shared`) and using plain-HTTP internal URLs took it from
+   **~50-150ms per request to ~15-30ms** — a 3-5x latency win purely from *not traversing the
+   sidecar path*. That is prior evidence, on this box, that the sidecar hop is expensive and
+   that bypassing it where it isn't needed pays. Start the audit by looking for other
+   same-host service-to-service pairs still going out through the tailnet the long way.
+
    Deliverable: a measured comparison of one service via sidecar vs the same service via Caddy
    on a shared node — CPU-s/GiB and RSS — before anyone proposes changing the architecture.
 
