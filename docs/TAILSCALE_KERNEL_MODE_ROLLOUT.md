@@ -139,7 +139,7 @@ Ordering is most-benefit-first. One container at a time; verify before moving on
 |---|---|---|
 | jellyfin | containers | **DONE** 2026-07-27 (`7c53bd4`) — see note below |
 | immich | containers | **DONE** 2026-07-27 (`a45ee22`) — A/B'd: 58.3 -> 61.6 MB/s |
-| nextcloud | containers | pending |
+| nextcloud | containers | **DONE** 2026-07-27 (`7cee2ca`) — A/B'd: no change, see below |
 | filez | containers | pending |
 | zipline | containers | pending |
 | paperless | containers | pending |
@@ -177,9 +177,62 @@ The two claims that do hold are unchanged: the ~11% inbound UDP loss (Tier 1, al
 on valheim) and the aggregate CPU/RSS reduction (`37 userspace sidecars = 26.9% CPU + 1.13 GiB`
 vs `2.6% / 0.12 GiB` for the host's kernel-mode daemon).
 
-**Better measurement for the remaining Tier 2 containers:** record CPU alongside throughput —
-`pidstat -p $(pgrep -f "tailscaled --socket") 1` during the transfer, before and after. The CPU
-delta is where the actual Tier 2 win is, and throughput alone will keep understating it.
+**nextcloud was then measured with CPU included** — and this is the result that matters.
+Same container, same 17.6 MB asset, 10 runs, identical byte count, same tailscaled 1.98.9,
+CPU sampled from `/proc/<pid>/stat` (utime+stime) of the sidecar's own tailscaled:
+
+| | throughput | sidecar CPU per GiB |
+|---|---|---|
+| before (userspace) | 111.4 MB/s | 21.46 CPU-s |
+| after (kernel) | 111.1 MB/s | 21.65 CPU-s |
+
+**No benefit. Not a small benefit — none.** Script: `scripts/ts-measure.sh`.
+
+## STOP — the Tier 2/3 rationale does not survive measurement
+
+Three Tier 2 containers are converted and measured. The throughput/CPU case for converting
+the rest is not supported:
+
+- jellyfin: 59 MB/s (no baseline captured)
+- immich: 58.3 -> 61.6 MB/s (+5.7%)
+- nextcloud: 111.4 -> 111.1 MB/s, 21.46 -> 21.65 CPU-s/GiB (**no change**)
+
+**Why the original justification was wrong.** The headline number above —
+`37 userspace sidecars = 26.9% CPU + 1.13 GiB RSS` vs `2.6% / 0.12 GiB` for the host daemon —
+compares **37 processes against 1 process**. 37 x ~0.55% = 26.9% and 37 x ~31 MB = 1.13 GiB;
+the arithmetic just recovers the per-process baseline cost of *being a Tailscale node at all*
+(control plane, netmap, DERP), which every sidecar pays in either mode. It never isolated
+userspace-vs-kernel, so it cannot support a kernel-mode rollout. Measured directly, the host's
+own kernel-mode daemon is the **largest** tailscaled on the box at 145.8 MB RSS.
+
+**Why there's no win here specifically.** These containers run app and `ts` as peers on a
+shared bridge and publish via `TS_SERVE_CONFIG`. tailscaled terminates TLS and proxies HTTP
+itself, in userspace, *regardless of TUN mode*. Kernel mode changes how packets reach that
+proxy, not the proxy. It arguably adds a hop: out to `tailscale0` and back into tailscaled's
+own listener, rather than staying inside the netstack.
+
+And the UDP-loss fix — the one proven, dramatic win — **does not apply to this class at all**.
+A `TS_SERVE_CONFIG` HTTPS reverse proxy carries no UDP to the app. Tier 1 earned its fix
+because those are raw UDP game servers; Tier 3 is entirely stateless web apps.
+
+**What was checked and did NOT hold up** (recorded so it isn't re-raised): kernel sidecars
+looked like they used +15-140 MB RSS. They don't. Go retains transfer buffers and releases
+them lazily — nextcloud-ts read 187 MB right after its transfers and fell to 68 MB within
+two idle minutes. There is no RSS regression. The version confound was also ruled out
+(`code-ts`/`paperless-ts`/`homepage-ts` run 1.98.9 in userspace).
+
+### Honest limits of this measurement
+Single-stream, host -> its own tailnet IP over the docker bridge. It does **not** cover many
+concurrent connections, or real remote clients over WAN/DERP where loss and RTT are higher.
+The CPU figure is sampled at the sidecar so it is attributable regardless of client, but a
+high-concurrency or lossy-path win remains unmeasured rather than disproven.
+
+### Recommendation
+The three converted Tier 2 containers are fine — kernel mode is not harmful, node identity
+survived, and fleet uniformity has some operational value. **Leave them.** But do not convert
+the remaining ~42 on a throughput/CPU argument that measurement does not support. Convert a
+Tier 2/3 container only if it has a specific reason (raw UDP, `network_mode: service:ts`, or
+a measured problem), not as a sweep.
 
 ### Tier 3 — everything else (stateless web apps, lowest risk)
 actual-budget, actual-budget-api, borgitory, changedetection, code, collabora, dawarich,
