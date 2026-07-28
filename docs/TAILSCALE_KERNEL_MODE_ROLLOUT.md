@@ -243,6 +243,42 @@ the-lounge, trilium, uptime, wallabag, your-spotify, quicken *(personal repo)*
 ### Tier 4 — last, glance at config first
 forgejo, vaultwarden, netdata, portainer, recon *(two sidecars — do both, incl. `ts-lazylibrarian`)*
 
+## If you flip everything at once without restarting
+
+Considered: edit `TS_USERSPACE=false` into all remaining sidecars and let each pick it up
+whenever it next restarts (reboot, DIUN image update, `module.sh update`). Prerequisites are
+genuinely fine — **re-verified independently: zero sidecars lack `/dev/net/tun` or
+`net_admin`** — and 6/6 conversions so far came up clean first try. The risk is not spread
+evenly across the fleet, though. It is concentrated in two containers.
+
+**`recon` — do NOT include it in any bulk flip.** Its sidecar is not like the others:
+`network_mode: "service:gluetun"`, no `TS_SERVE_CONFIG`. tailscaled runs *inside the VPN
+container's netns*, shared with all 8+ `*arr` apps. That netns already has
+`tun0 = 100.64.2.159/32`, and gluetun's killswitch carries
+`FIREWALL_OUTBOUND_SUBNETS=100.64.0.0/10`. Tailscale's own address space **is**
+`100.64.0.0/10`. Kernel mode would create a second TUN there and install routes and policy
+rules for the very range gluetun's VPN and firewall already occupy. Userspace mode needs no
+interface and no routing changes, which is plausibly *why* this works today. This is the
+container that once wedged whole-stack startup; a collision here takes the whole `*arr` stack
+and the VPN killswitch with it.
+
+**`obsidian` — moderate.** Uses `network_mode: service:ts`, so it is in the set where the app
+genuinely sees `100.x` instead of `127.0.0.1`. Worth a look at its auth config first.
+(`pure-ftpd`, `factorio`, `rustdesk` also use `service:ts` but are **not installed** — no risk.)
+
+The remaining ~36 are the `TS_SERVE_CONFIG`-on-a-shared-bridge class: prerequisites met, no
+source-IP change, same shape as the six already converted. Low risk individually.
+
+**The deferred part is the worst property, though.** The change lands unattended — most likely
+during the boot cron path or a `module.sh update` sweep — on ~36 containers *simultaneously*,
+with nobody watching. Failures would be correlated and would need bisecting across 36 changed
+containers instead of one. That is an acceptable trade for a large benefit. It is a poor trade
+for a benefit measured at zero for exactly this class of container.
+
+**Verdict:** if uniformity is the goal, it is defensible — but exclude `recon` unconditionally,
+check `obsidian` first, and prefer landing it during a watched `--stop --start` sweep rather
+than blind at boot. Otherwise the cleanest answer is to leave the fleet alone.
+
 ---
 
 # Follow-on: network throughput audit
@@ -260,6 +296,12 @@ Change **one** thing, measure, keep or revert. A confident theory survived two r
 reasoning tonight and was only settled by a controlled A/B. Nothing below is adopted without
 a before/after number.
 
+This rule has already paid out once, against this document's own top-ranked item: the
+kernel-mode rollout was ranked #1 on "highest confidence, already proven" and measured to
+zero effect for Tier 2. Rank order here is a hypothesis, not evidence. Capture the baseline
+**before** touching anything — jellyfin was converted before anyone thought to measure it,
+and that number is now unrecoverable.
+
 ### Step 0 — build the measuring rig first (blocking)
 - Install `iperf3` on `neuromancer` and `wintermute` (`192.168.0.2` / `100.67.223.82`).
   `wintermute` is the right target: reachable **both** LAN-direct and over Tailscale, so each
@@ -269,10 +311,53 @@ a before/after number.
 
 ### Ranked candidates
 
-1. **Finish the kernel-mode rollout above — highest confidence, already proven.**
-   Measured: `37 userspace sidecars = 26.9% CPU (lifetime avg) + 1.13 GiB RSS` vs the host's
-   single kernel-mode daemon at `2.6% / 0.12 GiB`. With CPU pressure `some avg10=13.49%` and
-   9.4 GiB swapped, software-path networking is CPU-bound — CPU contention *is* the ceiling.
+1. ~~**Finish the kernel-mode rollout — highest confidence, already proven.**~~
+   **WITHDRAWN 2026-07-27 — the supporting measurement was invalid.** It compared 37 sidecar
+   processes against 1 host daemon, so it only recovered per-process baseline node overhead,
+   which both TUN modes pay. Direct A/B on nextcloud: `111.4 -> 111.1 MB/s` and
+   `21.46 -> 21.65 CPU-s/GiB` — no change. See the STOP section above. The rollout still stands
+   for Tier 1 (raw UDP), which is separately proven; it is not a throughput lever.
+
+   **Replaced by candidate 0 below, which is where that CPU actually goes.**
+
+0. **Where is 2.2 cores per 111 MB/s going? — the biggest unexplained cost found so far.**
+   The nextcloud A/B measured the sidecar's *own* tailscaled at **21.65 CPU-seconds per GiB**.
+   At 111 MB/s that transfer takes ~9.7s wall, so tailscaled alone burned **~2.2 CPU cores'
+   worth** to serve one stream — and it did so *identically in both TUN modes*, which is
+   precisely why kernel mode changed nothing. The cost is not the netstack. It is WireGuard
+   crypto plus TLS termination plus the HTTP proxy hop, all inside tailscaled.
+
+   That is the real ceiling and nothing in the current list addresses it. Measure with
+   `scripts/ts-measure.sh` before/after any change here. Sub-questions:
+   - How much is WireGuard vs TLS? Compare a `tailscale serve` HTTPS path against plain HTTP
+     over the tailnet to the same app.
+   - Does the sidecar benefit from more cores, or is it single-flow-bound? Check thread-level
+     CPU during a transfer.
+   - Is this figure normal for tailscaled, or is this host's crypto path slow? Compare against
+     the host daemon serving an equivalent transfer.
+
+0b. **Is the 46-sidecar architecture itself the bottleneck? — worth asking, currently unasked.**
+   Every service runs its own tailnet node: its own WireGuard endpoint, its own DERP
+   connection, its own netmap/control-plane traffic, its own TLS termination, its own LetsEncrypt
+   certs, plus a `docker-proxy` hop for any published port. Candidate 0 shows the per-stream
+   cost of one such node is ~2.2 cores; this asks whether having ~46 of them is the wrong shape
+   for a single 31 GiB host that is already memory-oversubscribed and swapping.
+
+   Alternatives to cost out — **not** a recommendation, an audit question:
+   - One tailnet node fronted by the **Caddy instance this repo already runs**, reverse-proxying
+     to services over the docker network. 46 nodes -> 1.
+   - Tailscale `serve` on the *host* daemon rather than per-container sidecars.
+   - Keep sidecars only where per-service tailnet identity is actually load-bearing.
+
+   Real costs of consolidating, which is why the sidecar design exists and why this needs
+   costing rather than assuming: per-service ACL tags and MagicDNS names, per-service isolation,
+   blast radius of one shared proxy, cert consolidation, and the LE rate limit already known to
+   bite when many sidecars start at once. Also note the aggregate baseline is not nothing —
+   ~36 idle sidecars at ~27-38 MB RSS each is ~1.1 GiB of RSS spent on being nodes, on a host
+   with a livelock history.
+
+   Deliverable: a measured comparison of one service via sidecar vs the same service via Caddy
+   on a shared node — CPU-s/GiB and RSS — before anyone proposes changing the architecture.
 
 2. **`rx-udp-gro-forwarding on` — Tailscale's own recommendation, currently off.**
    `enp4s0`: `rx-udp-gro-forwarding: off`, `rx-gro-list: off`. Tailscale recommends `on`/`off`
