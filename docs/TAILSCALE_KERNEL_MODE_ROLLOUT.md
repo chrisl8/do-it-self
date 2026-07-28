@@ -138,7 +138,7 @@ Ordering is most-benefit-first. One container at a time; verify before moving on
 | Container | Repo | Status |
 |---|---|---|
 | jellyfin | containers | **DONE** 2026-07-27 (`7c53bd4`) — see note below |
-| immich | containers | pending |
+| immich | containers | **DONE** 2026-07-27 (`a45ee22`) — A/B'd: 58.3 -> 61.6 MB/s |
 | nextcloud | containers | pending |
 | filez | containers | pending |
 | zipline | containers | pending |
@@ -158,6 +158,28 @@ it lands in single-digit MB/s.
 
 If a genuine A/B matters for a future container, capture the tailnet number *before* editing
 the compose file.
+
+**immich was A/B'd properly** (4.85 MB asset, 10 runs each, same tailnet path):
+
+| | avg | peak |
+|---|---|---|
+| before (userspace) | 58.3 MB/s | 67.6 MB/s |
+| after (kernel) | 61.6 MB/s | 70.3 MB/s |
+
+**+5.7% — real but modest, and it undercuts the stated Tier 2 rationale.** Sequential TCP
+over a host-loopback tailnet path is not where userspace mode hurts. TCP retransmits hide the
+loss (that's exactly why this went unnoticed for years, per "Why it hid for years" above), and
+on this path the ceiling is TLS + WireGuard crypto CPU, not the netstack. So a big Tier 2
+throughput win should **not** be expected, and its absence is not evidence the switch failed —
+the verify block is the authority on that.
+
+The two claims that do hold are unchanged: the ~11% inbound UDP loss (Tier 1, already proven
+on valheim) and the aggregate CPU/RSS reduction (`37 userspace sidecars = 26.9% CPU + 1.13 GiB`
+vs `2.6% / 0.12 GiB` for the host's kernel-mode daemon).
+
+**Better measurement for the remaining Tier 2 containers:** record CPU alongside throughput —
+`pidstat -p $(pgrep -f "tailscaled --socket") 1` during the transfer, before and after. The CPU
+delta is where the actual Tier 2 win is, and throughput alone will keep understating it.
 
 ### Tier 3 — everything else (stateless web apps, lowest risk)
 actual-budget, actual-budget-api, borgitory, changedetection, code, collabora, dawarich,
