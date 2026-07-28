@@ -1407,63 +1407,6 @@ app.post("/api/kopia-check", async (req, res) => {
   });
 });
 
-app.get("/api/ups-status", async (req, res) => {
-  try {
-    const child = spawn("apcaccess", [], { env: childEnv() });
-    let data = "";
-    let error = "";
-    child.stdout.on("data", (chunk) => {
-      data += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      error += chunk;
-    });
-    child.on("close", (code) => {
-      if (code !== 0 || !data.trim()) {
-        res.status(500).json({ error: error || "apcaccess failed" });
-        return;
-      }
-      const status = {};
-      for (const line of data.trim().split("\n")) {
-        if (line.includes(":")) {
-          let key = line.split(":")[0].trim();
-          let value = line.slice(line.indexOf(":") + 1).trim();
-          switch (key) {
-            case "LINEV":
-              key = "LINE_VOLTAGE";
-              value = Number(value.split(" ")[0]);
-              break;
-            case "LOADPCT":
-              key = "LOAD_PERCENT";
-              value = Number(value.split(" ")[0]);
-              break;
-            case "BCHARGE":
-              key = "BATTERY_CHARGE_PERCENT";
-              value = Number(value.split(" ")[0]);
-              break;
-            case "TIMELEFT":
-              key = "MINUTES_LEFT";
-              value = Number(value.split(" ")[0]);
-              break;
-            case "END APC":
-              key = "END_APC";
-              break;
-          }
-          status[key] = value;
-        }
-      }
-      res.json(status);
-    });
-    child.on("error", (err) => {
-      console.error("Error spawning apcaccess:", err);
-      res.status(500).json({ error: "apcaccess not available" });
-    });
-  } catch (err) {
-    console.error("Error getting UPS status:", err);
-    res.status(500).json({ error: "Failed to get UPS status" });
-  }
-});
-
 app.get("/api/borg-log", async (req, res) => {
   try {
     const logFile = join(os.homedir(), "logs/borg-backup.log");
