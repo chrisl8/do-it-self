@@ -335,6 +335,15 @@ async function collectSeerr() {
 const PROFILE_REJECTION =
   /not wanted in profile|below (?:Series|Movie) profile minimum|does not contain one of the required/i;
 
+// "Unknown is not wanted in profile" reads like a profile rejection but is not
+// one: Unknown means the *arr could not determine a quality from the release
+// title at all. The 2005 Quatermass TV movie is nothing but these -- bare titles
+// like "The Quatermass Experiment 2005" with no source, resolution or group. No
+// widening of the quality range fixes that, and allowing Unknown would mean
+// accepting literally any file, so these count as unparseable rather than
+// blocked.
+const UNKNOWN_QUALITY = /^Unknown is not wanted in profile/i;
+
 // The definitive check, and the only one that costs anything: ask the indexers
 // what exists, then see how much of it the profile will accept.
 //   nothing found                    ->  no releases exist. Not fixable here.
@@ -366,7 +375,11 @@ async function confirm(stall, sonarr, radarr) {
       for (const rej of r.rejections ?? []) {
         reasons.set(rej, (reasons.get(rej) ?? 0) + 1);
       }
-      if (r.rejections?.some((rej) => PROFILE_REJECTION.test(rej))) {
+      if (
+        r.rejections?.some(
+          (rej) => PROFILE_REJECTION.test(rej) && !UNKNOWN_QUALITY.test(rej),
+        )
+      ) {
         profileBlocked += 1;
       }
     }
@@ -527,6 +540,8 @@ for (const s of reportable) {
   console.log(`    ${who}`);
 
   const c = s.confirm;
+  // Sonarr and Radarr each have a local profile of this name that reaches down
+  // to SD, so the remedy reads identically on both sides.
   const TV_FALLBACK = "Best Available (SD-1080p)";
   if (c?.verdict === "PROFILE_TRAP") {
     console.log(
@@ -546,8 +561,15 @@ for (const s of reportable) {
       console.log(
         `    blocking format is a custom-format score, not the quality range.`,
       );
+    } else if (s.profile !== TV_FALLBACK) {
+      console.log(`    FIX: set profile to "${TV_FALLBACK}" and re-search.`);
     } else {
-      console.log(`    FIX: needs a sub-4K Radarr profile (see note below).`);
+      console.log(
+        `    Already on "${TV_FALLBACK}" -- the floor cannot go lower, so the`,
+      );
+      console.log(
+        `    blocking format is a custom-format score, not the quality range.`,
+      );
     }
   } else if (c?.verdict === "UNUSABLE") {
     console.log(
