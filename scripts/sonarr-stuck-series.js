@@ -58,11 +58,22 @@ function profileCeilingAndFloor(profile) {
   return { floor: Math.min(...nums), ceiling: Math.max(...nums), allowed };
 }
 
-// Newest year a show could plausibly have a master at a given resolution.
-// 4K TV masters essentially do not exist before ~2013; HD before ~1998.
+// Whether a profile floor is defensible for a show of this vintage.
+//
+// This used to give anything from 2013 onward a free pass at 2160, on the
+// reasoning that 4K TV masters exist after then. That is true and irrelevant:
+// 4K existing in the world says nothing about whether THIS show has it. Most
+// post-2013 TV -- network sitcoms, cartoons, BBC drama, anything that is not
+// prestige streaming -- never gets a 4K master. The free pass is exactly why
+// this scan reported "no suspects" while The Good Place (2016) sat at 0/59 and
+// Infinity Train (2019) at 0/55, both dead on a 4K-only profile.
+//
+// So a 2160 floor is never self-justifying. It is treated as suspect for every
+// year, and the "has it ever grabbed anything?" test below does the real work
+// of separating healthy 4K shows from stuck ones. Only the lower floors, where
+// the format genuinely did not exist yet, can be ruled out by year alone.
 function plausible(year, floor) {
-  if (floor >= 2160) return year >= 2013;
-  if (floor >= 1080) return year >= 1998;
+  if (floor >= 2160) return false;
   if (floor >= 720) return year >= 1998;
   return true;
 }
@@ -118,18 +129,29 @@ async function verify(seriesId) {
 }
 
 async function scan() {
-  const [series, profiles] = await Promise.all([
+  const [series, profiles, missingEps] = await Promise.all([
     api("series"),
     api("qualityprofile"),
+    api("wanted/missing?pageSize=2000&monitored=true"),
   ]);
   const byId = new Map(profiles.map((p) => [p.id, p]));
+
+  // Count only episodes that have aired AND are monitored AND have no file --
+  // which is what wanted/missing returns. Subtracting file count from total
+  // episode count (the old way) counts specials and unaired episodes as
+  // "missing", which flagged healthy shows like The Mandalorian at 24/25 and
+  // buried the real cases. It also wildly overstates the gap on shows with lost
+  // episodes: Doctor Who reads 15/749, but only 38 are actually wanted.
+  const wanted = new Map();
+  for (const ep of missingEps.records ?? []) {
+    wanted.set(ep.seriesId, (wanted.get(ep.seriesId) ?? 0) + 1);
+  }
 
   const suspects = [];
   for (const s of series) {
     if (!s.monitored) continue;
     const stats = s.statistics ?? {};
-    const missing =
-      (stats.totalEpisodeCount ?? 0) - (stats.episodeFileCount ?? 0);
+    const missing = wanted.get(s.id) ?? 0;
     if (missing <= 0) continue;
 
     const profile = byId.get(s.qualityProfileId);
@@ -137,7 +159,22 @@ async function scan() {
     const { floor } = profileCeilingAndFloor(profile);
     if (plausible(s.year, floor)) continue;
 
+    // A 4K-only profile is only a problem if it is actually failing. A show
+    // that has grabbed something recently is working as intended, however
+    // narrow its profile looks -- so ask what happened rather than guessing
+    // what should have. This is what makes dropping the year free-pass above
+    // safe instead of merely noisy.
+    const grabs = await api(`history/series?seriesId=${s.id}&eventType=1`);
+    const lastGrab = grabs.length
+      ? grabs
+          .map((g) => g.date)
+          .sort()
+          .at(-1)
+      : null;
+    if (lastGrab && (Date.now() - new Date(lastGrab)) / 86400000 < 14) continue;
+
     suspects.push({
+      lastGrab,
       id: s.id,
       title: s.title,
       year: s.year,
