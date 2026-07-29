@@ -71,6 +71,7 @@ installed-modules.yaml
 # User config
 user-config.yaml
 scripts/backup-coverage-audit.conf
+scripts/media-stall-check.conf
 scripts/backup-coverage-acks.json
 scripts/backup-coverage-acks/
 
