@@ -228,28 +228,60 @@ save: a combined SD→2160p profile re-downloads every episode of an airing show
 just inverts the problem so 4K shows silently cap at 1080p. Repointing a series
 takes seconds once you know, so **the alert is the fix**, not a profile change.
 
-## Radarr has no escape hatch at all
+## Radarr had no escape hatch at all — fixed 2026-07-29
 
-Radarr has exactly one profile:
+Radarr had exactly one profile:
 
 ```
 UHD Bluray + WEB  ->  WEBDL-2160p, WEBRip-2160p, Bluray-2160p
 ```
 
-So every movie is 4K-or-nothing and **there is nowhere to move a stuck movie
-to**. The usual fix simply does not exist on the Radarr side. Three movies are
-sitting in this state, two of them 69-day-old requests:
+So every movie was 4K-or-nothing, and because it was the *only* profile there
+was **nowhere to move a stuck movie to** — the Sonarr fix had no target on this
+side.
 
-```
-1967  The Quatermass Experiment    (Hammer film, no 4K release)
-2005  The Quatermass Experiment    (BBC live TV remake, no 4K will ever exist)
-2016  The Woodsman                 (small indie, no 4K)
-```
+Added a local `Best Available (SD-1080p)` for Radarr, mirroring the Sonarr
+profile of the same name, in the **module** at
+`.modules/do-it-self-containers/recon/config-defaults/recyclarr-configs/uhd-bluray-web.yml`
+(module commit `70f4a39`). Bluray-1080p down to SDTV, cutoff WEB 1080p, same
+`Upscaled` floor.
 
-Fixing this needs a sub-4K Radarr profile added to the Recyclarr config in the
-**module** (`.modules/do-it-self-containers/recon/config-defaults/recyclarr-configs/radarr.yml`),
-mirroring what `Best Available (SD-1080p)` does for Sonarr. Not done yet.
-`media-stall-check.js` prints a standing note while this remains true.
+Both profiles have to share one instance block: Recyclarr rejects two config
+instances with the same `base_url`. That is also why the file keeps its
+now-misleading name — renaming it would leave the old copy in the deployed
+`recyclarr-configs` directory, and two files declaring `radarr@localhost:7878`
+is exactly that Split Instances error.
+
+**Deliberately excluded**, all of which Radarr offers: `Remux-1080p` (102+
+MB/min, so a 2h film is 12 GB+ — this is a fallback profile, not an archival
+one), `DVD-R`/`BR-DISK`/`Raw-HD` (disc images and raw transport streams), and the
+whole cam tier. A movie having no 4K release is not a reason to accept a
+camcorder rip.
+
+### The three stuck movies were not profile traps
+
+Worth recording, because it is the opposite of the Sonarr result. All three were
+moved to the new profile and re-searched. **None of them grabbed anything**:
+
+| Movie | Releases | Reality |
+| --- | --- | --- |
+| The Quatermass Experiment (1967) | **0** | nothing exists at any quality |
+| The Woodsman (2016) | **0** | nothing exists at any quality |
+| The Quatermass Experiment (2005) | 5, all `Unknown` | unparseable |
+
+The 2005 BBC live remake returns only bare titles like
+`The Quatermass Experiment 2005` — no source, resolution or release group — so
+Radarr cannot determine a quality and files them all as `Unknown`.
+
+This produced a false verdict worth guarding against: **`Unknown is not wanted
+in profile` reads exactly like a profile rejection but is not one.** Widening the
+quality range cannot fix it, and allowing `Unknown` would mean accepting
+literally any file. `media-stall-check.js` now excludes that specific rejection
+from its profile-trap test so it reports these as `UNUSABLE`, not as something a
+profile change would solve.
+
+All three are parked in `media-stall-check.conf`. They stay on the new profile
+rather than reverting, so if a release ever does appear they will grab it.
 
 ## The alert: `scripts/media-stall-check.js`
 
