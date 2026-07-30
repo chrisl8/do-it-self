@@ -194,8 +194,17 @@ async function collectSonarr(api) {
   // the only gap worth acting on. Raw statistics are misleading: Doctor Who
   // reads 15/749 but only 38 of those are actually wanted -- the rest are
   // unmonitored lost episodes that no amount of searching will produce.
+  //
+  // Season 0 is excluded, and that exclusion is doing a lot of work. Season 0 is
+  // where TVDB files DVD extras and oddities -- "Mission Directive: Sanctuary",
+  // "Set Tour with Martin Wood", "Diary of Rainbow Sun Francks" -- which were
+  // never released as standalone files and never will be. Counting them made
+  // Stargate Atlantis look like 100/155 with 53 wanted when it is actually
+  // 100/100 and finished, and made 91 of a 105-episode "backlog" phantom. At 9
+  // enabled indexers that is ~820 wasted queries per search pass, forever.
   const wanted = new Map();
   for (const ep of missing.records ?? []) {
+    if (ep.seasonNumber === 0) continue;
     wanted.set(ep.seriesId, (wanted.get(ep.seriesId) ?? 0) + 1);
   }
 
@@ -213,7 +222,18 @@ async function collectSonarr(api) {
     if (downloading.has(s.id)) continue;
 
     const profile = byId.get(s.qualityProfileId);
-    const files = s.statistics?.episodeFileCount ?? 0;
+    // Count regular seasons only, for the same reason Season 0 is dropped from
+    // the wanted map: series-level statistics fold DVD extras into the totals,
+    // so a finished show reads as incomplete forever.
+    const regular = (s.seasons ?? []).filter((x) => x.seasonNumber > 0);
+    const files = regular.reduce(
+      (n, x) => n + (x.statistics?.episodeFileCount ?? 0),
+      0,
+    );
+    const totalEps = regular.reduce(
+      (n, x) => n + (x.statistics?.totalEpisodeCount ?? 0),
+      0,
+    );
     const grabs = await api(`history/series?seriesId=${s.id}&eventType=1`);
     const lastGrab = grabs.length
       ? grabs
@@ -239,7 +259,7 @@ async function collectSonarr(api) {
       id: s.id,
       title: `${s.title} (${s.year})`,
       have: files,
-      total: s.statistics?.totalEpisodeCount ?? 0,
+      total: totalEps,
       want,
       profile: profile?.name ?? `#${s.qualityProfileId}`,
       floor: profile ? profileFloor(profile) : 0,

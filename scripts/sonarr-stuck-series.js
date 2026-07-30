@@ -142,8 +142,12 @@ async function scan() {
   // "missing", which flagged healthy shows like The Mandalorian at 24/25 and
   // buried the real cases. It also wildly overstates the gap on shows with lost
   // episodes: Doctor Who reads 15/749, but only 38 are actually wanted.
+  // Season 0 excluded: it holds DVD extras and oddities that were never
+  // released standalone, so counting them invents a permanent backlog. It made
+  // Stargate Atlantis read 100/155 with 53 wanted when it is 100/100 and done.
   const wanted = new Map();
   for (const ep of missingEps.records ?? []) {
+    if (ep.seasonNumber === 0) continue;
     wanted.set(ep.seriesId, (wanted.get(ep.seriesId) ?? 0) + 1);
   }
 

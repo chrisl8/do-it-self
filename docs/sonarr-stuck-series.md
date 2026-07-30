@@ -476,3 +476,107 @@ Effect on the report: **9 items down to 3**, and all three remaining are back
 catalog that just needs `sonarr-kick-missing.js`, not anything stuck —
 Fullmetal Alchemist: Brotherhood (14 wanted), Stargate Atlantis (53),
 Doctor Who 1963 (38).
+
+---
+
+# Season 0 was inventing most of the backlog (2026-07-29)
+
+## The question that exposed it
+
+"Do we need an automated kick mechanism?" — because back catalog structurally
+never self-heals, so every missing episode needs a human to remember to search.
+The answer turned out to be **no**, because most of the backlog was not real.
+
+## 91 of 105 "wanted" episodes were DVD extras
+
+Season 0 is where TVDB files extras and oddities. They were monitored, so Sonarr
+counted them as wanted forever:
+
+```
+Stargate Atlantis    regular episodes: 100/100  <- COMPLETE
+  the 53 "wanted":   Mission Directive: Sanctuary
+                     Set Tour with Martin Wood and Peter DeLuise
+                     Diary of Rainbow Sun Francks
+                     A Look back on Season 1 with Martin Gero
+
+Doctor Who (1963)    regular episodes: 14/694, 0 monitored+aired+missing
+  the 38 "wanted":   Death Comes to Time (5 webcast parts)
+                     Real Time (5 webcast parts)
+                     The Five Doctors, the 1963 unaired Pilot
+```
+
+Stargate Atlantis is **finished**. It only looked stalled because its 155 total
+folds in 55 featurettes. None of these were ever released as standalone files.
+
+## Why that killed the case for a sweeper
+
+From live Prowlarr data: **9 enabled indexers, so one episode search costs ~9
+queries.**
+
+| | |
+| --- | --- |
+| Full pass over the 105-item "backlog" | ~945 queries |
+| …of which are DVD extras | **~820 wasted, every pass, forever** |
+| Real backlog | 14 episodes, ~126 queries, one-off |
+| Last 7 days | 10,947 queries → **155 grabs** |
+| …grabs from NZBgeek | **151 of 155** |
+
+The eight torrent indexers produced **4 grabs from ~9,500 queries** in a week.
+A periodic sweeper would have spent its budget re-searching featurettes against
+public trackers that rate-limit and a paid indexer with a daily API cap.
+
+**Fix the accounting, not the automation.** Both scripts now exclude season 0
+from the wanted count, and derive have/total from regular seasons only.
+
+If automation is ever wanted, the shape is a budgeted trickle with **per-episode
+exponential backoff** (1d → 3d → 1w → 2w → 1mo → quarterly floor), not a sweep:
+searching is the only way to learn whether a gap is real, so bound how much
+effort goes into finding out.
+
+## The ended-vs-continuing trap
+
+Blanket-unmonitoring season 0 is **wrong**, and nearly got done anyway. Season 0
+is not only extras — for Doctor Who, TVDB files real broadcast specials there:
+
+```
+Doctor Who (2023)  CONTINUING  S0 = The Star Beast, Wild Blue Yonder, The Giggle
+Doctor Who (2005)  ended       S0 with files:    The Christmas Invasion, The Runaway Bride
+                               S0 without files: Children in Need: Born Again, Time Crash
+```
+
+Unmonitoring a **continuing** show's season 0 silently stops future Christmas
+specials being grabbed. The safe line is `series.ended`:
+
+- **ended** → unmonitor season 0. Nothing new will air, so there is no cost.
+- **continuing** → leave it alone.
+
+Applied to 4 ended series (280 episodes: SG-1 4, Atlantis 55, Doctor Who 2005
+169, Doctor Who 1963 52). Files are untouched — 56 of those episodes have files
+and keep them. The season-level `monitored` flag was cleared too, so a future
+TVDB refresh cannot quietly re-add specials to the wanted list. Doctor Who (2023),
+Grantchester and INVINCIBLE were deliberately skipped.
+
+Report went from **9 items to 1**.
+
+## The one real gap: Fullmetal Alchemist: Brotherhood
+
+Kicked (14 episodes). **Found nothing** — 87 releases for S01E16 alone, zero
+acceptable. This is a genuinely stuck series but a different flavour from the
+4K trap, and it is an **open thread**:
+
+```
+ 32 | Custom Formats Language: Not English have score 0 below Series profile minimum 100
+ 21 | Not enough seeders: 0. Minimum seeders: 1
+ 18 | Unknown Series
+ 14 | Unknown is not wanted in profile
+  7 | Existing file on disk has a equal or higher Custom Format score: 975
+```
+
+`[Anime] Remux-1080p` sets `min_format_score: 100`, so anything scoring 0 is
+rejected outright. Nothing is blocklisted (0 entries for this series), so that
+is not it. The 87 releases are mostly `EP 16`-style fan naming that lands as
+`Unknown Series`, plus dead 0-seeder torrents, plus season packs correctly
+refused because the other 50 episodes already have Remux files scoring 975.
+
+Not diagnosed further. The likely lever is that profile's minimum interacting
+with the anime tier scores, which is a Recyclarr question, not a per-series one.
