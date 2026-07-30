@@ -149,6 +149,12 @@ function isExcluded(stall, excludes) {
   );
 }
 
+// Ids that currently have something in the download queue. Sonarr and Radarr
+// both paginate the same way and differ only in the id field name.
+function queueIds(queue, field) {
+  return new Set((queue?.records ?? []).map((r) => r[field]).filter(Boolean));
+}
+
 // Lowest quality a profile will accept, as a rough resolution number. A floor
 // of 2160 is the shape that causes almost every stall we have seen: it means
 // "4K or nothing", and most titles have no 4K master at any age.
@@ -175,12 +181,14 @@ function profileFloor(profile) {
 // --------------------------------------------------------------------- sonarr
 
 async function collectSonarr(api) {
-  const [series, profiles, missing] = await Promise.all([
+  const [series, profiles, missing, queue] = await Promise.all([
     api("series"),
     api("qualityprofile"),
     api("wanted/missing?pageSize=2000&monitored=true"),
+    api("queue?pageSize=500"),
   ]);
   const byId = new Map(profiles.map((p) => [p.id, p]));
+  const downloading = queueIds(queue, "seriesId");
 
   // wanted/missing is exactly "aired AND monitored AND has no file", which is
   // the only gap worth acting on. Raw statistics are misleading: Doctor Who
@@ -196,6 +204,13 @@ async function collectSonarr(api) {
     if (!s.monitored) continue;
     const want = wanted.get(s.id) ?? 0;
     if (want === 0) continue;
+    // Something in the download queue is not stalled, it is in progress -- and
+    // it can legitimately stay there far longer than the grace period. The
+    // Quatermass II pack was a 2.09 GB torrent on a single seed with a 19-hour
+    // ETA; without this it would have paged the next morning while working
+    // perfectly. A download that dies in the queue gets caught anyway, because
+    // the queue entry disappears and the series falls back to having no files.
+    if (downloading.has(s.id)) continue;
 
     const profile = byId.get(s.qualityProfileId);
     const files = s.statistics?.episodeFileCount ?? 0;
@@ -240,15 +255,18 @@ async function collectSonarr(api) {
 // --------------------------------------------------------------------- radarr
 
 async function collectRadarr(api) {
-  const [movies, profiles] = await Promise.all([
+  const [movies, profiles, queue] = await Promise.all([
     api("movie"),
     api("qualityprofile"),
+    api("queue?pageSize=500"),
   ]);
   const byId = new Map(profiles.map((p) => [p.id, p]));
+  const downloading = queueIds(queue, "movieId");
 
   const stalls = [];
   for (const m of movies) {
     if (!m.monitored || m.hasFile) continue;
+    if (downloading.has(m.id)) continue;
     // A movie with no digital or physical release yet is not stalled, it is
     // just early -- searching for it is guaranteed to find nothing.
     if (!m.isAvailable) continue;
