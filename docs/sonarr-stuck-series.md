@@ -678,3 +678,87 @@ behaviour, not a defect.
 name contains the episode title Sonarr assigned it — 50/50 before, 64/64 after.
 Given a numbering bug that misfiles content while looking perfectly healthy, that
 check is worth more than the quality audit.
+
+---
+
+# Star Trek: Voyager — the alert's blind spot (2026-07-30)
+
+Voyager sat at 125/172 with all 47 remaining episodes unobtainable, and the
+alert said nothing. Same underlying cause as FMA:B — dead usenet posts — but it
+exposed a real defect in the check.
+
+## Why it was missing 47 episodes
+
+**2014 blocklist entries, 73% of the entire instance's blocklist**, all created
+on 15–16 July:
+
+```
+2026-07-15: 1744    2026-07-16: 270
+distinct episodes with blocklisted releases: 167
+of the 47 wanted episodes, 47 have blocklisted releases   <- every one
+```
+
+When Voyager was kicked on 14 July, Sonarr searched all 173 episodes, grabbed
+~2000 releases and nearly all of them failed — DVD-era usenet posts are largely
+incomplete. 125 imported; the other 47 exhausted **every candidate they had**.
+
+## Why no alarm — the defect
+
+Two reasons. The mundane one: last grab was 13.73 days ago against a 14-day
+threshold, so it was 6.5 hours from alerting.
+
+The real one: **the staleness clock keyed off the last GRAB.** Grabbing is not
+progress. A series in a grab → fail → blocklist loop churns constantly, so its
+last-grab timestamp is permanently fresh and it looks healthy for exactly as
+long as it keeps failing:
+
+```
+grabs: 2191     imports: 125     ratio 17.5 : 1
+```
+
+Voyager was drowning and reported as fine. Two changes:
+
+- **Key the STALLED tier off `downloadFolderImported` (eventType 3)**, not
+  `grabbed` (eventType 1).
+- **Add a CHURNING tier** that fires *while it is still happening* — 20+ grabs
+  with fewer than a fifth as many imports means downloads are failing, not
+  missing. Waiting for the loop to go quiet for a fortnight is too late.
+
+Both applied to Radarr as well.
+
+## The fix: same selective-file pattern as FMA:B
+
+`Star Trek Voyager (1995) Season 1-7 (480p DVD x265 HEVC 10bit AC3 5.1 Panda)`
+— 87.3 GB, 72 seeders. Chosen over the better-seeded 117-seeder pack (33.4 GB,
+~194 MB/ep, stereo) because the existing library medians 350 MB/episode, so
+~507 MB/ep with 5.1 audio matches and slightly improves it.
+
+**Explicitly rejected: the 36-seeder `1080p AI Upscale` pack.** Voyager was
+finished on SD NTSC video and never remastered, so any "1080p" is an upscale of
+the same master — bigger files, no more detail. That is exactly what the
+`Upscaled -10000` custom format exists to prevent; do not hand-import around it.
+
+47 wanted episodes mapped to 47 files = **25.6 GB instead of 87.3 GB**.
+
+The pack names files `S01E03 - Parallax`, and combines two-parters as
+`S01E01-E02 - Caretaker`. Three selected files (`Caretaker`, `Dark Frontier`,
+`Endgame`) also cover an episode already on disk; importing them replaces a
+single-part file with a matched pair from one source, which is an improvement
+rather than a collision.
+
+## qBittorrent gotcha, second variant
+
+The FMA:B pack came through as a `.torrent` with metadata attached. This one
+resolved to a **magnet**, so `/torrents/files` returns an empty list and the
+size reads 0 until peers supply the metadata — which cannot happen while the
+torrent is stopped. Sequence that works:
+
+1. add with `stopped=true`
+2. **start it** and poll `/torrents/files` until non-empty
+3. immediately set every file to priority 0 (this freezes downloading without
+   stopping the torrent)
+4. set the wanted indices to priority 1, then start
+
+Also: `filePrio` rejects an id list containing indices beyond the file count
+with `409 File ID is not valid` — build the deselect list from the actual file
+count, not a generous range.
