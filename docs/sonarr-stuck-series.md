@@ -762,3 +762,19 @@ torrent is stopped. Sequence that works:
 Also: `filePrio` rejects an id list containing indices beyond the file count
 with `409 File ID is not valid` — build the deselect list from the actual file
 count, not a generous range.
+
+## Result: 172/172
+
+```
+TITLE CHECK (part-aware): 172 episodes -> 0 real mismatches
+quality: DVD 134, WEBDL-480p 27, SDTV 7, WEBRip-480p 1   (169 files, 3 are two-parters)
+wanted remaining: 0
+```
+
+**Verification note.** The naive title check reported 4 "mismatches" — `S01E01
+"Caretaker (1)"` against a file named `S01E01-E02 - Caretaker`. Those are the
+checker's artifact, not corruption: a two-parter is one file carrying the bare
+title, so the `(1)`/`(2)` marker is never in the filename. Strip a trailing part
+marker before comparing. Worth keeping in the check rather than deleting it —
+it correctly flagged three legitimate multi-episode files, which is exactly the
+shape a real mismapping would take.
