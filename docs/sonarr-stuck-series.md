@@ -55,9 +55,15 @@ avoiding.
 ./scripts/sonarr-stuck-series.js
 ```
 
-Free, no indexer traffic. Flags any monitored series with missing episodes whose
-profile floor is above what could have existed when it aired (no 4K TV masters
-before ~2013, no HD before ~1998).
+Free, no indexer traffic. Flags monitored series with wanted episodes on a
+4K-only profile that have never grabbed anything.
+
+> **Superseded for routine use.** `scripts/media-stall-check.js` runs from cron
+> and catches strictly more (Radarr and Seerr too, and every stall cause rather
+> than just this one). This script is now the manual deep-dive, and its `--verify`
+> is the definitive single-series check. Note that the year-based heuristic
+> described in the original version of this section was **wrong** and has been
+> removed — see "Round two" below for why.
 
 To confirm a suspect for real:
 
@@ -353,3 +359,120 @@ Tunable via env: `STALL_GRACE_HOURS`, `STALL_STALE_DAYS`, `STALL_RENAG_DAYS`,
 Both series repointed to `Best Available (SD-1080p)` and kicked (50 and 40
 episode searches). Both began grabbing immediately — The Good Place on
 `1080p BluRay`, Infinity Train on `1080p AMZN WEB-DL`.
+
+---
+
+# The Quatermass serials, chased down (2026-07-29)
+
+Three serials were alerting. The expectation going in was "they probably don't
+exist either." That was right for one of three, and the profile was the blocker
+in **none** of them. Worth recording because each failed for a different reason,
+and only one of those reasons was fixable by anything we had built.
+
+## Results
+
+| Serial | Verdict |
+| --- | --- |
+| Quatermass II (1955) | **obtainable — now 6/6** |
+| The Quatermass Experiment (1953) | 4 of 6 episodes exist nowhere on earth |
+| Quatermass (1979) | nothing on the indexers at all |
+
+The useful control was **Quatermass and the Pit (1958)**, sitting at 6/6 from a
+BFI Blu-ray rip (`...Bluray-1080p.x264.DTS.-AOS`) grabbed the day the set was
+added. A 1950s BBC Quatermass serial being complete proves these rips circulate,
+so "old and obscure" was never a sufficient explanation for the others.
+
+## Quatermass II — a naming problem, not an availability problem
+
+Six releases existed, all on LimeTorrents, and Sonarr rejected every one:
+
+```
+Unable to identify correct episode(s) using release name and scene mappings  x4
+Unknown is not wanted in profile                                             x1
+Not enough seeders: 0. Minimum seeders: 1                                    x1
+Unable to parse release                                                      x1
+```
+
+The per-episode rips are named `Quatermass II  Episode 4  The Coming (1955)` and
+`Quatermass II  1of6  The Bolts (1955)`. Sonarr cannot read "Episode 4" or
+"1of6" as episode numbers — it mapped only the `1of6` one, and that failed on
+zero seeders. The complete pack, `Quatermass II [1955  UK] BBC sci fi mini
+series` (2.09 GB, 6 seeders), was unparseable outright.
+
+**The fix — `release/push` with a corrected title.** This is the reusable
+technique. Sonarr's interactive-search override does *not* work here:
+
+```
+POST /api/v3/release  ->  404
+"Unable to parse episodes in the release, will need to be manually provided"
+```
+
+It validates against its own **cached parse** of the release, so supplying
+`seriesId`/`episodeIds` in the body changes nothing. `release/push` is different
+— it parses a title *you* provide, against whatever `downloadUrl` you point it
+at:
+
+```js
+POST /api/v3/release/push
+{
+  title: "Quatermass II (1955) S01 SDTV x264-MANUAL",   // parseable by Sonarr
+  downloadUrl: <the original release's downloadUrl>,     // the real file
+  protocol: "Torrent", publishDate, indexerId, size
+}
+```
+
+Result: `S1 fullSeason=true, quality=SDTV, approved=true`. Sonarr grabbed it,
+mapped all six episodes, and imported cleanly at 6/6 — the internal filenames
+(`Quatermass II [1955] Part 1 - The Bolts.mkv`) matched TVDB episode titles, so
+no Manual Import was needed after all.
+
+Two things to get right when doing this:
+- **Name a quality the profile allows.** `SDTV` in the pushed title makes Sonarr
+  parse it as SDTV, which `Best Available (SD-1080p)` accepts. Leaving it
+  `Unknown` reproduces the original rejection.
+- **The response says `series: (none)`** even on success. Ignore it — check
+  history and the queue instead. It grabbed and mapped correctly regardless.
+
+## The Quatermass Experiment (1953) — permanently incomplete
+
+Two releases, both unparseable, and one of them names the problem:
+
+```
+The Quatermass Experiment (1953) Parts 1   2 only     0.41 GB, 0 seeders
+Quatermass Experiment [1953  UK] BBC sci fi mini series   0.80 GB, 4 seeders
+```
+
+The BBC telerecorded only episodes 1 and 2 of the live 1953 broadcast before
+abandoning the process. **Episodes 3–6 were never recorded and exist nowhere.**
+No profile, indexer or technique reaches them.
+
+Episodes 3–6 are now **unmonitored**, which drops Sonarr's wanted count for the
+series from 6 to 2 and stops it being permanently, misleadingly incomplete. The
+0.80 GB / 4-seeder torrent may hold the two survivors, but its contents are
+unverified (it could be the 2005 live remake) — push it the same way if you want
+them, and check Manual Import before accepting anything.
+
+## Quatermass (1979) — genuinely absent
+
+24 results, **not one of them this show**. Eighteen were rejected as
+`Wrong series` — every hit was *Quatermass and the Pit* (1958) bleeding into the
+query, including files already on disk (`Existing file on disk is of equal or
+higher preference: Bluray-1080p v1`). The Thames/Euston serial returns nothing;
+it would need a Network DVD/Blu-ray rip from somewhere else entirely.
+
+## Alert fix this exposed: queue-awareness
+
+The Quatermass II pack spent a while at 58 KB/s on a single seed with a 19-hour
+ETA. During all of that the series had **zero files** and an `added` date months
+old, so it matched the `NEVER` tier perfectly and would have paged the next
+morning about a download that was working fine.
+
+`media-stall-check.js` now skips anything with an active queue entry. A download
+that *dies* is still caught, because the queue entry disappears and the series
+falls back to having no files — so this suppresses false alarms without creating
+a blind spot.
+
+Effect on the report: **9 items down to 3**, and all three remaining are back
+catalog that just needs `sonarr-kick-missing.js`, not anything stuck —
+Fullmetal Alchemist: Brotherhood (14 wanted), Stargate Atlantis (53),
+Doctor Who 1963 (38).
