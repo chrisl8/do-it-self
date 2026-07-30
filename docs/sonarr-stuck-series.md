@@ -778,3 +778,98 @@ title, so the `(1)`/`(2)` marker is never in the filename. Strip a trailing part
 marker before comparing. Worth keeping in the check rather than deleting it —
 it correctly flagged three legitimate multi-episode files, which is exactly the
 shape a real mismapping would take.
+
+---
+
+# What Sonarr is actually for, and what cutoff-unmet means (2026-07-30)
+
+Worth writing down, because it reframes the cutoff-unmet question from "clutter"
+to "the profile is lying".
+
+## Sonarr is a permanent library manager, not a fetch-and-release tool
+
+Series stay in Sonarr forever. Removing one leaves the files but throws away the
+missing-episode tracking, the upgrade path, consistent renaming, and the ability
+to repair a single bad episode — delete the file, Sonarr marks it missing,
+search just that episode. None of that works if the series is gone. So "a stack
+of content we are content with" **is** the intended end state.
+
+## The cutoff is how you tell Sonarr you are content
+
+When a file meets the profile cutoff, that episode goes permanently quiet: no
+longer cutoff-unmet, no longer an upgrade candidate. That is "done", expressed
+in Sonarr's own vocabulary.
+
+Which means **562 cutoff-unmet episodes is not cosmetic — it is the profile
+misdescribing the done state.** Voyager at 172/172 DVD is genuinely finished,
+but `Best Available (SD-1080p)` insists it is not done until WEB 1080p, which
+for Voyager can never exist.
+
+The root cause is that one profile serves two populations that need different
+cutoffs:
+
+| | ceiling | examples |
+| --- | --- | --- |
+| DVD-era, no HD master exists | DVD | Voyager, Blake's 7, classic Doctor Who, Stargate Infinity |
+| HD exists, no 4K | WEB 1080p | Doctor Who (2005), Stargate Universe, The Good Place, Infinity Train |
+
+A second profile with a DVD cutoff for the first group would drop ~250 of the
+562 and remove the upgrade pressure at the root. Not done — it needs per-show
+knowledge of whether an HD master exists (M\*A\*S\*H and SG-1 were shot on film
+and *do* have one; Voyager and Blake's 7 do not), and the custom format below
+closes the actual risk more cheaply.
+
+## Why cutoff-unmet is not purely a "don't press the button" problem
+
+There is **no scheduled cutoff-unmet search**, so nothing hunts for upgrades on
+its own. But **RSS still acts on cutoff-unmet episodes**: a new posting that
+scores higher gets grabbed as an upgrade, no button required. For a show with no
+HD master, anything "higher" than DVD is an upscale of the same SD source.
+
+## The local custom format
+
+The stock `Upscaled` CF is title-based and only catches releases that admit what
+they are. It misses these completely:
+
+```
+Star Trek Voyager S06E13 iNTERNAL MULTi 1080p WEB x264-N3TFL1X
+```
+
+82 of those were sitting in the blocklist, and **not one contains the word
+"upscale"**. Those 82 rows were the only thing preventing an RSS upgrade — a
+per-release band-aid rather than a rule.
+
+So: a local Sonarr custom format **`Upscaled (Unlabelled Groups)`**, scored
+**-10000** on `Best Available (SD-1080p)`.
+
+**It is deliberately narrow: release group AND (720p OR 1080p).** The same group
+also posts legitimate `WEBDL-480p` — 26 such files are in the library — so
+blocking the group outright would have been wrong. In Sonarr's matching rules
+every `required` specification must match and at least one non-required must
+also match, which gives `N3TFL1X AND (720p OR 1080p)` from one required title
+regex plus two non-required resolution specs.
+
+**The Recyclarr trap.** Recyclarr cannot create or score a CF with no
+`trash_id`, and `reset_unmatched_scores: enabled: true` wipes the score of
+anything it does not manage. A hand-made CF therefore reverts to 0 on the next
+sync, silently reopening the hole. It must be listed under `except:`:
+
+```yaml
+reset_unmatched_scores:
+  enabled: true
+  except:
+    - Upscaled (Unlabelled Groups)
+```
+
+Any future local CF on this profile has to be added there too.
+
+## Verified end to end
+
+```
+1080p N3TFL1X x4  ->  score -10000, rejected on the CF alone
+ 480p N3TFL1X     ->  score 0, no rejections, still grabbable
+```
+
+Confirmed *after* clearing the blocklist, so the CF is doing the work rather
+than leftover blocklist rows. Sonarr's blocklist went from **2762 entries to
+748** (Voyager's 2014 all removed).
