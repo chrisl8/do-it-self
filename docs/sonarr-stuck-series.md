@@ -580,3 +580,101 @@ refused because the other 50 episodes already have Remux files scoring 975.
 
 Not diagnosed further. The likely lever is that profile's minimum interacting
 with the anime tier scores, which is a Recyclarr question, not a per-series one.
+
+---
+
+# Fullmetal Alchemist: Brotherhood — the third failure mode (2026-07-30)
+
+Now 64/64. Neither the 4K trap nor a phantom backlog: **dead usenet posts plus an
+anime numbering hazard**. Worth reading before touching any anime series.
+
+## It was never the config
+
+```
+grabbed 107  ->  downloadFolderImported 50  ->  downloadFailed 57
+reason: "Aborted, cannot be completed - https://sabnzbd.org/not-complete"
+reason: "Manually marked as failed"   (Decluttarr's signature)
+```
+
+The FraMeSToR remux NZBs for 14 episodes were **incomplete on usenet**. Each grab
+failed, Decluttarr blocklisted it and Sonarr fell to the next candidate, until
+those episodes had exhausted their entire candidate pool. 35 blocklist entries,
+33 of them from the day the series was added.
+
+Proven rather than assumed: the blocklist was cleared and all 7 still-listed
+remuxes re-grabbed at 02:32 — **every one failed again by 03:05**. The posts are
+dead. For E25 and E64 no remux-grade release exists at all, under any mapping.
+
+**Diagnostic gotcha:** `GET /api/v3/blocklist` paginates. Fetching `pageSize=100`
+of 2775 entries and then filtering by series reports zero and sends you down the
+wrong path. Use `?seriesIds=<id>`.
+
+## The numbering hazard — real, not theoretical
+
+TVDB interleaves the four OVAs into the absolute sequence at **abs 21, 39 and
+56**, so absolute and standard numbering drift apart:
+
+```
+E20/abs20   E21/abs22   E38/abs40   E54/abs57   E64/abs67
+```
+
+With `seriesType: anime`, Sonarr reads a bare number in a release title as
+**absolute**. Release groups number FMA:B 1–64 as *standard* episodes. So
+anything numbered ≥21 lands 1–3 episodes off. Caught in the act:
+
+```
+"Fullmetal Alchemist Brotherhood - 57 - Eternal Leave"  ->  epIds=[2991] = S01E54
+```
+
+Episode 57 is "Eternal Leave"; Sonarr mapped it to E54, which is "Beyond the
+Inferno". Had it completed, episode 57's video would be filed as E54 — and E54
+would still be missing. No XEM scene mapping corrects this. Those downloads were
+removed with `blocklist=true&skipRedownload=true`.
+
+**Mitigation applied: `seriesType` anime → standard.** Bare-numbered releases now
+fail to parse instead of silently mismapping, and `SxxExx` releases — everything
+this series actually uses — keep working. Note this makes absolute-numbered
+releases invisible to Sonarr entirely, which is why the Erai-raws pack below had
+to be fetched via Prowlarr rather than through Sonarr.
+
+## The fix: selective-file torrent + hand-mapped import
+
+`[Erai-raws] ... 01 ~ 64 (V2) [1080p NF WEB-DL]` — 55.9 GB, 204 seeders — carries
+all 64 episodes at better quality than the 720p BluRay encodes, which were the
+only other correctly-named option and were rejected anyway by
+`[Anime] Remux-1080p`'s `min_format_score: 100` (they score 0).
+
+Downloading 55.9 GB for 14 episodes is wasteful, and letting Sonarr grab it would
+have reintroduced the absolute-numbering bug. So:
+
+1. Add to qBittorrent **directly**, category `manual-fma` (not `tv-sonarr`, so
+   Sonarr never auto-imports it).
+2. Set every file to priority 0, then re-enable only the 14 wanted indices —
+   file `- NN` is standard episode NN, so index = NN − 1.
+   **12.2 GB instead of 55.9 GB.**
+3. `ManualImport` with `importMode: "Copy"`, mapping each file to an explicit
+   `episodeIds` — the mapping is done by hand, so Sonarr's absolute logic never
+   gets a vote.
+
+qBittorrent API notes: it is at `localhost:8085` inside gluetun's netns (no auth
+from there). On 5.x, `paused=true` on `/torrents/add` is **ignored** and
+`/torrents/pause` is 404 — the endpoints are `/torrents/stop` and
+`/torrents/start`. The add returns `pending_count: 1` while it fetches the
+`.torrent` through Prowlarr, so poll for the hash rather than expecting it
+immediately.
+
+## Result
+
+```
+64/64 regular episodes, 0 title mismatches
+48 x Bluray-1080p Remux (FraMeSToR)  +  2 x Bluray-1080p  +  14 x WEBDL-1080p
+```
+
+The 14 sit below the profile cutoff, so they will show under Cutoff Unmet and
+upgrade themselves to remux if those posts ever reappear. That is the desired
+behaviour, not a defect.
+
+**Library integrity was verified at every step** by checking that each file's
+name contains the episode title Sonarr assigned it — 50/50 before, 64/64 after.
+Given a numbering bug that misfiles content while looking perfectly healthy, that
+check is worth more than the quality audit.
