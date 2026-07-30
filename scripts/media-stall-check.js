@@ -234,22 +234,45 @@ async function collectSonarr(api) {
       (n, x) => n + (x.statistics?.totalEpisodeCount ?? 0),
       0,
     );
-    const grabs = await api(`history/series?seriesId=${s.id}&eventType=1`);
-    const lastGrab = grabs.length
-      ? grabs
-          .map((g) => g.date)
-          .sort()
-          .at(-1)
-      : null;
+    // Measure IMPORTS, not grabs. Grabbing is not progress -- a series stuck in
+    // a grab -> fail -> blocklist loop grabs constantly and imports nothing, so
+    // a grab-based freshness test sees it as healthy the entire time it is
+    // drowning. Star Trek: Voyager grabbed ~2000 releases and imported 125 over
+    // two days (2014 blocklist entries, 73% of the whole instance's blocklist)
+    // and never once looked stale. eventType 3 is downloadFolderImported;
+    // eventType 1 is grabbed, kept only to show the ratio in the report.
+    const [grabs, imports] = await Promise.all([
+      api(`history/series?seriesId=${s.id}&eventType=1`),
+      api(`history/series?seriesId=${s.id}&eventType=3`),
+    ]);
+    const newest = (rows) =>
+      rows.length
+        ? rows
+            .map((g) => g.date)
+            .sort()
+            .at(-1)
+        : null;
+    const lastGrab = newest(grabs);
+    const lastImport = newest(imports);
+
+    // A series that keeps grabbing but rarely imports is failing, however busy
+    // it looks. Flag that on its own, before the staleness clock runs out --
+    // otherwise the loop has to go quiet for a fortnight before anyone hears.
+    const churn =
+      grabs.length >= 20 && imports.length * 5 < grabs.length
+        ? { grabs: grabs.length, imports: imports.length }
+        : null;
 
     let tier = null;
     if (files === 0 && ageHours(s.added) > GRACE_HOURS) {
       tier = "NEVER";
     } else if (
-      ageDays(lastGrab) > STALE_DAYS &&
+      ageDays(lastImport) > STALE_DAYS &&
       ageHours(s.added) > GRACE_HOURS
     ) {
       tier = "STALLED";
+    } else if (churn) {
+      tier = "CHURNING";
     }
     if (!tier) continue;
 
@@ -265,6 +288,8 @@ async function collectSonarr(api) {
       floor: profile ? profileFloor(profile) : 0,
       added: s.added,
       lastGrab,
+      lastImport,
+      churn,
       tier,
       status: s.status,
     });
@@ -293,13 +318,24 @@ async function collectRadarr(api) {
     if (ageHours(m.added) <= GRACE_HOURS) continue;
 
     const profile = byId.get(m.qualityProfileId);
-    const grabs = await api(`history/movie?movieId=${m.id}&eventType=1`);
-    const lastGrab = grabs.length
-      ? grabs
-          .map((g) => g.date)
-          .sort()
-          .at(-1)
-      : null;
+    // Same reasoning as the Sonarr side: imports are progress, grabs are not.
+    const [grabs, imports] = await Promise.all([
+      api(`history/movie?movieId=${m.id}&eventType=1`),
+      api(`history/movie?movieId=${m.id}&eventType=3`),
+    ]);
+    const newest = (rows) =>
+      rows.length
+        ? rows
+            .map((g) => g.date)
+            .sort()
+            .at(-1)
+        : null;
+    const lastGrab = newest(grabs);
+    const lastImport = newest(imports);
+    const churn =
+      grabs.length >= 20 && imports.length * 5 < grabs.length
+        ? { grabs: grabs.length, imports: imports.length }
+        : null;
 
     stalls.push({
       kind: "movie",
@@ -313,7 +349,9 @@ async function collectRadarr(api) {
       floor: profile ? profileFloor(profile) : 0,
       added: m.added,
       lastGrab,
-      tier: lastGrab ? "STALLED" : "NEVER",
+      lastImport,
+      churn,
+      tier: churn ? "CHURNING" : lastGrab ? "STALLED" : "NEVER",
       status: m.status,
     });
   }
@@ -572,10 +610,23 @@ for (const s of reportable) {
   console.log(
     `    ${s.kind === "tv" ? `${s.have}/${s.total} files, ${s.want} wanted` : "no file"}` +
       `  |  profile: ${s.profile}` +
+      `  |  last import: ${days(ageDays(s.lastImport))}` +
       `  |  last grab: ${days(ageDays(s.lastGrab))}` +
       `  |  added ${days(ageDays(s.added))} ago`,
   );
   console.log(`    ${who}`);
+  if (s.churn) {
+    console.log(
+      `    CHURNING -- ${s.churn.grabs} grabs but only ${s.churn.imports} imports.` +
+        ` Downloads are failing, not missing.`,
+    );
+    console.log(
+      `    Check the blocklist: releases that fail get blocklisted, and a series`,
+    );
+    console.log(
+      `    can exhaust every candidate it has. See docs/sonarr-stuck-series.md.`,
+    );
+  }
 
   const c = s.confirm;
   // Sonarr and Radarr each have a local profile of this name that reaches down
