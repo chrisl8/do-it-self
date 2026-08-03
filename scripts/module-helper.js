@@ -480,6 +480,11 @@ const PRESERVE_ON_UPDATE = [
   ".env",
   "icons",
   "images",
+  // Infisical's own bootstrap secrets (AUTH_SECRET/ENCRYPTION_KEY/DB_PASSWORD).
+  // generate-env.js re-appends these into infisical/.env from this file on
+  // every run; losing it here left .env's copy as the only one, and the next
+  // full .env regen silently dropped the secrets and crash-looped the container.
+  "infisical-secrets.env",
 ];
 
 // Recreate every re-rendered container that is currently running, so its
