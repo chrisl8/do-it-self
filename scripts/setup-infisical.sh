@@ -186,7 +186,51 @@ EOF
     });
   " 2>/dev/null)
 
+  # Extract the machine identity's own ID (distinct from the token above)
+  IDENTITY_ID=$(echo "$BOOTSTRAP_OUTPUT" | node -e "
+    let data=''; process.stdin.on('data',d=>data+=d); process.stdin.on('end',()=>{
+      try { const j=JSON.parse(data); console.log(j.identity.id); }
+      catch(e) { process.exit(1); }
+    });
+  " 2>/dev/null)
+
   printf "${GREEN}Bootstrap successful.${NC}\n"
+
+  # Infisical's token-auth method treats accessTokenTTL/accessTokenMaxTTL of 0 as
+  # "no override configured" and silently falls back to a short internal default
+  # (observed: the bootstrap token died after ~7 days with "Identity access token
+  # exceeded max age", even though its own DB record showed accessTokenMaxTTL: 0,
+  # which the API/UI otherwise documents as meaning unlimited). Explicitly setting
+  # a large non-zero TTL/maxTTL sidesteps the bug. Do this BEFORE anything else
+  # touches the identity, using the still-fresh bootstrap token as the bearer —
+  # the identity has org-admin rights over itself.
+  printf "${YELLOW}Setting a long-lived (10yr) token TTL/maxTTL for the machine identity...${NC}\n"
+  curl -sf -X PATCH "http://localhost:8085/api/v1/auth/token-auth/identities/${IDENTITY_ID}" \
+    -H "Authorization: Bearer ${IDENTITY_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"accessTokenTTL":315360000,"accessTokenMaxTTL":315360000}' > /dev/null 2>&1 || \
+    printf "${YELLOW}Could not set long-lived TTL — the bootstrap token may hit the ~7-day max-age bug. See docs/INFISICAL_UPGRADE_RUNBOOK.md.${NC}\n"
+
+  # Re-issue the token now that the identity's default TTL/maxTTL is fixed —
+  # unlike the bootstrap token (which has no baked-in JWT `exp` and relies on the
+  # buggy server-side maxTTL check), a token minted via this endpoint bakes the
+  # correct 10yr `exp` directly into the JWT, so it can't hit the same bug.
+  REISSUE_OUTPUT=$(curl -sf -X POST "http://localhost:8085/api/v1/auth/token-auth/identities/${IDENTITY_ID}/tokens" \
+    -H "Authorization: Bearer ${IDENTITY_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"cron-scripts-token"}' 2>/dev/null) || true
+  REISSUED_TOKEN=$(echo "$REISSUE_OUTPUT" | node -e "
+    let data=''; process.stdin.on('data',d=>data+=d); process.stdin.on('end',()=>{
+      try { const j=JSON.parse(data); console.log(j.accessToken); }
+      catch(e) { process.exit(1); }
+    });
+  " 2>/dev/null)
+  if [[ -n "$REISSUED_TOKEN" ]]; then
+    IDENTITY_TOKEN="$REISSUED_TOKEN"
+    printf "${GREEN}Re-issued a long-lived token.${NC}\n"
+  else
+    printf "${YELLOW}Could not re-issue a long-lived token — keeping the original bootstrap token.${NC}\n"
+  fi
 
   # 6. Create the "Containers" project
   printf "${YELLOW}Creating Containers project...${NC}\n"
