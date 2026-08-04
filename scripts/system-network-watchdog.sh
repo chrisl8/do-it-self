@@ -1,5 +1,5 @@
 #!/bin/bash
-# LAN watchdog: recover enp4s0 when the default gateway goes unreachable.
+# LAN watchdog: recover the LAN interface when the default gateway goes unreachable.
 #
 # Why this exists: on 2026-06-14 a router reboot reset the router's DHCP lease
 # table and it handed neuromancer's address (then 192.168.8.20) to a TP-Link
@@ -16,8 +16,15 @@
 # that specific conflict at the source. This watchdog is the general safety net
 # for the broader failure mode -- "router rebooted / link blipped and NM was left
 # wedged with an unreachable gateway" -- by performing the software equivalent of
-# the cable replug: `nmcli device reconnect enp4s0`. So recovery no longer needs
-# a human standing at the box.
+# the cable replug: disconnect + connect the LAN device via nmcli. So recovery no
+# longer needs a human standing at the box.
+#
+# The interface name and gateway IP are DERIVED from the live default route on
+# every run, not hardcoded -- an earlier version hardcoded "enp4s0" /
+# "192.168.8.1" and went silently inert for weeks after the LAN moved to
+# 192.168.0.x on a different NIC (enp5s0), because it kept probing a gateway
+# that could never answer. The last-known-good pair is cached so a probe still
+# has something to check even if the wedge has torn the default route out.
 #
 # It deliberately does the MINIMUM: it only acts when the LAN gateway is
 # unreachable, double-checks for flukes, and backs off so it can't thrash while
@@ -25,19 +32,32 @@
 # probe will simply pass on its own once the router returns).
 #
 # Runs as the normal user from cron; only the reconnect is elevated, via a narrow
-# NOPASSWD sudoers rule for exactly that one command
+# NOPASSWD sudoers rule for exactly those two commands
 # (/etc/sudoers.d/containers-netwatch, provisioned by setup.sh).
 set -e
 
-IFACE="enp4s0"
-# Derive the LAN gateway from the live default route; fall back to the known
-# value in case the wedge has already torn the route out.
-GW="$(ip -4 route show default dev "$IFACE" 2>/dev/null | awk '{print $3; exit}')"
-GW="${GW:-192.168.8.1}"
-RECONNECT_CMD=(/usr/bin/nmcli device reconnect "$IFACE")  # exact match for the NOPASSWD sudoers rule
+STATE="/home/chrisl8/.cache/network-watchdog-last-known"
 STAMP="/home/chrisl8/.cache/network-watchdog-last-reconnect"
 BACKOFF=900   # at most one reconnect per 15 min, so a real router outage can't make us thrash
 TAG="network-watchdog"
+
+# Derive the LAN interface + gateway from the live default route. Cache them so
+# a later run still has something to probe even if the wedge already tore the
+# default route out (the whole reason this watchdog exists).
+IFACE="$(ip route show default 2>/dev/null | awk '{print $5; exit}')"
+GW="$(ip route show default 2>/dev/null | awk '{print $3; exit}')"
+mkdir -p "$(dirname "$STATE")"
+if [[ -n "$IFACE" && -n "$GW" ]]; then
+  echo "$IFACE $GW" > "$STATE"
+elif [[ -f "$STATE" ]]; then
+  read -r IFACE GW < "$STATE"
+fi
+if [[ -z "$IFACE" || -z "$GW" ]]; then
+  logger -t "$TAG" "No default route and no cached interface/gateway to check; nothing to do"
+  exit 0
+fi
+DISCONNECT_CMD=(/usr/bin/nmcli device disconnect "$IFACE")  # matches the NOPASSWD sudoers wildcard
+CONNECT_CMD=(/usr/bin/nmcli device connect "$IFACE")        # matches the NOPASSWD sudoers wildcard
 
 # Gateway reachable at the ARP/IP level. This is the exact thing that breaks in
 # both the conflict wedge (our ARP binding poisoned) and a post-reboot NM wedge.
@@ -63,10 +83,10 @@ if [[ -f "$STAMP" ]]; then
   fi
 fi
 
-logger -t "$TAG" "Gateway ${GW} unreachable via ${IFACE}; running 'nmcli device reconnect ${IFACE}' (software cable-replug) to force a clean re-negotiation"
+logger -t "$TAG" "Gateway ${GW} unreachable via ${IFACE}; running 'nmcli device disconnect/connect ${IFACE}' (software cable-replug) to force a clean re-negotiation"
 mkdir -p "$(dirname "$STAMP")"
 echo "$now" > "$STAMP"
-if ! sudo "${RECONNECT_CMD[@]}"; then
+if ! sudo "${DISCONNECT_CMD[@]}" || ! sudo "${CONNECT_CMD[@]}"; then
   logger -t "$TAG" "FAILED to reconnect ${IFACE} (sudo/NOPASSWD misconfigured?) -- manual intervention may be needed"
   exit 1
 fi
