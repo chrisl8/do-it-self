@@ -6,6 +6,7 @@ import {
   getStackIcon,
 } from "./dockerContainerIcons.js";
 import { getPendingUpdates } from "./pendingUpdates.js";
+import { getDriftedContainers } from "./moduleDrift.js";
 import { getConfigStatus } from "./configRegistry.js";
 
 const docker = new Docker();
@@ -61,6 +62,7 @@ async function getFormattedDockerContainers() {
     const stacks = await scanContainerFolders();
 
     const pendingUpdates = getPendingUpdates();
+    const driftedContainers = await getDriftedContainers();
 
     let configStatus = { containers: {} };
     try {
@@ -77,6 +79,7 @@ async function getFormattedDockerContainers() {
         ...info,
         icon: getStackIcon(name, stackIcons),
         hasPendingUpdates: pendingUpdates.has(name),
+        hasModuleDrift: driftedContainers.has(name),
         // isDisabled now reflects user-config + registry enabled state,
         // not a filesystem marker. Containers not in config are treated
         // as enabled (default).
