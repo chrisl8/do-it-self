@@ -120,6 +120,7 @@ const buildUnifiedStackList = (running, stacks) => {
         containers: {},
         isRunning: false,
         hasPendingUpdates: info.hasPendingUpdates || false,
+        hasModuleDrift: info.hasModuleDrift || false,
         configReady: info.configReady ?? null,
         configMissing: info.configMissing || [],
       });
@@ -1007,6 +1008,16 @@ const DockerStatus = ({
                       color="warning"
                       variant="outlined"
                     />
+                  )}
+                  {stack.hasModuleDrift && (
+                    <Tooltip title="Root compose.yaml differs from its module source -- will be overwritten on the next module update. Reconcile with scripts/module.sh dev-sync or check.">
+                      <Chip
+                        label="Module Drift"
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                      />
+                    </Tooltip>
                   )}
                   {stack.hasPendingUpdates &&
                     !(() => {
