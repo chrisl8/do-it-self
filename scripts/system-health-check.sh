@@ -308,6 +308,35 @@ if [ -e /usr/bin/tailscale ]; then
   fi
 fi
 
+# Check for module drift: a container's root compose.yaml no longer matching
+# its module source, or a module clone sitting behind its remote. Root cause
+# of the 2026-08-04 paperless incident -- a module fix sat unapplied for 9
+# days because the only prior check (all-containers.sh's start-time warning)
+# only fires on the specific container being restarted. This sweeps every
+# installed container regardless of restart activity. Read-only: no git pull,
+# no re-render, no restarts (see `scripts/module.sh check`). Throttled to
+# once per 24h like the TS credential check below, since drift isn't urgent
+# minute-to-minute.
+MODULE_CHECK_SCRIPT="$(dirname "$0")/module.sh"
+if [ -x "$MODULE_CHECK_SCRIPT" ]; then
+  MODULE_DRIFT_STAMP="${HEALTH_STATE_DIR}/module-drift-last-warned"
+  NOW_EPOCH=$(date +%s)
+  LAST_WARNED=0
+  [[ -f "$MODULE_DRIFT_STAMP" ]] && LAST_WARNED=$(cat "$MODULE_DRIFT_STAMP" 2>/dev/null || echo 0)
+  [[ "$LAST_WARNED" =~ ^[0-9]+$ ]] || LAST_WARNED=0
+  if (( NOW_EPOCH - LAST_WARNED >= 86400 )); then
+    MODULE_DRIFT_OUT=$("$MODULE_CHECK_SCRIPT" check 2>&1) || true
+    if [ "$MODULE_DRIFT_OUT" != "No module drift detected." ]; then
+      echo ""
+      note "Module drift detected (scripts/module.sh check):"
+      note "$MODULE_DRIFT_OUT"
+      echo ""
+      echo "$NOW_EPOCH" > "$MODULE_DRIFT_STAMP"
+      ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+  fi
+fi
+
 # Check Tailscale credential expiry. Uses the preflight helper to query the
 # Tailscale API for each credential's expiration. The preflight surfaces an
 # advisory once a credential -- the auth key (TS_AUTHKEY) OR the API access

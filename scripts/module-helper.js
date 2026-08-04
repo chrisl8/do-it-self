@@ -1030,6 +1030,91 @@ async function syncOneContainer(containerName, moduleName, registry, yesFlag) {
   return true;
 }
 
+// Read-only drift check, safe to run on any schedule (no git pull, no
+// writes, no restarts). Two independent things can go stale between
+// `module.sh update` runs:
+//   1. Content drift: an installed container's root compose.yaml no longer
+//      matches its module source. Usually means a module fix (or an ad hoc
+//      module edit) was never re-rendered out to the platform root -- the
+//      paperless healthcheck fix sat unapplied for 9 days this way. Also
+//      catches the opposite trap: a root-only edit that `module.sh update`
+//      would silently clobber later (the recon/recyclarr incident).
+//   2. Unpulled commits: the local module clone is behind its remote, so
+//      even a same-day `module.sh update` wouldn't pick up the latest fix.
+async function checkDrift() {
+  const installed = await readInstalledModules();
+  const drifted = [];
+  const behind = [];
+
+  for (const [moduleName, moduleEntry] of Object.entries(
+    installed.modules || {},
+  )) {
+    const modulePath = join(MODULES_DIR, moduleName);
+    if (!(await dirExists(modulePath))) continue;
+
+    try {
+      execSync(`git -C "${modulePath}" fetch --quiet`, { stdio: "ignore" });
+      const localHead = execFileSync(
+        "git",
+        ["-C", modulePath, "rev-parse", "HEAD"],
+        { encoding: "utf8" },
+      ).trim();
+      const remoteHead = execFileSync(
+        "git",
+        ["-C", modulePath, "rev-parse", "@{u}"],
+        { encoding: "utf8" },
+      ).trim();
+      if (localHead !== remoteHead) {
+        const count = execFileSync(
+          "git",
+          ["-C", modulePath, "rev-list", "--count", `HEAD..@{u}`],
+          { encoding: "utf8" },
+        ).trim();
+        behind.push(`  ${moduleName}: ${count} commit(s) not yet pulled`);
+      }
+    } catch (e) {
+      behind.push(`  ${moduleName}: could not check remote (${e.message})`);
+    }
+
+    for (const containerName of moduleEntry.installed_containers || []) {
+      const moduleCompose = join(modulePath, containerName, "compose.yaml");
+      const rootCompose = join(CONTAINERS_DIR, containerName, "compose.yaml");
+      if (
+        !(await fileExists(moduleCompose)) ||
+        !(await fileExists(rootCompose))
+      )
+        continue;
+      const [moduleText, rootText] = await Promise.all([
+        readFile(moduleCompose, "utf8"),
+        readFile(rootCompose, "utf8"),
+      ]);
+      if (moduleText !== rootText) {
+        drifted.push(`  ${containerName} (module: ${moduleName})`);
+      }
+    }
+  }
+
+  if (drifted.length === 0 && behind.length === 0) {
+    console.log("No module drift detected.");
+    return;
+  }
+
+  if (drifted.length > 0) {
+    console.log(
+      "Root compose.yaml differs from module source (will be overwritten on next `module.sh update`; reconcile with `dev-sync` or re-render):",
+    );
+    console.log(drifted.join("\n"));
+  }
+  if (behind.length > 0) {
+    console.log(
+      (drifted.length > 0 ? "\n" : "") +
+        "Module clone(s) behind their remote (run `module.sh update` to pull):",
+    );
+    console.log(behind.join("\n"));
+  }
+  process.exitCode = 1;
+}
+
 async function devSync(args) {
   const yesFlag = args.includes("--yes") || args.includes("-y");
   const filteredArgs = args.filter((a) => a !== "--yes" && a !== "-y");
@@ -1196,6 +1281,7 @@ const subcommands = {
   list: listContainers,
   "regenerate-registry": regenerateRegistry,
   "dev-sync": devSync,
+  check: checkDrift,
 };
 
 const [subcommand, ...args] = process.argv.slice(2);
