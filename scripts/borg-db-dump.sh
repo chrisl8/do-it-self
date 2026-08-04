@@ -44,19 +44,25 @@ else
     echo "WARNING: Infisical not available — database credentials will be missing"
 fi
 
-# Clean up Dawarich database
-echo "  Cleaning up Dawarich database..."
-# Archive raw_data for points older than 2 months — raw_data contains original import
-# payloads and is not needed for Dawarich operation (all queries use without_raw_data scope).
-# This matches the behavior of Dawarich's Points::RawData::Archiver.
-echo "  Archiving raw_data for old points..."
-docker exec dawarich_db psql -U postgres -d dawarich_production -c \
-  "UPDATE points SET raw_data = NULL, raw_data_archived = true
-   WHERE raw_data IS NOT NULL AND raw_data != '{}' AND raw_data_archived = false
-   AND timestamp < EXTRACT(epoch FROM now() - interval '2 months');"
-docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_dead;'
-docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_home;'
-docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM;'
+# Clean up Dawarich database (only if the container is actually running —
+# otherwise this docker exec fails and, under set -e, takes the whole
+# script down with it before any dumps run)
+if docker ps --filter "name=dawarich_db" --filter "status=running" -q | grep -q .; then
+    echo "  Cleaning up Dawarich database..."
+    # Archive raw_data for points older than 2 months — raw_data contains original import
+    # payloads and is not needed for Dawarich operation (all queries use without_raw_data scope).
+    # This matches the behavior of Dawarich's Points::RawData::Archiver.
+    echo "  Archiving raw_data for old points..."
+    docker exec dawarich_db psql -U postgres -d dawarich_production -c \
+      "UPDATE points SET raw_data = NULL, raw_data_archived = true
+       WHERE raw_data IS NOT NULL AND raw_data != '{}' AND raw_data_archived = false
+       AND timestamp < EXTRACT(epoch FROM now() - interval '2 months');"
+    docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_dead;'
+    docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_home;'
+    docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM;'
+else
+    echo "  Skipping Dawarich cleanup (dawarich_db not running)"
+fi
 
 
 if [ -z "${PASTE_MYSQL_ROOT_PASSWORD}" ]; then
