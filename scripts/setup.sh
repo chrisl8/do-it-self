@@ -136,17 +136,24 @@ if [[ ! -f "$SUDOERS_RESOLVED" ]]; then
 else
   ok "Passwordless sudo for systemd-resolved restart already configured"
 fi
-# Narrow rule for the LAN watchdog: ONLY `nmcli device reconnect enp4s0`, not
-# nmcli in general. Lets system-network-watchdog.sh bounce the wired interface
-# from cron to recover a wedged gateway after a router reboot/IP conflict (see
-# that script's header).
+# Narrow rule for the LAN watchdog: ONLY `nmcli device disconnect|connect
+# <iface>`, not nmcli in general. The interface name is a wildcard because
+# system-network-watchdog.sh derives it from the live default route rather
+# than hardcoding it (an earlier hardcoded version went silently inert when
+# the LAN moved to a different NIC). Lets that script bounce the wired
+# interface from cron to recover a wedged gateway after a router reboot/IP
+# conflict (see that script's header). Note: nmcli has no "reconnect"
+# subcommand -- disconnect+connect is the real equivalent.
 if [[ ! -f "$SUDOERS_NETWATCH" ]]; then
-  step "Configuring passwordless sudo for reconnecting enp4s0"
-  echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/nmcli device reconnect enp4s0" | sudo tee "$SUDOERS_NETWATCH" > /dev/null
+  step "Configuring passwordless sudo for LAN interface reconnect"
+  {
+    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/nmcli device disconnect *"
+    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/nmcli device connect *"
+  } | sudo tee "$SUDOERS_NETWATCH" > /dev/null
   sudo chmod 0440 "$SUDOERS_NETWATCH"
-  ok "Passwordless sudo for enp4s0 reconnect configured"
+  ok "Passwordless sudo for LAN interface reconnect configured"
 else
-  ok "Passwordless sudo for enp4s0 reconnect already configured"
+  ok "Passwordless sudo for LAN interface reconnect already configured"
 fi
 
 # ── Step 1c: Memory-pressure hardening ──────────────────────────────────
