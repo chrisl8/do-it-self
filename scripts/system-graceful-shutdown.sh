@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2129,SC2002
+set -uo pipefail
 
 RED='\033[0;31m'
 NC='\033[0m' # NoColor
@@ -39,8 +40,8 @@ else
   exit 1
 fi
 
-# Test sudo access once at the start - required for chown operations
-# Test specifically for /usr/bin/chown since sudoers may allow only specific commands
+# Test sudo access once at the start - required for the shutdown command below.
+# sudoers may allow only specific commands, so check for that command by name.
 if ! sudo -l | grep "shutdown" > /dev/null; then
   printf "${RED}NOTE: sudo access required for shutdown operations.${NC}\n"
   printf "${RED}You CAN configure passwordless sudo for /usr/bin/shutdown.${NC}\n"
@@ -63,4 +64,8 @@ if "/home/$CURRENT_USER/containers/scripts/all-containers.sh" --stop --no-wait -
   elif [[ "$ACTION" == "reboot" ]];then
     sudo /usr/sbin/shutdown -r now
   fi
+else
+  printf "${RED}ERROR: all-containers.sh --stop failed; NOT shutting down.${NC}\n"
+  printf "${RED}The box is still up. Check the output above, fix the problem, and re-run this script.${NC}\n"
+  exit 1
 fi
