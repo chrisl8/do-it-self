@@ -2,11 +2,16 @@
 # Used by borg-backup.sh during archive creation
 
 # Re-downloadable media (large, easily re-acquired).
-# Note: recon/data/media/{movies,series,qbittorrent,sabnzbd} are NOT
-# listed here — recon's parent dir isn't in BORG_BACKUP_PATHS (only the
-# per-subdir comics/ebooks/manga/music are). If the recon parent is ever
-# added to backup_paths, add the corresponding excludes back here.
-#
+# recon is the *arr media stack — only data/media/{movies,series} exist
+# on disk today (no *arr app configs installed yet), and it's all
+# re-acquirable via indexers, so exclude the whole media tree.
+*/container-mounts/recon/data/media/movies/
+*/container-mounts/recon/data/media/series/
+
+# Kopia here only serves as a backup repository FOR another host
+# (oracleturret) — it's not something this server needs backed up itself.
+*/container-mounts/kopia/
+
 # jellyfin: only the re-acquirable subtrees are excluded.
 # home_videos/ and random/ stay in the backup — they're irreplaceable
 # family video history with no other copy. An earlier broader rule
