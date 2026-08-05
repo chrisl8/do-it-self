@@ -8,6 +8,23 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER="${SCRIPT_DIR}/module-helper.js"
 
+# Dynamically find Node.js regardless of installation method (n, nvm, fnm, system, etc.)
+# In cron, PATH is minimal and never sources the fnm shell hook, so search common install dirs.
+if ! command -v node &>/dev/null; then
+  SEARCH_PATHS=(
+    "$HOME/.local/share/fnm/aliases/default/bin"
+    "$HOME/.nvm/versions/node"/*/bin
+    "$HOME/.local/share/fnm"/*/bin
+    "$HOME/.fnm/current/bin"
+  )
+  for dir in "${SEARCH_PATHS[@]}"; do
+    if [[ -x "$dir/node" ]]; then
+      export PATH="$dir:$PATH"
+      break
+    fi
+  done
+fi
+
 if ! command -v node &>/dev/null; then
   echo "Error: Node.js is required but not installed." >&2
   exit 1
