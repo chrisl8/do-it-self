@@ -87,6 +87,11 @@ async function readUserConfig() {
 }
 
 // Deep-merge two plain objects. b wins on conflicts. Arrays are concatenated.
+// Key order: b's keys first (in b's order), then any a-only keys appended
+// after (in a's order). This lets config-personal control ordering -- e.g.
+// re-listing an existing key (even with an empty value) anchors where a new
+// personal-only key lands relative to it, which matters for settings.yaml's
+// `layout:` map (group render order follows key order).
 function deepMerge(a, b) {
   if (b === undefined || b === null) return a;
   if (a === undefined || a === null) return b;
@@ -97,8 +102,9 @@ function deepMerge(a, b) {
     !Array.isArray(a) &&
     !Array.isArray(b)
   ) {
-    const out = { ...a };
+    const out = {};
     for (const k of Object.keys(b)) out[k] = deepMerge(a[k], b[k]);
+    for (const k of Object.keys(a)) if (!(k in out)) out[k] = a[k];
     return out;
   }
   return b;
