@@ -696,7 +696,11 @@ for (const s of reportable) {
     );
   }
   console.log("");
-  state.alerted[s.key] = now;
+  // --all is the tool's own suggested way to manually confirm a SUSPECT
+  // (see the hint above). That's a console inspection, not a sent alert --
+  // marking it here would silence the real cron alert for RENAG_DAYS even
+  // though no mail ever went out.
+  if (!showAll) state.alerted[s.key] = now;
 }
 
 if (notes.length) {
