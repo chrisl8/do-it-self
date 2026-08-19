@@ -57,8 +57,6 @@ if docker ps --filter "name=dawarich_db" --filter "status=running" -q | grep -q 
       "UPDATE points SET raw_data = NULL, raw_data_archived = true
        WHERE raw_data IS NOT NULL AND raw_data != '{}' AND raw_data_archived = false
        AND timestamp < EXTRACT(epoch FROM now() - interval '2 months');"
-    docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_dead;'
-    docker exec dawarich_db psql -U postgres -d dawarich_production -c 'TRUNCATE points_home;'
     docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM;'
 else
     echo "  Skipping Dawarich cleanup (dawarich_db not running)"
