@@ -22,11 +22,15 @@ SCRIPT_VOLUME_PATH="${VOL_DIUN_SCRIPT:-$HOME/container-data}/container-mounts/di
 PENDING_UPDATES_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
 
 if [[ -e "$PENDING_UPDATES_FILE" ]]; then
-  # Get the current user dynamically since $USER is not set in cron
-  CURRENT_USER=$(whoami)
   echo "Pending container updates found"
   cat "$PENDING_UPDATES_FILE"
   echo ""
-  echo "/home/$CURRENT_USER/containers/scripts/update-containers-from-diun-list.sh"
+  TS_DOMAIN=$(tailscale status --json 2>/dev/null \
+    | grep -oP '"MagicDNSSuffix":\s*"\K[^"]+' | head -1)
+  if [[ -n "$TS_DOMAIN" ]]; then
+    echo "https://admin.$TS_DOMAIN/sources"
+  else
+    echo "https://admin.<your-tailnet>.ts.net/sources"
+  fi
   exit 1
 fi
