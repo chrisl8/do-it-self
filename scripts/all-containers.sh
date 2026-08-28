@@ -618,6 +618,9 @@ if [[ -x "$(command -v node)" ]] && [[ -f "${LIST_HELPER}" ]]; then
   ENABLED_LIST=$(node "${LIST_HELPER}" 2>/dev/null || true)
 fi
 
+# Optional per-container post-update maintenance checks (see scripts/post-update-checks/)
+POST_UPDATE_CHECK_DIR="${SCRIPT_DIR}/scripts/post-update-checks"
+
 # Remove cron jobs for disabled containers (only on --start)
 CRON_HELPER="${SCRIPT_DIR}/scripts/manage-cron-jobs.js"
 if [[ ${START_ACTION} = true ]] && [[ -n "${ENABLED_LIST}" ]] && [[ -x "$(command -v node)" ]] && [[ -f "${CRON_HELPER}" ]]; then
@@ -1423,6 +1426,17 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
         if [[ -x "$(command -v node)" ]] && [[ -f "${CRON_HELPER}" ]]; then
           set +e
           node "${CRON_HELPER}" sync "${CONTAINER_DIR}"
+          set -e
+        fi
+
+        # Optional per-container post-update maintenance check (e.g. Nextcloud
+        # occ housekeeping + log scan). Best-effort: a checker failing internally
+        # must never fail this update run, so it always exits 0 and records any
+        # problem into its own findings file instead.
+        if [[ ${GET_UPDATES} = true ]] && [[ -x "${POST_UPDATE_CHECK_DIR}/${CONTAINER_DIR}.sh" ]]; then
+          printf "${YELLOW}  Running post-update check for ${CONTAINER_DIR}...${NC}\n"
+          set +e
+          "${POST_UPDATE_CHECK_DIR}/${CONTAINER_DIR}.sh"
           set -e
         fi
 

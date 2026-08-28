@@ -205,6 +205,8 @@ const DockerStatus = ({
   releaseNotesLoading,
   fetchReleaseNotes,
   clearReleaseNotes,
+  postUpdateFindings,
+  acknowledgePostUpdateFinding,
 }) => {
   const [expandedStacks, setExpandedStacks] = useState({});
   const [expandedContainers, setExpandedContainers] = useState({});
@@ -1016,6 +1018,23 @@ const DockerStatus = ({
                         size="small"
                         color="warning"
                         variant="outlined"
+                      />
+                    </Tooltip>
+                  )}
+                  {postUpdateFindings?.[stack.name]?.needsAttention && (
+                    <Tooltip
+                      title={`${postUpdateFindings[stack.name].note || "Post-update check found something to review."} Click to dismiss.`}
+                    >
+                      <Chip
+                        icon={<WarningIcon />}
+                        label="Needs Attention"
+                        size="small"
+                        color="warning"
+                        sx={{ cursor: "pointer" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          acknowledgePostUpdateFinding?.(stack.name);
+                        }}
                       />
                     </Tooltip>
                   )}

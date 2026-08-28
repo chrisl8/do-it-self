@@ -50,6 +50,10 @@ import {
   unacknowledgePath as unackBackupCoveragePath,
 } from "./backupCoverage.js";
 import {
+  getFindings as getPostUpdateCheckFindings,
+  acknowledge as acknowledgePostUpdateCheck,
+} from "./postUpdateChecks.js";
+import {
   getConfigForUI as getMediaStagingConfig,
   getItemsForUI as getMediaStagingItems,
   getSeasonsForUI as getMediaStagingSeasons,
@@ -764,6 +768,24 @@ app.get("/api/system/backup-status", async (req, res) => {
   }
 
   res.json({ state, dismissed, conf_present: confPresent, local, remote });
+});
+
+app.get("/api/post-update-checks", async (req, res) => {
+  try {
+    const byContainer = await getPostUpdateCheckFindings();
+    res.json({ byContainer });
+  } catch (err) {
+    console.error("post-update-checks: failed to read findings:", err);
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+app.post("/api/post-update-checks/:container/ack", async (req, res) => {
+  const result = await acknowledgePostUpdateCheck(req.params.container);
+  if (!result.ok) {
+    return res.status(400).json(result);
+  }
+  res.json(result);
 });
 
 app.get("/api/config/borg-banner-dismiss", async (req, res) => {

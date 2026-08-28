@@ -25,7 +25,9 @@ import Sources from "./Sources";
 import MediaStaging from "./MediaStaging";
 import BorgNotConfiguredBanner from "./BorgNotConfiguredBanner";
 import CredentialWarningBanner from "./CredentialWarningBanner";
+import PostUpdateFindingsBanner from "./PostUpdateFindingsBanner";
 import useDockerStatus from "./hooks/useDockerStatus";
+import usePostUpdateChecks from "./hooks/usePostUpdateChecks";
 
 const routes = [
   { path: "/docker-status", label: "Dashboard" },
@@ -144,6 +146,10 @@ const App = () => {
     fetchReleaseNotes,
     clearReleaseNotes,
   } = useDockerStatus();
+  const {
+    byContainer: postUpdateFindings,
+    acknowledge: acknowledgePostUpdateFinding,
+  } = usePostUpdateChecks();
 
   return (
     <BrowserRouter>
@@ -152,6 +158,7 @@ const App = () => {
       <CredentialWarningBanner
         tailscalePreflightStatus={tailscalePreflightStatus}
       />
+      <PostUpdateFindingsBanner byContainer={postUpdateFindings} />
       <Routes>
         <Route path="/" element={<Navigate to="/docker-status" replace />} />
         <Route
@@ -181,6 +188,8 @@ const App = () => {
               releaseNotesLoading={releaseNotesLoading}
               fetchReleaseNotes={fetchReleaseNotes}
               clearReleaseNotes={clearReleaseNotes}
+              postUpdateFindings={postUpdateFindings}
+              acknowledgePostUpdateFinding={acknowledgePostUpdateFinding}
             />
           }
         />

@@ -123,6 +123,37 @@ For a manual full update of all containers:
 scripts/all-containers.sh --stop --start --update-git-repos --get-updates
 ```
 
+### Post-update maintenance checks
+
+Some services need follow-up steps after an image update that are easy to forget — Nextcloud in particular often needs a few `occ` commands run from the command line, and its admin Settings → Overview page can grow new warnings after a major version bump.
+
+`scripts/all-containers.sh --get-updates` automatically runs `scripts/post-update-checks/<container>.sh` for any container that has one, right after that container's update finishes. This never fails the update itself — a checker records what it found (or any internal error) into `~/logs/post-update-checks/<container>.json` and always exits 0.
+
+Findings surface in the web admin: a container with something to review gets a "Needs Attention" chip on its Docker Status row (click it to dismiss), plus an app-wide banner reminding you where to look. A dismissed finding reappears automatically if a later run reports something new — acks are keyed to that run's timestamp, not a one-time flag.
+
+**Nextcloud** (`scripts/post-update-checks/nextcloud.sh`) automatically:
+
+- waits for `occ status` to report installed and out of maintenance mode (a major upgrade runs its own `occ upgrade` on container start, which can take several minutes)
+- runs the idempotent `occ db:add-missing-indices`, `occ db:add-missing-columns`, and `occ db:add-missing-primary-keys` and reports whether any of them actually did something
+- scans `nextcloud.log` for new error-or-worse entries since the last check
+
+It can't headlessly check everything, though — PHP opcache, `.htaccess`, and memory-caching warnings on Settings → Overview have no clean CLI equivalent, so the findings always include a reminder link to that page. Give it a glance after any major-version Nextcloud upgrade.
+
+**Infisical** (`scripts/post-update-checks/infisical.sh`) has a different failure shape: it runs an irreversible DB migration on every startup, and every other container's secrets flow through it, but Docker's own healthcheck only curls `/api/status` — which can report healthy even when something more specific broke (this bit us once: a stale `DB_PASSWORD` leaking from the web admin's PM2 daemon into a bare `spawn()`, see git history around 2026-07-26). So this checker instead re-runs the exact `infisical export --path=/shared` call `all-containers.sh` itself relies on to inject shared secrets, plus checks the container's restart count — if secret export doesn't work post-update, nothing downstream will either, and that's worth knowing before touching any other container.
+
+To add this for another container, drop an executable `scripts/post-update-checks/<container-dir-name>.sh` that writes a findings file to `~/logs/post-update-checks/<container-dir-name>.json` in the shape:
+
+```json
+{
+  "timestamp": "2026-08-28T17:53:27-05:00",
+  "status": "clean",
+  "note": "human-readable summary",
+  "reminderUrl": "https://... (optional link for anything the script can't check itself)"
+}
+```
+
+`status` other than `"clean"` is what drives the "Needs Attention" chip and banner in the web admin.
+
 ## Troubleshooting
 
 ### Containers didn't start after reboot
