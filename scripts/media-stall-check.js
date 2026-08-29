@@ -687,6 +687,14 @@ for (const s of reportable) {
     );
   } else if (c?.error) {
     console.log(`    (confirmation failed: ${c.error})`);
+  } else if (s.floor >= 2160 && s.have > 0) {
+    console.log(
+      `    SUSPECT: profile is 4K-only and the remaining episodes have no 4K`,
+    );
+    console.log(`    release available. Confirm with`);
+    console.log(
+      `        ./scripts/media-stall-check.js --all   (or sonarr-stuck-series.js --verify ${s.id})`,
+    );
   } else if (s.floor >= 2160) {
     console.log(
       `    SUSPECT: profile is 4K-only and nothing has ever grabbed. Confirm with`,
