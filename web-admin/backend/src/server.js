@@ -10,6 +10,7 @@ import os from "os";
 import getFormattedDockerContainers from "./dockerStatus.js";
 import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 import { getReleaseNotesForStack } from "./githubReleases.js";
+import { refreshVersionDrift } from "./versionDrift.js";
 import { bestEffortFetch, getRepoStatus } from "./gitRepoStatus.js";
 import {
   getRegistry,
@@ -2261,6 +2262,23 @@ async function webserver() {
     );
   }, TS_PREFLIGHT_INTERVAL_MS).unref();
 
+  // Fleet-wide "newer registry tag available" check -- independent of DIUN
+  // (which only tracks digest changes on the tag already pinned in each
+  // compose.yaml) and independent of the SOURCE_OVERRIDES/OCI-label-based
+  // "What's new?" release-notes feature (which only covers a fraction of
+  // stacks). Registry tag-list APIs are far more rate-limited than the
+  // release-notes GitHub/Gitea calls, so this runs on a much slower cadence.
+  // dockerWatcher.init() (called after webserver() in main.js) hasn't
+  // populated docker.running yet at this point, so delay the first run.
+  const runVersionDriftCheck = () =>
+    Promise.resolve(getStatus()?.docker?.running || {})
+      .then(refreshVersionDrift)
+      .catch((e) => console.error("[Version Drift] check failed:", e));
+  const VERSION_DRIFT_STARTUP_DELAY_MS = 30 * 1000;
+  const VERSION_DRIFT_INTERVAL_MS = 12 * 60 * 60 * 1000;
+  setTimeout(runVersionDriftCheck, VERSION_DRIFT_STARTUP_DELAY_MS).unref();
+  setInterval(runVersionDriftCheck, VERSION_DRIFT_INTERVAL_MS).unref();
+
   wss.on("connection", async (ws) => {
     console.log("WebSocket client connected");
 
@@ -2810,9 +2828,13 @@ async function webserver() {
           const currentStatus = getStatus();
           const stackContainers =
             currentStatus?.docker?.running?.[stackName] || null;
+          const pendingUpdateImages =
+            currentStatus?.docker?.stacks?.[stackName]?.pendingUpdateImages ||
+            [];
           const result = await getReleaseNotesForStack(
             stackName,
             stackContainers,
+            pendingUpdateImages,
           );
           ws.send(JSON.stringify({ type: "releaseNotes", payload: result }));
         } catch (e) {

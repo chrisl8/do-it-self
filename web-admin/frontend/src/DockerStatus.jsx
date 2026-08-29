@@ -27,6 +27,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import NewReleasesIcon from "@mui/icons-material/NewReleases";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
 import Snackbar from "@mui/material/Snackbar";
@@ -121,6 +122,7 @@ const buildUnifiedStackList = (running, stacks) => {
         isRunning: false,
         hasPendingUpdates: info.hasPendingUpdates || false,
         hasModuleDrift: info.hasModuleDrift || false,
+        versionDrift: info.versionDrift || null,
         configReady: info.configReady ?? null,
         configMissing: info.configMissing || [],
       });
@@ -1021,6 +1023,27 @@ const DockerStatus = ({
                       />
                     </Tooltip>
                   )}
+                  {stack.versionDrift?.map((drift) => (
+                    <Tooltip
+                      key={drift.container}
+                      title={`${drift.container}: pinned to ${drift.currentTag}, ${drift.newerTag} is available on ${drift.registry} -- this is a manual upgrade, not a one-click restart. Click to view available tags.`}
+                    >
+                      <Chip
+                        icon={<TrendingUpIcon />}
+                        label={`${drift.newerTag} available`}
+                        size="small"
+                        color="secondary"
+                        variant="outlined"
+                        component="a"
+                        href={drift.tagsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        clickable
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{ cursor: "pointer" }}
+                      />
+                    </Tooltip>
+                  ))}
                   {postUpdateFindings?.[stack.name]?.needsAttention && (
                     <Tooltip
                       title={`${postUpdateFindings[stack.name].note || "Post-update check found something to review."} Click to dismiss.`}
@@ -1443,6 +1466,20 @@ const DockerStatus = ({
             <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
               <Spinner />
             </Box>
+          )}
+          {releaseNotes?.pendingUpdateMismatch && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              The pending update for this stack was triggered by{" "}
+              <strong>
+                {releaseNotes.pendingUpdateMismatch.updatedImages.join(", ")}
+              </strong>
+              , a different image in this stack than{" "}
+              <strong>{releaseNotes.pendingUpdateMismatch.checkedImage}</strong>
+              , which is what the notes below are for. This dialog doesn't track
+              release notes separately per sidecar image, so what's shown here
+              may not reflect the actual pending update -- click "Update" to
+              apply it regardless.
+            </Alert>
           )}
           {releaseNotes?.disabled && (
             <Alert severity="info">{releaseNotes.reason}</Alert>

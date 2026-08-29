@@ -19,10 +19,6 @@ const DISABLED_STACKS = {
     'itzg/minecraft-server\'s version label is a Java runtime marker ("java25"), not a Minecraft server version.',
   kopia:
     'The kopia container has no source label; its version label leaks the Ubuntu base image tag (e.g. "22.04"), not Kopia\'s own version.',
-  netdata:
-    'This stack runs the nightly tag, whose version label is literally "nightly" -- it never matches a tagged release.',
-  "stirling-pdf":
-    'This stack\'s version label ("V2-test") is a dev/test tag, not a released version.',
 };
 
 const SOURCE_OVERRIDES = {
@@ -188,7 +184,43 @@ function versionCore(version) {
   return match ? match[0] : normalizeVersion(version);
 }
 
-export async function getReleaseNotesForStack(stackName, stackContainers) {
+// Strip registry/namespace path and any @digest down to "repo:tag", matching
+// the LAST_PART derivation in diun/notif/diunUpdate.sh -- that's the format
+// pendingUpdateImages entries are stored in, so the two can be compared.
+// Docker's own Config.Image omits an implicit ":latest" when the compose
+// file pins no tag at all (e.g. "qmcgaw/gluetun"), but DIUN's reported
+// reference always includes one -- append it here so a bare-tag image
+// doesn't falsely mismatch against its own DIUN entry.
+function imageLastPart(image) {
+  if (!image) return null;
+  const last = image.split("@")[0].split("/").pop();
+  return last.includes(":") ? last : `${last}:latest`;
+}
+
+export async function getReleaseNotesForStack(
+  stackName,
+  stackContainers,
+  pendingUpdateImages,
+) {
+  // If the pending-update badge was triggered by an image that isn't the one
+  // this function ends up checking against GitHub/Gitea releases (e.g. a VPN
+  // sidecar like gluetun bumping its :latest digest in a stack whose "app"
+  // container is ungoogled-chromium), checking the app's version alone can
+  // truthfully say "already on latest" while an update is still pending --
+  // which reads as a flat contradiction. Surface which image actually
+  // triggered the badge so the dialog can explain the mismatch instead.
+  function withMismatchNote(result, checkedImage) {
+    if (!pendingUpdateImages?.length || !checkedImage) return result;
+    if (pendingUpdateImages.includes(checkedImage)) return result;
+    return {
+      ...result,
+      pendingUpdateMismatch: {
+        checkedImage,
+        updatedImages: pendingUpdateImages,
+      },
+    };
+  }
+
   if (!stackContainers || Object.keys(stackContainers).length === 0) {
     return { stackName, error: "Stack is not running" };
   }
@@ -204,7 +236,9 @@ export async function getReleaseNotesForStack(stackName, stackContainers) {
   let currentVersion = null;
   let labelSource = null;
   let labelVersion = null;
+  let labelImage = null;
   let overrideVersion = null;
+  let overrideImage = null;
   for (const container of Object.values(stackContainers)) {
     const labels = container.labels || {};
     const cSource = labels["org.opencontainers.image.source"] || null;
@@ -212,6 +246,7 @@ export async function getReleaseNotesForStack(stackName, stackContainers) {
     if (!labelSource && cSource) {
       labelSource = cSource;
       labelVersion = cVersion;
+      labelImage = imageLastPart(container.image);
     }
     // For an overridden stack, only adopt a version label from a container that
     // belongs to the same project (same repo owner, or no source label at all).
@@ -225,33 +260,43 @@ export async function getReleaseNotesForStack(stackName, stackContainers) {
           cParsed.owner.toLowerCase() === overrideRepo.owner.toLowerCase());
       if (sameProject) {
         overrideVersion = cVersion;
+        overrideImage = imageLastPart(container.image);
       }
     }
   }
+  let checkedImage;
   if (sourceUrl) {
     currentVersion = overrideVersion;
+    checkedImage = overrideImage;
   } else {
     // No override: preserve the original pairing of source + version from the
     // same container that carried the source label.
     sourceUrl = labelSource;
     currentVersion = labelVersion;
+    checkedImage = labelImage;
   }
 
   if (!sourceUrl) {
-    return {
-      stackName,
-      error: "No source repository URL found in container labels",
-    };
+    return withMismatchNote(
+      {
+        stackName,
+        error: "No source repository URL found in container labels",
+      },
+      checkedImage,
+    );
   }
 
   const parsed = parseRepo(sourceUrl);
   if (!parsed) {
-    return {
-      stackName,
-      error:
-        "Release notes are only available for GitHub- and Codeberg-hosted projects",
-      repoUrl: sourceUrl,
-    };
+    return withMismatchNote(
+      {
+        stackName,
+        error:
+          "Release notes are only available for GitHub- and Codeberg-hosted projects",
+        repoUrl: sourceUrl,
+      },
+      checkedImage,
+    );
   }
 
   const { owner, repo } = parsed;
@@ -263,13 +308,16 @@ export async function getReleaseNotesForStack(stackName, stackContainers) {
   const releases = await fetchReleases(parsed);
 
   if (releases.length === 0) {
-    return {
-      stackName,
-      currentVersion,
-      repoUrl,
-      releases: [],
-      error: "No releases found for this repository",
-    };
+    return withMismatchNote(
+      {
+        stackName,
+        currentVersion,
+        repoUrl,
+        releases: [],
+        error: "No releases found for this repository",
+      },
+      checkedImage,
+    );
   }
 
   const latestVersion = releases[0]?.tag;
@@ -283,44 +331,56 @@ export async function getReleaseNotesForStack(stackName, stackContainers) {
 
     if (currentIndex > 0) {
       // Found current version, return everything newer
-      return {
-        stackName,
-        currentVersion,
-        latestVersion,
-        repoUrl,
-        releases: releases.slice(0, currentIndex),
-      };
+      return withMismatchNote(
+        {
+          stackName,
+          currentVersion,
+          latestVersion,
+          repoUrl,
+          releases: releases.slice(0, currentIndex),
+        },
+        checkedImage,
+      );
     }
 
     if (currentIndex === 0) {
       // Already on latest
-      return {
+      return withMismatchNote(
+        {
+          stackName,
+          currentVersion,
+          latestVersion,
+          repoUrl,
+          releases: [],
+        },
+        checkedImage,
+      );
+    }
+
+    // Current version not found in release list — show all with a note
+    return withMismatchNote(
+      {
         stackName,
         currentVersion,
         latestVersion,
         repoUrl,
-        releases: [],
-      };
-    }
-
-    // Current version not found in release list — show all with a note
-    return {
-      stackName,
-      currentVersion,
-      latestVersion,
-      repoUrl,
-      releases,
-      versionNotFound: true,
-    };
+        releases,
+        versionNotFound: true,
+      },
+      checkedImage,
+    );
   }
 
   // No current version label — show recent releases
-  return {
-    stackName,
-    currentVersion: null,
-    latestVersion,
-    repoUrl,
-    releases: releases.slice(0, 5),
-    versionNotFound: true,
-  };
+  return withMismatchNote(
+    {
+      stackName,
+      currentVersion: null,
+      latestVersion,
+      repoUrl,
+      releases: releases.slice(0, 5),
+      versionNotFound: true,
+    },
+    checkedImage,
+  );
 }

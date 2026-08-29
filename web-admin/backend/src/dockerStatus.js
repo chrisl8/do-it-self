@@ -10,6 +10,7 @@ import {
   getPendingUpdateDetails,
 } from "./pendingUpdates.js";
 import { getDriftedContainers } from "./moduleDrift.js";
+import { getVersionDrift } from "./versionDrift.js";
 import { getConfigStatus } from "./configRegistry.js";
 
 const docker = new Docker();
@@ -85,6 +86,7 @@ async function getFormattedDockerContainers() {
         hasPendingUpdates: pendingUpdates.has(name),
         pendingUpdateImages: pendingUpdateDetails.get(name) || [],
         hasModuleDrift: driftedContainers.has(name),
+        versionDrift: getVersionDrift(name),
         // isDisabled now reflects user-config + registry enabled state,
         // not a filesystem marker. Containers not in config are treated
         // as enabled (default).
