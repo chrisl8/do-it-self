@@ -1049,7 +1049,13 @@ const DockerStatus = ({
                     !updateAllStatus?.queue?.includes(stack.name) &&
                     updateAllStatus?.current !== stack.name && (
                       <>
-                        <Tooltip title="Click to apply pending updates">
+                        <Tooltip
+                          title={
+                            stack.pendingUpdateImages?.length
+                              ? `${stack.pendingUpdateImages.join(", ")} image updated -- click to apply pending updates`
+                              : "Click to apply pending updates"
+                          }
+                        >
                           <Chip
                             icon={<WarningIcon />}
                             label="Update"
@@ -1416,7 +1422,8 @@ const DockerStatus = ({
         <DialogTitle>
           {releaseNotesLoading
             ? "Loading release notes..."
-            : releaseNotes?.error && !releaseNotes?.releases?.length
+            : releaseNotes?.disabled ||
+                (releaseNotes?.error && !releaseNotes?.releases?.length)
               ? "Release Notes Unavailable"
               : `What's new in ${releaseNotes?.stackName}?`}
           {releaseNotes?.currentVersion && releaseNotes?.latestVersion && (
@@ -1437,9 +1444,14 @@ const DockerStatus = ({
               <Spinner />
             </Box>
           )}
-          {releaseNotes?.error && !releaseNotes?.releases?.length && (
-            <Alert severity="warning">{releaseNotes.error}</Alert>
+          {releaseNotes?.disabled && (
+            <Alert severity="info">{releaseNotes.reason}</Alert>
           )}
+          {!releaseNotes?.disabled &&
+            releaseNotes?.error &&
+            !releaseNotes?.releases?.length && (
+              <Alert severity="warning">{releaseNotes.error}</Alert>
+            )}
           {releaseNotes?.releases?.length === 0 &&
             !releaseNotes?.error &&
             !releaseNotesLoading && (

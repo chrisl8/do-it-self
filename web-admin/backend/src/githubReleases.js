@@ -8,6 +8,23 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 // redis) instead of the app. An entry here pins the canonical upstream and
 // bypasses the label scan entirely. Values are repo URLs; GitHub and Codeberg/
 // Forgejo (Gitea API) hosts are supported — see parseRepo().
+
+// Stacks whose currently-running-version label will never line up with their
+// upstream's release tags, no matter how it's normalized -- so a release-notes
+// comparison can only ever be misleading or an unhelpful "couldn't find your
+// version" dump. Each entry's value is shown to the user as the reason the
+// check is unavailable, instead of silently hiding the button.
+const DISABLED_STACKS = {
+  "minecraft-java":
+    'itzg/minecraft-server\'s version label is a Java runtime marker ("java25"), not a Minecraft server version.',
+  kopia:
+    'The kopia container has no source label; its version label leaks the Ubuntu base image tag (e.g. "22.04"), not Kopia\'s own version.',
+  netdata:
+    'This stack runs the nightly tag, whose version label is literally "nightly" -- it never matches a tagged release.',
+  "stirling-pdf":
+    'This stack\'s version label ("V2-test") is a dev/test tag, not a released version.',
+};
+
 const SOURCE_OVERRIDES = {
   // No source label on the image at all
   "actual-budget": "https://github.com/actualbudget/actual",
@@ -162,9 +179,22 @@ function normalizeVersion(version) {
   return version.replace(/^v/, "").toLowerCase();
 }
 
+// Pull out the semver-looking core of a version string (e.g. "12.3.3" out of
+// "mariadb-12.3.3", or "10.11.11" out of "v10.11.11-202606061137") so current
+// vs. release-tag comparisons survive distro prefixes and build suffixes.
+// Falls back to normalizeVersion() when no such substring is present.
+function versionCore(version) {
+  const match = version.match(/\d+(?:\.\d+){1,3}/);
+  return match ? match[0] : normalizeVersion(version);
+}
+
 export async function getReleaseNotesForStack(stackName, stackContainers) {
   if (!stackContainers || Object.keys(stackContainers).length === 0) {
     return { stackName, error: "Stack is not running" };
+  }
+
+  if (Object.hasOwn(DISABLED_STACKS, stackName)) {
+    return { stackName, disabled: true, reason: DISABLED_STACKS[stackName] };
   }
 
   // A manual override pins the canonical upstream for this stack; otherwise
@@ -246,9 +276,9 @@ export async function getReleaseNotesForStack(stackName, stackContainers) {
 
   // If we know the current version, filter to only show newer releases
   if (currentVersion) {
-    const normalizedCurrent = normalizeVersion(currentVersion);
+    const normalizedCurrent = versionCore(currentVersion);
     const currentIndex = releases.findIndex(
-      (r) => normalizeVersion(r.tag) === normalizedCurrent,
+      (r) => versionCore(r.tag) === normalizedCurrent,
     );
 
     if (currentIndex > 0) {
