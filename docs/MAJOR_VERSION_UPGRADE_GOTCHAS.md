@@ -297,3 +297,53 @@ prefer dump/restore into a **brand-new data directory** over an in-place
    "the SQL ran without error." Confirmed this pattern catches real issues:
    the app reporting "no migrations to apply" after restore is strong
    independent confirmation the restored schema is exactly what's expected.
+
+## "Brand-new data directory" can silently land on the wrong ZFS dataset
+
+The dump/restore-to-new-directory pattern above says to point the new engine
+version at a brand-new directory. On a host with **dedicated per-database ZFS
+datasets** (this one has `tank-2tb/{nextcloud,dawarich,infisical,paperless}-db`,
+each with a deliberate `recordsize` tuned to the engine's native page size —
+16K for MariaDB/InnoDB, 8K for Postgres), a naively-named new directory like
+`db-pg18` is just a **plain folder inside the parent dataset's generic pool
+root** (128K default recordsize) unless you explicitly create it as its own
+dataset or reuse an existing one. This is easy to miss because everything
+still works correctly — it's a performance/write-amplification regression
+(small-record DB I/O on a 128K-recordsize dataset), not a correctness bug, so
+nothing about the migration's own verification steps will catch it.
+
+Confirmed hit on all four of this host's migrations (2026-08-29) — every new
+`-pg18`/`-mariadb12`/`-database-pg18`/`db_data-pg18` directory ended up on the
+generic pool root instead of a tuned dataset. Fixed the next day (2026-08-30)
+by moving the live data onto each original per-DB dataset (still present,
+emptied but not destroyed since destroying requires host root/sudo this
+environment doesn't have) via a plain `cp -a` — since it's a same-engine-
+version file copy, not a dump/restore, this is much simpler than the original
+migration: no schema/version-compatibility question at all, just verify table/
+row counts match afterward.
+
+**How to apply:** before pointing a migration's new directory at a bare path,
+check `zfs list -r <pool>` (or `findmnt <path>` once something's there) for a
+dataset dedicated to that service. If one exists, either restore straight
+into it (after emptying it) or `zfs create` a fresh dataset with matching
+`recordsize` for the new directory *before* writing any data into it —
+recordsize is a write-time property, so setting it after data already exists
+does nothing for existing blocks.
+
+## Two processes copying into the same destination is a real corruption risk
+
+A `cp -a` of a multi-GB directory can outlive this tool's 2-minute command
+timeout — the *tool call* times out, but the underlying process is **not
+guaranteed killed**; it can keep running as an orphan while a "did it really
+finish" check is inconclusive. Retrying the same copy in the background
+without confirming the first one actually died produces two `cp` processes
+writing into the same destination files concurrently, which is unsynchronized
+and can corrupt whichever files both happen to touch at once. Hit this on
+dawarich's ~2.2GB data-directory move (2026-08-30).
+
+**How to apply:** after any copy/write command appears to time out or you lose
+track of it, check `ps aux | grep <command>` for a still-running process
+*before* retrying — don't rely on the tool's timeout message as proof it's
+gone. If in doubt, kill anything found, wipe the (possibly torn) destination,
+and redo the copy once, from scratch, watched to actual completion (e.g. via
+a backgrounded shell + polling, not a blind fire-and-forget retry).
