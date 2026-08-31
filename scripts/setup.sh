@@ -188,6 +188,11 @@ if ! groups | grep -q '\bdocker\b'; then
   exec sg docker "$0 $*"
 fi
 
+# NetworkManager/docker interaction fix: keeps NM from adopting docker's
+# br-*/veth* bridges (which caused spurious Tailscale "IP forwarding
+# disabled" alerts) and persists IP forwarding across reboots. Idempotent.
+"${SCRIPT_DIR}/scripts/fix-nm-docker-forwarding.sh"
+
 # ── Step 3: Node.js (via fnm) ───────────────────────────────────────────
 
 if ! command -v node &>/dev/null; then
