@@ -36,6 +36,7 @@ const CONTAINERS_DIR = join(__dirname, "..");
 const MODULES_DIR = join(CONTAINERS_DIR, ".modules");
 const REGISTRY_PATH = join(CONTAINERS_DIR, "container-registry.yaml");
 const INSTALLED_MODULES_PATH = join(CONTAINERS_DIR, "installed-modules.yaml");
+const USER_CONFIG_PATH = join(CONTAINERS_DIR, "user-config.yaml");
 
 // --- Utility helpers ---
 
@@ -552,6 +553,7 @@ async function updateModules(args) {
   // Container folders re-rendered this run (new inode); restarted at the end.
   const reRendered = [];
   const registry = await readRegistry();
+  const userConfig = await readYaml(USER_CONFIG_PATH);
 
   for (const name of moduleNames) {
     const moduleEntry = installed.modules[name];
@@ -580,14 +582,32 @@ async function updateModules(args) {
     }
 
     const newCommit = exec(`git -C "${modulePath}" rev-parse HEAD`);
-    if (newCommit === moduleEntry.commit) {
+    const moduleYaml = await readModuleYaml(name);
+    const containerList = moduleEntry.installed_containers || [];
+
+    // The commit-equality check below is a "nothing changed" fast path, but
+    // it must not leave a generation-gated container (see the gate below)
+    // permanently stuck: if a consumer fixes their pin *after* already being
+    // skipped at the current commit, there is no future commit that would
+    // ever re-trigger the check on its own. moduleEntry.container_state
+    // tracks the last generation label actually applied per container, so a
+    // pin that now matches but hasn't been applied yet forces a real pass
+    // even when the module's own commit hasn't moved.
+    const pendingGenerationRetry = containerList.some((containerName) => {
+      const gen = moduleYaml.containers?.[containerName]?.generation;
+      if (!gen) return false;
+      const pinned = userConfig?.containers?.[containerName]?.pinned_generation;
+      const applied =
+        moduleEntry.container_state?.[containerName]?.applied_generation;
+      return pinned === gen && applied !== gen;
+    });
+
+    if (newCommit === moduleEntry.commit && !pendingGenerationRetry) {
       console.log(`  ${name}: already up to date.`);
       continue;
     }
 
     anyUpdated = true;
-    const moduleYaml = await readModuleYaml(name);
-    const containerList = moduleEntry.installed_containers || [];
 
     for (const containerName of containerList) {
       const sourceDir = join(modulePath, containerName);
@@ -629,6 +649,35 @@ async function updateModules(args) {
           `  Warning: ${containerName} directory missing at platform root, skipping.`,
         );
         continue;
+      }
+
+      // Breaking-change generation gate. A container's module.yaml entry can
+      // declare `generation: "<label>"` when a bundle of changes (e.g. a
+      // datastore engine bump) would break an existing install if applied
+      // blindly -- see docs/MAJOR_VERSION_UPGRADE_GOTCHAS.md. Comparison is
+      // exact string match, not "newer than": an engine swap (e.g.
+      // Redis->Valkey) has no meaningful version ordering to compare, and a
+      // human (the module maintainer) is the one deciding what counts as
+      // breaking, not a parser. Unset on the consumer side means "not yet
+      // pinned to this generation" and is therefore treated as blocked, not
+      // as "take latest" -- the opposite of every other consumer override in
+      // this file, deliberately, so every existing install is protected the
+      // moment a container's first `generation` is introduced with zero
+      // action required from that consumer. A fresh install with no existing
+      // targetDir content of its own has nothing to protect and is handled
+      // like any other container (this check only ever skips an update to
+      // an already-installed container).
+      const currentGeneration =
+        moduleYaml.containers?.[containerName]?.generation;
+      if (currentGeneration) {
+        const pinnedGeneration =
+          userConfig?.containers?.[containerName]?.pinned_generation;
+        if (pinnedGeneration !== currentGeneration) {
+          console.log(
+            `  ${containerName}: module has a breaking change pending (generation "${currentGeneration}") -- skipping, not pinned. See docs/MAJOR_VERSION_UPGRADE_GOTCHAS.md, then set user-config.yaml containers.${containerName}.pinned_generation: "${currentGeneration}" once migrated.`,
+          );
+          continue;
+        }
       }
 
       // Copy module source into a staging dir. targetDir remains intact;
@@ -718,6 +767,14 @@ async function updateModules(args) {
 
       reRendered.push(containerName);
       console.log(`  ${containerName}: updated.`);
+
+      if (currentGeneration) {
+        moduleEntry.container_state = moduleEntry.container_state || {};
+        moduleEntry.container_state[containerName] = {
+          ...moduleEntry.container_state[containerName],
+          applied_generation: currentGeneration,
+        };
+      }
     }
 
     // Update tracking

@@ -590,11 +590,12 @@ containers:
     uses_tailscale: false
     start_order: "000"
     protected: true
+    generation: 2026-08-postgres18-valkey
     volumes:
       db:
         var: VOL_INFISICAL_DB
         host_subpath: container-mounts/infisical/db
-        container_path: /var/lib/postgresql/data
+        container_path: /var/lib/postgresql
       redis:
         var: VOL_INFISICAL_REDIS
         host_subpath: container-mounts/infisical/redis
@@ -870,6 +871,7 @@ containers:
     tags: []
     uses_tailscale: true
     start_order: "010"
+    generation: 2026-08-mariadb12
     variables:
       MYSQL_ROOT_PASSWORD:
         type: secret

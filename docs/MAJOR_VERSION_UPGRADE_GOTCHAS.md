@@ -10,20 +10,55 @@ the durable version). Applies to any future bump of a datastore image
 (Postgres, MariaDB, MongoDB, Redis/Valkey) in this repo, and to anyone else
 running the `do-it-self-containers` module who hits the same wall.
 
-## Policy: datastore bumps go in `compose.override.yaml`, not the module
+## Policy: datastore bumps go in `compose.override.yaml` first, then behind a generation gate
 
 If the container is sourced from a shared module (check
 `container-registry.yaml` / `.modules/<module>/<container>/`), a
 datastore/engine image bump (anything backed by a persistent volume whose
-on-disk format is tied to that image's major version) must **not** go into
-the module's shared `compose.yaml`. `module.sh update` is a blind `git pull`
-+ file copy with no changelog or migration-gating mechanism — anyone else
-who pulls the update and restarts would have their datastore refuse to
-start against old-format data with zero warning. Put it in a per-container
-`compose.override.yaml` at the platform root instead. An app-level version
-bump (the application binary itself, when it isn't also changing its own
-infra pins) is generally safe to land in the shared module, since the app
-migrates its own schema on startup.
+on-disk format is tied to that image's major version) must **not** go
+straight into the module's shared `compose.yaml` unpinned. `module.sh
+update` (and the web admin's Sources-page pull, which calls the same code)
+is a blind `git pull` + file copy — anyone else who pulls the update and
+restarts (via the Dashboard's Update button, a plain Restart, or the
+`@reboot` cron) would have their datastore refuse to start against
+old-format data with zero warning.
+
+Land the bump in a per-container `compose.override.yaml` at the platform
+root first (see the per-stack sections below for the exact mechanics of
+each engine). Once the migration has been proven for real on at least one
+install, it can be **promoted into the module**, gated by a breaking-change
+generation label so existing installs stay frozen until they've migrated:
+
+1. Add `generation: "<label>"` to the container's block in
+   `.modules/do-it-self-containers/module.yaml` (a short descriptive string,
+   e.g. `"2026-08-postgres18-valkey"` — not a bare version number, since a
+   container can have more than one backing store and an engine swap like
+   Redis→Valkey has no meaningful "newer than" version to compare).
+2. Bump the container's actual `compose.yaml` in the module to the new
+   image(s) — this is now safe to do unconditionally.
+3. `scripts/module-helper.js`'s `updateModules()` compares this label
+   against the consumer's own `user-config.yaml`
+   `containers.<name>.pinned_generation`, exact match required — unset or
+   mismatched means "not yet migrated," and that container's whole update is
+   skipped (not just `compose.yaml`), leaving it exactly as it was. A fresh
+   install has no existing data to protect and gets the new images directly.
+4. A consumer wanting the new version does the actual migration by hand
+   (the steps in this doc), then sets `pinned_generation` in their own
+   `user-config.yaml` to match — their next pull then applies normally.
+
+No gating exists anywhere in `all-containers.sh`'s start/restart path — the
+whole mechanism works by controlling whether the risky `compose.yaml` ever
+reaches a consumer's disk in the first place, so every trigger (Update
+button, plain Restart, Update All, manual CLI, the reboot cron) is
+automatically safe with no new logic in any of them. infisical and
+nextcloud were promoted this way on 2026-09-04 (generations
+`2026-08-postgres18-valkey` and `2026-08-mariadb12`); see their `module.yaml`
+comments for the exact labels.
+
+An app-level version bump (the application binary itself, when it isn't
+also changing its own infra pins) is generally safe to land in the shared
+module directly, with no gate needed, since the app migrates its own schema
+on startup.
 
 ## `compose.override.yaml` merges list-valued keys — it does not replace them
 
