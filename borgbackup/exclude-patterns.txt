@@ -43,6 +43,7 @@
 */container-mounts/formbricks/data/
 */container-mounts/onlyoffice/db_data/
 */container-mounts/infisical/db/
+*/container-mounts/zipline/db/
 # MariaDB
 */container-mounts/mariadb/db/
 */container-mounts/nextcloud/db/

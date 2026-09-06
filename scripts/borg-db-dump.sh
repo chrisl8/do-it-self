@@ -114,6 +114,8 @@ dump_postgres "onlyoffice-postgresql" "onlyoffice" "onlyoffice" &
 PG_PIDS[4]=$!
 dump_postgres "infisical-db" "infisical" "infisical" &
 PG_PIDS[5]=$!
+dump_postgres "zipline-db" "zipline" "zipline" &
+PG_PIDS[6]=$!
 
 for pid in "${PG_PIDS[@]}"; do
     if ! wait "${pid}"; then
