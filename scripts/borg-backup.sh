@@ -55,6 +55,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=borg-backup.conf
 . "${SCRIPT_DIR}/borg-backup.conf"
 
+# Optional gitignored companion exclude file (real names/paths, no public copy)
+BORG_EXCLUDE_ARGS=(--exclude-from "${BORG_EXCLUDE_FILE}")
+if [ -n "${BORG_EXCLUDE_FILE_PERSONAL}" ] && [ -f "${BORG_EXCLUDE_FILE_PERSONAL}" ]; then
+    BORG_EXCLUDE_ARGS+=(--exclude-from "${BORG_EXCLUDE_FILE_PERSONAL}")
+fi
+
 # The push job (--remote-only) and the local job (--skip-remote / flagless) use
 # separate lock and log files so the two halves of the split daily backup never
 # block each other or interleave their logs (the web admin serves borg-backup.log).
@@ -186,6 +192,47 @@ else
     fi
 fi
 
+# ── Backup history logging ──────────────────────────────────────────
+# Appends one JSONL line per successful archive to ~/logs/backup-history/
+# <label>.jsonl — same schema wintermute's backup-history-log.sh writes
+# (host, name, start, end, original/compressed/deduplicated_size, nfiles),
+# so the web admin's backupHistory.js module (already watching that
+# directory) picks it up unchanged. No rsync needed for either call site —
+# neuromancer IS the web admin host. Used for both the local archive (label
+# = hostname) and the offsite push to backup-pi (label = "neuromancer-pi",
+# matching wintermute's "wintermute-pi" naming for its own push).
+log_backup_history() {
+    local repo="$1" archive="$2" label="$3" passphrase="$4"
+    local history_dir="${HOME}/logs/backup-history"
+    local history_file="${history_dir}/${label}.jsonl"
+    mkdir -p "${history_dir}"
+    local info_json
+    if info_json=$(BORG_PASSPHRASE="${passphrase}" borg info --json "${repo}::${archive}" 2>/dev/null); then
+        HISTORY_LABEL="${label}" python3 - "${info_json}" <<'PYEOF' >> "${history_file}"
+import json, os, sys
+info = json.loads(sys.argv[1])
+a = info["archives"][0]
+stats = a["stats"]
+row = {
+    "host": os.environ["HISTORY_LABEL"],
+    "name": a["name"],
+    "start": a["start"],
+    "end": a["end"],
+    "original_size": stats["original_size"],
+    "compressed_size": stats["compressed_size"],
+    "deduplicated_size": stats["deduplicated_size"],
+    "nfiles": a.get("nfiles") or stats.get("nfiles"),
+}
+print(json.dumps(row, separators=(",", ":")))
+PYEOF
+        chown 1000:1000 "${history_file}"
+        chmod 644 "${history_file}"
+        echo "Logged ${archive} to ${history_file}"
+    else
+        echo "WARNING: borg info failed — backup history not logged for ${archive} (${label})"
+    fi
+}
+
 # ── Create archive ────────────────────────────────────────────────
 
 ARCHIVE_NAME="backup-$(date +%Y-%m-%dT%H:%M:%S)"
@@ -200,7 +247,7 @@ else
     # Build the borg create command
     if borg create \
         --compression "${BORG_COMPRESSION}" \
-        --exclude-from "${BORG_EXCLUDE_FILE}" \
+        "${BORG_EXCLUDE_ARGS[@]}" \
         --exclude-caches \
         --stats \
         --show-rc \
@@ -216,6 +263,14 @@ else
             BACKUP_STATUS="failed"
             BACKUP_ERROR="borg create failed with exit code ${BORG_EXIT}"
         fi
+    fi
+
+    # Skipped when the create hard-failed (BACKUP_STATUS=failed): the archive
+    # may not have been written, and borg info would just error on it anyway.
+    if [ "${BACKUP_STATUS}" != "failed" ]; then
+        echo ""
+        echo "── Logging backup history ──"
+        log_backup_history "${BORG_REPO}" "${ARCHIVE_NAME}" "$(hostname)" "${BORG_PASSPHRASE}"
     fi
 
     # ── Prune old archives ───────────────────────────────────────────
@@ -264,7 +319,7 @@ run_remote_backup() {
     echo "Creating remote archive: ${ARCHIVE_NAME}"
     if BORG_PASSPHRASE="${BORG_REMOTE_PASSPHRASE}" borg create \
         --compression "${BORG_REMOTE_COMPRESSION}" \
-        --exclude-from "${BORG_EXCLUDE_FILE}" \
+        "${BORG_EXCLUDE_ARGS[@]}" \
         --exclude-caches \
         --stats \
         --show-rc \
@@ -280,6 +335,10 @@ run_remote_backup() {
             return ${BORG_EXIT}
         fi
     fi
+
+    echo ""
+    echo "── Logging backup history ──"
+    log_backup_history "${BORG_REMOTE_REPO}" "${ARCHIVE_NAME}" "neuromancer-pi" "${BORG_REMOTE_PASSPHRASE}"
 
     # Remote prune/compact intentionally NOT done here. The remote borg user
     # is restricted to `borg serve --append-only`, so client-issued prune is

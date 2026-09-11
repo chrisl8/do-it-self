@@ -1443,6 +1443,18 @@ app.get("/api/borg-log", async (req, res) => {
   }
 });
 
+// Per-archive size/duration/file-count history, keyed by host. Backed by
+// backupHistory.js's poller (reads scripts/backup-history-log.sh's JSONL
+// output); this route just returns whatever it last published, so the
+// frontend can fetch it directly instead of waiting on the websocket.
+app.get("/api/backup-history", async (req, res) => {
+  const backupHistory = getStatus().backupHistory;
+  if (!backupHistory) {
+    return res.status(404).json({ error: "No backup history yet" });
+  }
+  res.json(backupHistory);
+});
+
 // --- Container Configuration Registry APIs ---
 
 app.get("/api/registry", async (req, res) => {

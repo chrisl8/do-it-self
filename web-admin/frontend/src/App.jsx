@@ -19,6 +19,7 @@ import DockerStatus from "./DockerStatus";
 import BackupStatus from "./BackupStatus";
 import BackupPi from "./BackupPi";
 import BackupCoverage from "./BackupCoverage";
+import BackupHistory from "./BackupHistory";
 import ContainerConfig from "./ContainerConfig";
 import Browse from "./Browse";
 import Sources from "./Sources";
@@ -29,17 +30,44 @@ import PostUpdateFindingsBanner from "./PostUpdateFindingsBanner";
 import useDockerStatus from "./hooks/useDockerStatus";
 import usePostUpdateChecks from "./hooks/usePostUpdateChecks";
 
+// Backups, Backup Pi, Coverage, and History are all facets of one feature
+// area — grouped under a single top-level "Backups" tab (below) with these
+// as a secondary sub-tab row, rather than eating 4 of the 8 top slots.
+// Paths are unchanged so existing bookmarks/links still work.
+const backupRoutes = [
+  { path: "/backup-status", label: "Status" },
+  { path: "/backup-pi", label: "Backup Pi" },
+  { path: "/backup-coverage", label: "Coverage" },
+  { path: "/backup-history", label: "History" },
+];
+
+// Flat list of every real route, used only to resolve the per-page browser
+// tab title (so a backup sub-page still shows its own label, not "Backups").
 const routes = [
   { path: "/docker-status", label: "Dashboard" },
   { path: "/container-config", label: "Configuration" },
   { path: "/browse", label: "Browse" },
   { path: "/sources", label: "Sources" },
-  { path: "/backup-status", label: "Backups" },
-  { path: "/backup-pi", label: "Backup Pi" },
-  { path: "/backup-coverage", label: "Coverage" },
+  ...backupRoutes,
   // Niche, per-host feature: only show the tab where a mediaStaging config
   // block exists (the receiver host). Keeps it out of the way for everyone
   // else, including the source host and any other deployment of this code.
+  { path: "/media-staging", label: "Media Staging", gated: "mediaStaging" },
+];
+
+const isBackupPath = (pathname) =>
+  backupRoutes.some(
+    (r) => pathname === r.path || pathname.startsWith(r.path + "/"),
+  );
+
+// Top-level tab strip: same as `routes` but the 4 backup pages collapse
+// into one "Backups" tab, targeting the Status page by default.
+const topRoutes = [
+  { path: "/docker-status", label: "Dashboard" },
+  { path: "/container-config", label: "Configuration" },
+  { path: "/browse", label: "Browse" },
+  { path: "/sources", label: "Sources" },
+  { path: "/backup-status", label: "Backups", isBackupGroup: true },
   { path: "/media-staging", label: "Media Staging", gated: "mediaStaging" },
 ];
 
@@ -76,46 +104,75 @@ const Navigation = () => {
     document.title = match ? `${match.label} · ${site}` : site;
   }, [location.pathname, hostName]);
 
-  const visibleRoutes = routes.filter(
+  const visibleTopRoutes = topRoutes.filter(
     (r) => r.gated !== "mediaStaging" || mediaStagingEnabled,
   );
-  const currentTab = visibleRoutes.findIndex(
-    (r) => r.path === location.pathname,
+  const inBackups = isBackupPath(location.pathname);
+  const currentTab = visibleTopRoutes.findIndex((r) =>
+    r.isBackupGroup ? inBackups : r.path === location.pathname,
+  );
+  const currentBackupTab = backupRoutes.findIndex(
+    (r) =>
+      location.pathname === r.path ||
+      location.pathname.startsWith(r.path + "/"),
   );
 
   return (
-    <Box
-      sx={{
-        borderBottom: 1,
-        borderColor: "divider",
-        display: "flex",
-        alignItems: "center",
-      }}
-    >
-      <Tabs
-        value={currentTab === -1 ? 0 : currentTab}
-        onChange={(e, val) => navigate(visibleRoutes[val].path)}
-        variant="scrollable"
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        sx={{ flexGrow: 1, minWidth: 0 }}
+    <Box>
+      <Box
+        sx={{
+          borderBottom: inBackups ? 0 : 1,
+          borderColor: "divider",
+          display: "flex",
+          alignItems: "center",
+        }}
       >
-        {visibleRoutes.map((r) => (
-          <Tab key={r.path} label={r.label} />
-        ))}
-      </Tabs>
-      <Tooltip
-        title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      >
-        <IconButton
-          onClick={toggleColorMode}
-          color="inherit"
-          sx={{ mx: 1 }}
-          aria-label="toggle color mode"
+        <Tabs
+          value={currentTab === -1 ? 0 : currentTab}
+          onChange={(e, val) => navigate(visibleTopRoutes[val].path)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{ flexGrow: 1, minWidth: 0 }}
         >
-          {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
-        </IconButton>
-      </Tooltip>
+          {visibleTopRoutes.map((r) => (
+            <Tab key={r.path} label={r.label} />
+          ))}
+        </Tabs>
+        <Tooltip
+          title={
+            mode === "dark" ? "Switch to light mode" : "Switch to dark mode"
+          }
+        >
+          <IconButton
+            onClick={toggleColorMode}
+            color="inherit"
+            sx={{ mx: 1 }}
+            aria-label="toggle color mode"
+          >
+            {mode === "dark" ? <Brightness7Icon /> : <Brightness4Icon />}
+          </IconButton>
+        </Tooltip>
+      </Box>
+      {inBackups && (
+        <Tabs
+          value={currentBackupTab === -1 ? 0 : currentBackupTab}
+          onChange={(e, val) => navigate(backupRoutes[val].path)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{
+            minHeight: 36,
+            borderBottom: 1,
+            borderColor: "divider",
+            "& .MuiTab-root": { minHeight: 36, py: 0.5 },
+          }}
+        >
+          {backupRoutes.map((r) => (
+            <Tab key={r.path} label={r.label} />
+          ))}
+        </Tabs>
+      )}
     </Box>
   );
 };
@@ -209,6 +266,7 @@ const App = () => {
         <Route path="/backup-pi" element={<BackupPi />} />
         <Route path="/backup-coverage" element={<BackupCoverage />} />
         <Route path="/backup-coverage/:host" element={<BackupCoverage />} />
+        <Route path="/backup-history" element={<BackupHistory />} />
         <Route path="/media-staging" element={<MediaStaging />} />
       </Routes>
     </BrowserRouter>
