@@ -614,6 +614,8 @@ export function renderBorgConf(userConfig) {
     "",
     "# ── Exclusion patterns ──────────────────────────────────────────",
     'BORG_EXCLUDE_FILE="${HOME}/containers/borgbackup/exclude-patterns.txt"',
+    "# Optional, gitignored companion for patterns with real, non-public values.",
+    'BORG_EXCLUDE_FILE_PERSONAL="${HOME}/containers/borgbackup/config-personal/exclude-patterns-personal.txt"',
     "",
     "# ── Status & logging ───────────────────────────────────────────",
     'BORG_STATUS_DIR="${HOME}/containers/homepage/images"',

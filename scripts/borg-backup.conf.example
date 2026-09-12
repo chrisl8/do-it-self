@@ -28,6 +28,12 @@ BORG_DB_DUMP_DIR="/YOUR-MOUNT/borg-db-dumps"
 
 BORG_EXCLUDE_FILE="${HOME}/containers/borgbackup/exclude-patterns.txt"
 
+# Optional: gitignored companion file for patterns with real, non-public
+# values (a real name in a path, etc). See
+# borgbackup/exclude-patterns-personal.txt.example. Leave unset/blank if
+# you don't need one — the script skips it if the file doesn't exist.
+BORG_EXCLUDE_FILE_PERSONAL="${HOME}/containers/borgbackup/config-personal/exclude-patterns-personal.txt"
+
 # ── Status & logging ───────────────────────────────────────────
 
 # JSON status file served by the Homepage dashboard

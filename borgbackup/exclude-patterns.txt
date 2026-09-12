@@ -28,12 +28,9 @@
 */Foundation/scratch/
 */Hyperion/scratch/
 
-# Already-migrated photos. The directory name documents the intent: the
-# content is already in immich, which is itself backed up via
-# /mnt/2000/container-mounts/. Keeping the original location on /mnt/22TB
-# as a local copy (no harm) but excluding from the offsite archive
-# avoids paying for a redundant 153 GiB on the Pi.
-*/Foundation/DELETE-MIGRAGTED-Family-Member-APhotos/
+# Already-migrated photos with a real per-person directory name -- see
+# borgbackup/config-personal/exclude-patterns-personal.txt (gitignored,
+# not shipped here) for that pattern and why.
 
 # Raw database data directories (already backed up via SQL/archive dumps)
 # PostgreSQL
@@ -128,20 +125,20 @@
 # /home/chrisl8/Downloads/ holds re-downloadable tooling installers
 # (.deb packages, etc.) that don't need to be in the offsite archive.
 # Anchored to this specific path — the previous `*/Downloads/` wildcard
-# also caught Nextcloud user content like Family Member B's "Witcher 2/Downloads"
-# folder (game saves) which is now correctly preserved in the backup.
+# also caught Nextcloud user content like a family member's game-save
+# "Downloads" folder, which is now correctly preserved in the backup.
 /home/chrisl8/Downloads/
 
 # NOTE: XDG default-dir patterns (*/Downloads/, */Desktop/, */Documents/,
 # */Music/, */Pictures/, */Public/, */Templates/) used to live here. They
 # were intended to skip the empty XDG defaults under /home/chrisl8/ but
 # the recursive `*/` glob silently dropped ~50 GiB of family Nextcloud
-# user data: Family Member A's Documents (40 GiB), Family Member B's Pictures (6.4 GiB) and
-# Documents (2.3 GiB), plus the caddy site Pictures and the jellyfin
-# music sounds dataset. The XDG dirs in /home/chrisl8/ are empty so
-# removing these patterns has zero cost there. If a specific empty XDG
-# dir ever becomes non-empty with content you DON'T want backed up, add
-# a full-path exclude below — never a `*/Name/` wildcard.
+# user data across multiple family members' Documents/Pictures folders,
+# plus the caddy site Pictures and the jellyfin music sounds dataset. The
+# XDG dirs in /home/chrisl8/ are empty so removing these patterns has zero
+# cost there. If a specific empty XDG dir ever becomes non-empty with
+# content you DON'T want backed up, add a full-path exclude below — never
+# a `*/Name/` wildcard.
 
 # OS artifacts
 .Trash-*

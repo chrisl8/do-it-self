@@ -74,6 +74,15 @@ scripts/backup-coverage-audit.conf
 scripts/media-stall-check.conf
 scripts/backup-coverage-acks.json
 scripts/backup-coverage-acks/
+# Diagnostic tool, not for the public mirror (personal library paths/titles,
+# home network details) -- whole directory, not just its secrets file.
+scripts/jellyfin-stream-test/
+
+# Personal data (real names/locations) that public exclude patterns / docs
+# reference generically -- mirrors the config-personal/ convention used
+# elsewhere for per-container overrides.
+borgbackup/config-personal/
+docs/config-personal/
 
 # Python bytecode
 __pycache__/

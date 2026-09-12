@@ -1,0 +1,12 @@
+# Optional, gitignored companion to exclude-patterns.txt for patterns that
+# only make sense with real, non-public values (a real name in a path, a
+# specific host-local directory, etc).
+#
+# To use: copy this file to borgbackup/config-personal/exclude-patterns-personal.txt
+# and set BORG_EXCLUDE_FILE_PERSONAL in scripts/borg-backup.conf to point at
+# it. borg-backup.sh passes it as an extra --exclude-from alongside the
+# public exclude-patterns.txt when the file exists; it's a no-op if you
+# never create it.
+#
+# Example:
+# */Foundation/some-real-persons-name-Photos/
