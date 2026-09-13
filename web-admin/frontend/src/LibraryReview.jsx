@@ -178,11 +178,7 @@ const WatchStatsSection = () => {
   }
 
   const filtered = filter
-    ? items.filter((it) =>
-        `${it.name} ${it.seriesName || ""}`
-          .toLowerCase()
-          .includes(filter.toLowerCase()),
-      )
+    ? items.filter((it) => it.name.toLowerCase().includes(filter.toLowerCase()))
     : items;
 
   return (
@@ -226,14 +222,34 @@ const WatchStatsSection = () => {
               {filtered.map((it) => (
                 <TableRow key={it.id}>
                   <TableCell>
-                    {it.seriesName ? `${it.seriesName} — ${it.name}` : it.name}
+                    {it.name}
+                    {it.kind === "series" && (
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        color="text.secondary"
+                      >
+                        {" "}
+                        ({it.episodeCount} ep)
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell>{it.library}</TableCell>
                   {users.map((u) => {
                     const stat = it.perUser[u];
+                    if (!stat) return <TableCell key={u}>—</TableCell>;
+                    if (it.kind === "series") {
+                      return (
+                        <TableCell key={u}>
+                          {stat.watchedCount === 0
+                            ? "—"
+                            : `${stat.watchedCount}/${stat.episodeCount} (${stat.playCount}×)`}
+                        </TableCell>
+                      );
+                    }
                     return (
                       <TableCell key={u}>
-                        {stat?.played ? `✓ (${stat.playCount}×)` : "—"}
+                        {stat.played ? `✓ (${stat.playCount}×)` : "—"}
                       </TableCell>
                     );
                   })}
