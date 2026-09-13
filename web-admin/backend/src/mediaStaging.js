@@ -295,7 +295,18 @@ function readDisk(cfg) {
 }
 
 // ── staged-item enumeration ─────────────────────────────────────
+// A staged movie can be a bare file directly under the library root (no
+// per-title folder), not just a directory -- readdir() on a file throws
+// ENOTDIR, so stat it directly rather than assuming every entry is a dir.
 async function dirSize(p) {
+  let top;
+  try {
+    top = await stat(p);
+  } catch {
+    return 0;
+  }
+  if (top.isFile()) return top.size;
+
   let total = 0;
   let entries;
   try {
