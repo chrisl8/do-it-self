@@ -42,25 +42,6 @@ async function fetchJson(url, opts) {
   return data;
 }
 
-const WatchedBadge = ({ played, unplayed }) => {
-  if (played === true || unplayed === 0) {
-    return (
-      <Chip label="Watched" size="small" color="default" variant="outlined" />
-    );
-  }
-  if (typeof unplayed === "number" && unplayed > 0) {
-    return (
-      <Chip
-        label={`${unplayed} unwatched`}
-        size="small"
-        color="primary"
-        variant="outlined"
-      />
-    );
-  }
-  return null;
-};
-
 const Poster = ({ itemId, hasPoster }) => {
   if (!hasPoster) {
     return (
@@ -134,7 +115,6 @@ const MovieRow = ({ item, libraryName, isSelected, toggle }) => {
         spacing={1}
         sx={{ flexShrink: 0 }}
       >
-        <WatchedBadge played={item.played} />
         {item.staged && <Chip label="Staged" size="small" color="success" />}
       </Stack>
     </Stack>
@@ -193,7 +173,6 @@ const EpisodeRow = ({
       <Typography variant="caption" color="text.secondary">
         {formatBytes(episode.sizeBytes)}
       </Typography>
-      {episode.played && <Chip label="✓" size="small" variant="outlined" />}
       {episode.staged && <Chip label="Staged" size="small" color="success" />}
     </Stack>
   );
@@ -363,7 +342,6 @@ const SeriesRow = ({ item, libraryName, isSelected, toggle }) => {
           spacing={1}
           sx={{ flexShrink: 0 }}
         >
-          <WatchedBadge unplayed={item.unplayedItemCount} />
           {item.staged && <Chip label="Staged" size="small" color="success" />}
         </Stack>
         <IconButton size="small" onClick={expand}>
