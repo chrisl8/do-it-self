@@ -54,7 +54,10 @@ let jobCounter = 0;
 const seenDoneIds = new Set(); // jobs we've already triggered a refresh for
 
 const secretCache = new Map(); // `${path}/${key}` → { value, expiresAt }
-let cachedUserId = null;
+// Keyed by server.baseUrl -- source (neuromancer) and local (deepthought)
+// Jellyfin instances have different admin user ids, so a single shared
+// variable here would leak one server's id into the other's requests.
+const cachedUserIds = new Map();
 
 // ── helpers ─────────────────────────────────────────────────────
 function expandHome(p) {
@@ -139,9 +142,11 @@ async function localServer(cfg) {
 }
 
 async function resolveUserId(server) {
-  if (cachedUserId) return cachedUserId;
-  cachedUserId = await jf.getAdminUserId(server).catch(() => null);
-  return cachedUserId;
+  const cached = cachedUserIds.get(server.baseUrl);
+  if (cached) return cached;
+  const userId = await jf.getAdminUserId(server).catch(() => null);
+  if (userId) cachedUserIds.set(server.baseUrl, userId);
+  return userId;
 }
 
 // Write the source and/or local Jellyfin API keys into Infisical at the
@@ -163,7 +168,7 @@ async function setApiKeys({ sourceKey, localKey }) {
         cfg.jellyfinApiKeyPath,
       );
       secretCache.delete(`${cfg.jellyfinApiKeyPath}/${cfg.jellyfinApiKeyName}`);
-      cachedUserId = null; // re-resolve the admin user with the new key
+      cachedUserIds.delete(cfg.jellyfinBaseUrl); // re-resolve the admin user with the new key
       written.push(cfg.jellyfinApiKeyName);
     }
     if (typeof localKey === "string" && localKey.length > 0) {
@@ -175,6 +180,7 @@ async function setApiKeys({ sourceKey, localKey }) {
       secretCache.delete(
         `${cfg.jellyfinApiKeyPath}/${cfg.localJellyfinApiKeyName}`,
       );
+      cachedUserIds.delete(cfg.localJellyfinBaseUrl); // re-resolve the admin user with the new key
       written.push(cfg.localJellyfinApiKeyName);
     }
   } catch (err) {
