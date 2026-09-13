@@ -55,6 +55,15 @@ export async function getAdminUserId(server) {
   return (admin || users[0])?.Id || null;
 }
 
+// ── Users ───────────────────────────────────────────────────────
+export async function listUsers(server) {
+  const users = await jfFetch(server, "/Users");
+  return (Array.isArray(users) ? users : []).map((u) => ({
+    id: u.Id,
+    name: u.Name,
+  }));
+}
+
 // ── Libraries ───────────────────────────────────────────────────
 // /Library/VirtualFolders gives CollectionType, the real on-disk Locations,
 // and ItemId (usable as ParentId for item queries).
@@ -231,6 +240,31 @@ export function relUnderPrefix(jellyfinPath, libraryCfg) {
     );
   }
   return jellyfinPath.slice(prefix.length).replace(/^\/+/, "");
+}
+
+// Every movie/episode under a library, per-user watch stats — the basis of
+// the neuromancer household watch-history dashboard (watchStats.js). One
+// call per (user, library) pair; the caller loops users since Jellyfin only
+// returns one user's UserData per request.
+export async function listPlaybackItems(server, { parentId, userId }) {
+  const params = new URLSearchParams({
+    ParentId: parentId,
+    IncludeItemTypes: "Movie,Episode",
+    Recursive: "true",
+    Fields: "SeriesName",
+    EnableUserData: "true",
+  });
+  if (userId) params.set("userId", userId);
+  const data = await jfFetch(server, `/Items?${params}`);
+  return (data?.Items || []).map((it) => ({
+    id: it.Id,
+    name: it.Name,
+    type: it.Type,
+    seriesName: it.SeriesName || null,
+    played: it.UserData?.Played ?? false,
+    playCount: it.UserData?.PlayCount ?? 0,
+    lastPlayedDate: it.UserData?.LastPlayedDate || null,
+  }));
 }
 
 // Compute the path of an item RELATIVE to its library root — the unit of

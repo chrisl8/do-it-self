@@ -69,6 +69,10 @@ import {
   dismissJob as dismissMediaStagingCopy,
   setApiKeys as setMediaStagingApiKeys,
 } from "./mediaStaging.js";
+import {
+  getWatchStats,
+  setApiKey as setWatchStatsApiKey,
+} from "./watchStats.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -2108,6 +2112,23 @@ app.get("/api/media-staging/size", async (req, res) => {
 app.get("/api/media-staging/staged", async (req, res) => {
   try {
     res.json(await getMediaStagingStaged());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Household watch stats (neuromancer's own Jellyfin) — see watchStats.js.
+app.get("/api/watch-stats", async (req, res) => {
+  try {
+    res.json(await getWatchStats({ forceRefresh: req.query.refresh === "1" }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/watch-stats/api-key", async (req, res) => {
+  try {
+    res.json(await setWatchStatsApiKey(req.body?.apiKey));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
