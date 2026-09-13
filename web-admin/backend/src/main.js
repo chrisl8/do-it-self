@@ -6,6 +6,8 @@ import backupCoverage from "./backupCoverage.js";
 import backupHistory from "./backupHistory.js";
 import mediaStaging from "./mediaStaging.js";
 import mediaStagingPush from "./mediaStagingPush.js";
+import seerrLedger from "./seerrLedger.js";
+import watchedStatusPoller from "./watchedStatusPoller.js";
 
 async function main() {
   try {
@@ -17,6 +19,8 @@ async function main() {
     await backupHistory.init();
     await mediaStaging.init();
     await mediaStagingPush.init();
+    await seerrLedger.init();
+    await watchedStatusPoller.init();
     console.log("Docker Status monitoring started");
   } catch (error) {
     console.error("Failed to start server:", error);

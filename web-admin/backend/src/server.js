@@ -69,10 +69,17 @@ import {
   dismissJob as dismissMediaStagingCopy,
   setApiKeys as setMediaStagingApiKeys,
 } from "./mediaStaging.js";
+import { listCopyHistory } from "./copyHistory.js";
+import { deleteOnClient as deleteMediaStagingOnClient } from "./mediaStagingPush.js";
 import {
   getWatchStats,
   setApiKey as setWatchStatsApiKey,
 } from "./watchStats.js";
+import {
+  upsertFromWebhook,
+  listLedgerRequests,
+  setApiKey as setSeerrApiKey,
+} from "./seerrLedger.js";
 
 const fileName = fileURLToPath(import.meta.url);
 const dirName = dirname(fileName);
@@ -2112,6 +2119,108 @@ app.get("/api/media-staging/size", async (req, res) => {
 app.get("/api/media-staging/staged", async (req, res) => {
   try {
     res.json(await getMediaStagingStaged());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Durable copy-history ledger (sender-side only — see copyHistory.js).
+app.get("/api/copy-history", async (req, res) => {
+  const limit = req.query.limit ? Number(req.query.limit) : 200;
+  try {
+    res.json({
+      entries: await listCopyHistory({
+        limit: Number.isFinite(limit) ? limit : 200,
+        client: req.query.client,
+      }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Jellyseerr webhook target — see seerrLedger.js for the expected payload
+// shape and required Jellyseerr-side webhook config. No-ops (200, ignored)
+// when seerrNotify isn't configured, same self-gating convention as the rest
+// of Media Staging.
+app.post("/api/seerr-webhook", async (req, res) => {
+  const result = await upsertFromWebhook(req.body, req.headers).catch(
+    (err) => ({ ok: false, error: err?.message || String(err) }),
+  );
+  res.json(result);
+});
+
+app.get("/api/seerr-requests", async (req, res) => {
+  try {
+    res.json({
+      requests: await listLedgerRequests({ status: req.query.status }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Inject the Seerr API key (and optional webhook shared secret) into
+// Infisical, same in-app-injection pattern as the SMTP/Jellyfin key routes.
+app.post("/api/seerr-notify/api-key", async (req, res) => {
+  try {
+    res.json(
+      await setSeerrApiKey({
+        apiKey: req.body?.apiKey,
+        webhookSecret: req.body?.webhookSecret,
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Review dashboard: joins copy-history with the Seerr request ledger so
+// each copied item shows who (if anyone) requested it, alongside its
+// deepthought watched status (from watchedStatusPoller.js) — the two
+// signals you actually use to decide "can I delete this."
+app.get("/api/review-dashboard", async (req, res) => {
+  try {
+    const [entries, requests] = await Promise.all([
+      listCopyHistory({ limit: 500 }),
+      listLedgerRequests({}),
+    ]);
+    const byRequestId = new Map(requests.map((r) => [r.seerrRequestId, r]));
+    const items = entries.map((e) => {
+      const req = e.seerrRequestId ? byRequestId.get(e.seerrRequestId) : null;
+      return {
+        id: e.id,
+        label: e.label,
+        kind: e.kind,
+        library: e.library,
+        client: e.client,
+        sizeBytes: e.sizeBytes,
+        completedEpoch: e.completedEpoch,
+        destPath: e.destPath,
+        watched: e.watched,
+        notifiedEpoch: e.notifiedEpoch,
+        requestedByUsername: req?.requestedByUsername || null,
+      };
+    });
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual "delete this copy off deepthought" action — never automatic, per
+// the review dashboard's whole purpose: surface the signal, let a human act.
+app.delete("/api/copy-history/:id/remote", async (req, res) => {
+  try {
+    const entries = await listCopyHistory({});
+    const entry = entries.find((e) => e.id === req.params.id);
+    if (!entry) return res.status(404).json({ error: "not found" });
+    res.json(
+      await deleteMediaStagingOnClient({
+        clientName: entry.client,
+        destPath: entry.destPath,
+      }),
+    );
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -17,6 +17,7 @@ import { spawn } from "child_process";
 import os from "os";
 import { join } from "path";
 import { getUserConfig } from "./configRegistry.js";
+import { recordCopy } from "./copyHistory.js";
 
 const POLL_INTERVAL_MS_DEFAULT = 10 * 1000;
 const STATUS_THROTTLE_MS = 3 * 1000;
@@ -330,6 +331,9 @@ async function runJob({ client, job, p }) {
         await setStatus({ state: "cancelled", percent });
       } else if (code === 0) {
         await setStatus({ state: "done", percent: 100 });
+        await recordCopy({ client, job, completedEpoch: nowEpoch() }).catch(
+          (err) => console.error("[mediaStagingPush] recordCopy failed:", err),
+        );
       } else {
         await setStatus({
           state: "failed",
@@ -379,6 +383,49 @@ async function stop() {
     clearInterval(tickTimer);
     tickTimer = null;
   }
+}
+
+// ── watched-status snapshot (see watchedStatusPoller.js) ───────────
+// The client periodically writes a rel->played map (per library) into its
+// own spool, built from ITS OWN local Jellyfin (see mediaStaging.js's
+// buildWatchedSnapshot) — this host has no other way to reach that Jellyfin
+// (separate host, separate Infisical), so reading this one file over the
+// same SSH channel already used for copy jobs is the only path.
+export async function getWatchedSnapshot(clientName) {
+  const cfg = await readConfig();
+  if (!cfg) return null;
+  const client = cfg.clients.find((c) => c.name === clientName);
+  if (!client) return null;
+  return readRemoteJson(client, `${client.spoolDir}/watched-snapshot.json`);
+}
+
+export async function listClientNames() {
+  const cfg = await readConfig();
+  return cfg ? cfg.clients.map((c) => c.name) : [];
+}
+
+// Delete a copy off the client's disk, after the fact (not part of an active
+// job) — driven by the review dashboard's "no longer need this on
+// deepthought" action. `destPath` always comes from a copy-history entry we
+// wrote ourselves at copy time (never typed in by a caller), so the only
+// guard needed is against an obviously-wrong path, not path traversal.
+export async function deleteOnClient({ clientName, destPath }) {
+  const cfg = await readConfig();
+  if (!cfg) return { ok: false, error: "media staging push not configured" };
+  const client = cfg.clients.find((c) => c.name === clientName);
+  if (!client) return { ok: false, error: `unknown client "${clientName}"` };
+  if (
+    typeof destPath !== "string" ||
+    destPath.split("/").filter(Boolean).length < 2
+  ) {
+    return { ok: false, error: "refusing to delete an unsafe-looking path" };
+  }
+  const { code, stderr } = await remoteExec(
+    client,
+    `rm -rf -- ${shQuote(destPath)}`,
+  );
+  if (code !== 0) return { ok: false, error: stderr || `exit ${code}` };
+  return { ok: true };
 }
 
 export default { init: start, stop };

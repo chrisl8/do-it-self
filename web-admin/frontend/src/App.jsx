@@ -24,6 +24,7 @@ import ContainerConfig from "./ContainerConfig";
 import Browse from "./Browse";
 import Sources from "./Sources";
 import MediaStaging from "./MediaStaging";
+import LibraryReview from "./LibraryReview";
 import BorgNotConfiguredBanner from "./BorgNotConfiguredBanner";
 import CredentialWarningBanner from "./CredentialWarningBanner";
 import PostUpdateFindingsBanner from "./PostUpdateFindingsBanner";
@@ -53,6 +54,9 @@ const routes = [
   // block exists (the receiver host). Keeps it out of the way for everyone
   // else, including the source host and any other deployment of this code.
   { path: "/media-staging", label: "Media Staging", gated: "mediaStaging" },
+  // Ungated (like Browse/Sources) — each section shows its own
+  // not-configured message rather than needing a combined gate flag.
+  { path: "/library-review", label: "Library Review" },
 ];
 
 const isBackupPath = (pathname) =>
@@ -69,6 +73,7 @@ const topRoutes = [
   { path: "/sources", label: "Sources" },
   { path: "/backup-status", label: "Backups", isBackupGroup: true },
   { path: "/media-staging", label: "Media Staging", gated: "mediaStaging" },
+  { path: "/library-review", label: "Library Review" },
 ];
 
 const Navigation = () => {
@@ -268,6 +273,7 @@ const App = () => {
         <Route path="/backup-coverage/:host" element={<BackupCoverage />} />
         <Route path="/backup-history" element={<BackupHistory />} />
         <Route path="/media-staging" element={<MediaStaging />} />
+        <Route path="/library-review" element={<LibraryReview />} />
       </Routes>
     </BrowserRouter>
   );

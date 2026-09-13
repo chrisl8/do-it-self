@@ -44,8 +44,10 @@ const POSTER_MAX_WIDTH = 240;
 const DONE_RETENTION_MS = 60 * 1000;
 const TERMINAL_RETENTION_MS = 6 * 60 * 60 * 1000;
 const MAX_TERMINAL_IN_VIEW = 10;
+const WATCHED_SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
 
 let tickTimer = null;
+let watchedSnapshotTimer = null;
 let tickInFlight = false;
 let lastDisk = null;
 let jobCounter = 0;
@@ -208,6 +210,12 @@ function normalizeLibrary(l) {
     collection_type: l.collection_type || "movies",
     dest_root: expandHome(l.dest_root),
     folders,
+    // Optional: this library's path prefix inside the LOCAL (deepthought)
+    // Jellyfin container — distinct from `folders[].jellyfin_path_prefix`,
+    // which is the SOURCE (neuromancer) Jellyfin's prefix. Only needed for
+    // the watched-status snapshot (see buildWatchedSnapshot); omitted
+    // libraries just report unknown watched status rather than guessing.
+    local_jellyfin_path_prefix: l.local_jellyfin_path_prefix || null,
   };
 }
 
@@ -520,6 +528,7 @@ async function resolveSelection(server, userId, cfg, sel) {
   let sizeBytes = null;
   let label = "";
   let useParentDir = false;
+  let mediaId = { tmdbId: null, tvdbId: null };
 
   if (sel.kind === "movie") {
     const item = await jf.getItemById(server, { id: sel.id, userId });
@@ -527,22 +536,24 @@ async function resolveSelection(server, userId, cfg, sel) {
     sizeBytes = item?.MediaSources?.[0]?.Size ?? null;
     label = item?.Name || sel.id;
     useParentDir = true;
+    mediaId = jf.normalizeProviderIds(item);
   } else if (sel.kind === "series") {
     const item = await jf.getItemById(server, {
       id: sel.seriesId,
       userId,
-      fields: "Path",
+      fields: "Path,ProviderIds",
     });
     jellyfinPath = item?.Path;
     sizeBytes = await jf
       .sumSeriesBytes(server, { seriesId: sel.seriesId, userId })
       .catch(() => null);
     label = item?.Name || sel.seriesId;
+    mediaId = jf.normalizeProviderIds(item);
   } else if (sel.kind === "season") {
     const item = await jf.getItemById(server, {
       id: sel.seasonId,
       userId,
-      fields: "Path",
+      fields: "Path,IndexNumber",
     });
     jellyfinPath = item?.Path;
     sizeBytes = await jf
@@ -553,11 +564,39 @@ async function resolveSelection(server, userId, cfg, sel) {
       })
       .catch(() => null);
     label = item?.Name || sel.seasonId;
+    // Provider ids live on the series, not the season, and Seerr requests
+    // are keyed by series — match against those, not the season item.
+    const seriesItem = await jf
+      .getItemById(server, {
+        id: sel.seriesId,
+        userId,
+        fields: "ProviderIds",
+      })
+      .catch(() => null);
+    mediaId = {
+      ...jf.normalizeProviderIds(seriesItem),
+      season: item?.IndexNumber ?? null,
+    };
   } else if (sel.kind === "episode") {
-    const item = await jf.getItemById(server, { id: sel.episodeId, userId });
+    const item = await jf.getItemById(server, {
+      id: sel.episodeId,
+      userId,
+      fields: "Path,MediaSources,ProductionYear,ParentIndexNumber",
+    });
     jellyfinPath = item?.MediaSources?.[0]?.Path || item?.Path;
     sizeBytes = item?.MediaSources?.[0]?.Size ?? null;
     label = item?.Name || sel.episodeId;
+    const seriesItem = await jf
+      .getItemById(server, {
+        id: sel.seriesId,
+        userId,
+        fields: "ProviderIds",
+      })
+      .catch(() => null);
+    mediaId = {
+      ...jf.normalizeProviderIds(seriesItem),
+      season: item?.ParentIndexNumber ?? null,
+    };
   } else {
     throw new Error(`unknown selection kind "${sel.kind}"`);
   }
@@ -570,6 +609,7 @@ async function resolveSelection(server, userId, cfg, sel) {
     rel,
     label: label || rel,
     sizeBytes,
+    mediaId,
     destRoot: lib.dest_root,
     destPath: destPathFor(lib, rel),
   };
@@ -852,11 +892,70 @@ async function tick() {
   }
 }
 
+// A rel->played map per library, built from the LOCAL Jellyfin (this host's
+// own playback), for the sender's watchedStatusPoller.js to read over SSH
+// and cross-reference against copy-history entries. Only covers libraries
+// with `local_jellyfin_path_prefix` configured — the sender has no way to
+// reach this host's Jellyfin directly (separate host, separate Infisical),
+// so this snapshot file (read via the existing spool SSH channel) is the
+// only path watched-status data travels.
+async function buildWatchedSnapshot(cfg) {
+  const server = await localServer(cfg);
+  if (!server) return null;
+  const userId = await resolveUserId(server).catch(() => null);
+  const folders = await jf.getVirtualFolders(server).catch(() => []);
+  const snapshot = {};
+  for (const lib of cfg.libraries) {
+    if (!lib.local_jellyfin_path_prefix) continue;
+    const folder = folders.find(
+      (f) => f.name === lib.name || f.collectionType === lib.collection_type,
+    );
+    if (!folder?.itemId) continue;
+    const leaves = await jf
+      .listLeafItems(server, { parentId: folder.itemId, userId })
+      .catch(() => []);
+    const rels = {};
+    for (const leaf of leaves) {
+      if (!leaf.path) continue;
+      try {
+        const rel = jf.relUnderPrefix(leaf.path, {
+          jellyfin_path_prefix: lib.local_jellyfin_path_prefix,
+        });
+        rels[rel] = leaf.played === true;
+      } catch {
+        // path isn't under this library's configured local prefix — skip
+      }
+    }
+    snapshot[lib.name] = rels;
+  }
+  return snapshot;
+}
+
+async function refreshWatchedSnapshot() {
+  try {
+    const cfg = await readConfig();
+    if (!cfg) return;
+    const snapshot = await buildWatchedSnapshot(cfg);
+    if (!snapshot) return;
+    await writeJson(join(cfg.spoolDir, "watched-snapshot.json"), snapshot);
+  } catch (err) {
+    console.error(
+      "[mediaStaging] watched snapshot refresh failed:",
+      err?.message || err,
+    );
+  }
+}
+
 async function start() {
   tick();
   tickTimer = setInterval(tick, POLL_INTERVAL_MS_DEFAULT);
   console.log(
     `[mediaStaging] receiver poller started (${POLL_INTERVAL_MS_DEFAULT / 1000}s)`,
+  );
+  refreshWatchedSnapshot();
+  watchedSnapshotTimer = setInterval(
+    refreshWatchedSnapshot,
+    WATCHED_SNAPSHOT_INTERVAL_MS,
   );
 }
 
@@ -864,6 +963,10 @@ async function stop() {
   if (tickTimer) {
     clearInterval(tickTimer);
     tickTimer = null;
+  }
+  if (watchedSnapshotTimer) {
+    clearInterval(watchedSnapshotTimer);
+    watchedSnapshotTimer = null;
   }
 }
 

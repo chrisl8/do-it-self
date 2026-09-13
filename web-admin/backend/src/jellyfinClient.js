@@ -82,6 +82,18 @@ function imageTag(item) {
   return item?.ImageTags?.Primary || null;
 }
 
+// Jellyfin's ProviderIds keys are provider-name-cased ("Tmdb", "Tvdb", ...).
+// Sonarr/Radarr-managed libraries populate these from their own metadata, and
+// they're the stable join key between a Jellyfin item and a Seerr request
+// (titles drift, ids don't).
+export function normalizeProviderIds(item) {
+  const ids = item?.ProviderIds || {};
+  return {
+    tmdbId: ids.Tmdb ? Number(ids.Tmdb) : null,
+    tvdbId: ids.Tvdb ? Number(ids.Tvdb) : null,
+  };
+}
+
 // List the top-level items of a library (Movies or Series). For movies we get
 // the file Path/Size; series have no single file (size is summed lazily when a
 // series is expanded or staged).
@@ -118,7 +130,7 @@ export async function listLibraryItems(server, { parentId, userId, itemType }) {
 // the copy engine — never trust a client-supplied path).
 export async function getItemById(
   server,
-  { id, userId, fields = "Path,MediaSources,ProductionYear" },
+  { id, userId, fields = "Path,MediaSources,ProductionYear,ProviderIds" },
 ) {
   const params = new URLSearchParams({ Ids: id, Fields: fields });
   if (userId) params.set("userId", userId);
@@ -171,12 +183,20 @@ export async function listEpisodes(server, { seriesId, seasonId, userId }) {
 
 // Sum the byte sizes of every episode of a series (optionally one season).
 // Used to size a whole-series or whole-season stage request.
+// Returns null (unknown) rather than 0 when no episode had a resolvable
+// size, so the UI can show "unknown" instead of a misleading "0 GB" —
+// a single season is much more likely to hit this than a whole series.
 export async function sumSeriesBytes(server, { seriesId, seasonId, userId }) {
   const episodes = await listEpisodes(server, { seriesId, seasonId, userId });
-  return episodes.reduce(
-    (acc, e) => acc + (typeof e.sizeBytes === "number" ? e.sizeBytes : 0),
-    0,
-  );
+  let total = 0;
+  let anyKnown = false;
+  for (const e of episodes) {
+    if (typeof e.sizeBytes === "number") {
+      total += e.sizeBytes;
+      anyKnown = true;
+    }
+  }
+  return anyKnown ? total : null;
 }
 
 // ── Poster proxy ────────────────────────────────────────────────
@@ -240,6 +260,25 @@ export function relUnderPrefix(jellyfinPath, libraryCfg) {
     );
   }
   return jellyfinPath.slice(prefix.length).replace(/^\/+/, "");
+}
+
+// Every playable leaf (movie or episode) under a library, with its on-disk
+// path and played flag, in one call — used to build a watched-status
+// snapshot without walking series/season structure item by item.
+export async function listLeafItems(server, { parentId, userId }) {
+  const params = new URLSearchParams({
+    ParentId: parentId,
+    IncludeItemTypes: "Movie,Episode",
+    Recursive: "true",
+    Fields: "Path,MediaSources",
+    EnableUserData: "true",
+  });
+  if (userId) params.set("userId", userId);
+  const data = await jfFetch(server, `/Items?${params}`);
+  return (data?.Items || []).map((it) => ({
+    path: it.MediaSources?.[0]?.Path || it.Path || null,
+    played: it.UserData?.Played ?? null,
+  }));
 }
 
 // Every movie/episode under a library, per-user watch stats — the basis of
