@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
+// `enabled: null` means "haven't heard back yet" — distinct from `false`
+// ("genuinely not configured"), so the UI can show a loading state instead
+// of falsely claiming it's unconfigured while the first (often slow, see
+// watchStats.js) query is still in flight.
 const useWatchStats = () => {
-  const [data, setData] = useState({ enabled: false, users: [], items: [] });
+  const [data, setData] = useState({ enabled: null, users: [], items: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 

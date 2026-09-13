@@ -99,55 +99,66 @@ export async function getWatchStats({ forceRefresh = false } = {}) {
 
   const laterDate = (a, b) => (!a ? b : !b ? a : a > b ? a : b);
 
+  // One request per (user, library) pair — Jellyfin only returns one user's
+  // UserData per call. Run them concurrently rather than serially: a
+  // household's worth of users times a couple of libraries is a handful of
+  // requests, and serial awaits were most of why this took minutes.
+  const pairs = [];
   for (const user of users) {
     for (const folder of folders) {
-      if (!folder.itemId) continue;
-      const items = await jf.listPlaybackItems(srv, {
-        parentId: folder.itemId,
-        userId: user.id,
-      });
-      for (const it of items) {
-        if (it.type === "Episode") {
-          const seriesName = it.seriesName || it.name;
-          const key = `${folder.name}::${seriesName}`;
-          if (!series.has(key)) {
-            series.set(key, {
-              name: seriesName,
-              library: folder.name,
-              kind: "series",
-              episodeIds: new Set(),
-              perUser: {},
-            });
-          }
-          const s = series.get(key);
-          s.episodeIds.add(it.id);
-          if (!s.perUser[user.name]) {
-            s.perUser[user.name] = {
-              watchedIds: new Set(),
-              playCount: 0,
-              lastPlayedDate: null,
-            };
-          }
-          const su = s.perUser[user.name];
-          if (it.played) su.watchedIds.add(it.id);
-          su.playCount += it.playCount || 0;
-          su.lastPlayedDate = laterDate(su.lastPlayedDate, it.lastPlayedDate);
-        } else {
-          if (!movies.has(it.id)) {
-            movies.set(it.id, {
-              id: it.id,
-              name: it.name,
-              library: folder.name,
-              kind: "movie",
-              perUser: {},
-            });
-          }
-          movies.get(it.id).perUser[user.name] = {
-            played: it.played,
-            playCount: it.playCount,
-            lastPlayedDate: it.lastPlayedDate,
+      if (folder.itemId) pairs.push({ user, folder });
+    }
+  }
+  const results = await Promise.all(
+    pairs.map(({ user, folder }) =>
+      jf
+        .listPlaybackItems(srv, { parentId: folder.itemId, userId: user.id })
+        .then((items) => ({ user, folder, items })),
+    ),
+  );
+
+  for (const { user, folder, items } of results) {
+    for (const it of items) {
+      if (it.type === "Episode") {
+        const seriesName = it.seriesName || it.name;
+        const key = `${folder.name}::${seriesName}`;
+        if (!series.has(key)) {
+          series.set(key, {
+            name: seriesName,
+            library: folder.name,
+            kind: "series",
+            episodeIds: new Set(),
+            perUser: {},
+          });
+        }
+        const s = series.get(key);
+        s.episodeIds.add(it.id);
+        if (!s.perUser[user.name]) {
+          s.perUser[user.name] = {
+            watchedIds: new Set(),
+            playCount: 0,
+            lastPlayedDate: null,
           };
         }
+        const su = s.perUser[user.name];
+        if (it.played) su.watchedIds.add(it.id);
+        su.playCount += it.playCount || 0;
+        su.lastPlayedDate = laterDate(su.lastPlayedDate, it.lastPlayedDate);
+      } else {
+        if (!movies.has(it.id)) {
+          movies.set(it.id, {
+            id: it.id,
+            name: it.name,
+            library: folder.name,
+            kind: "movie",
+            perUser: {},
+          });
+        }
+        movies.get(it.id).perUser[user.name] = {
+          played: it.played,
+          playCount: it.playCount,
+          lastPlayedDate: it.lastPlayedDate,
+        };
       }
     }
   }

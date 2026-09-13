@@ -161,6 +161,40 @@ const WatchStatsSection = () => {
   const { enabled, users, items, loading, error, refresh } = useWatchStats();
   const [filter, setFilter] = useState("");
 
+  // enabled === null means "haven't heard back yet" (see useWatchStats) —
+  // show a loading state instead of the not-configured message. The first
+  // query (and any after the 2-minute cache expires) queries every user
+  // against the whole library, so it's genuinely slow, not stuck.
+  if (enabled === null && loading) {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            Household Watch Stats
+          </Typography>
+          <Typography color="text.secondary">
+            Loading… this queries every user against your whole library, so it
+            can take a minute or two the first time (or after a few minutes
+            idle).
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (enabled === null && error) {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            Household Watch Stats
+          </Typography>
+          <Alert severity="error">{error}</Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!enabled) {
     return (
       <Card>
