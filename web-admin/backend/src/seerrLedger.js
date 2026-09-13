@@ -25,7 +25,10 @@ import { join } from "path";
 import { mkdir, readFile, writeFile, rename } from "fs/promises";
 import { getUserConfig } from "./configRegistry.js";
 import { getSecret, setSecret, createFolder } from "./infisicalClient.js";
-import { listRequests as listSeerrApiRequests } from "./seerrClient.js";
+import {
+  listRequests as listSeerrApiRequests,
+  getMediaTitle,
+} from "./seerrClient.js";
 import { getRecipientEmail } from "./notifyRecipients.js";
 import { sendReadyEmail } from "./emailNotifier.js";
 import { linkSeerrRequest } from "./copyHistory.js";
@@ -292,9 +295,27 @@ async function pollOnce() {
   if (!cfg) return;
   const server = await seerrServer(cfg);
   const apiRequests = await listSeerrApiRequests(server, { take: 50 });
+  const existing = await readLedger();
   for (const raw of apiRequests) {
     const normalized = normalizeApiRequest(raw);
-    if (normalized) await upsert(normalized);
+    if (!normalized) continue;
+    // /api/v1/request never carries a title (see seerrClient.js), and
+    // `upsert`'s merge would otherwise overwrite an already-known title
+    // (e.g. from a webhook) with this null on every poll — always resolve a
+    // real one before upserting, reusing whatever's already in the ledger
+    // rather than re-fetching every cycle.
+    if (!normalized.title) {
+      const prior = existing.find(
+        (r) => r.seerrRequestId === normalized.seerrRequestId,
+      );
+      normalized.title =
+        prior?.title ||
+        (await getMediaTitle(server, {
+          mediaType: normalized.mediaType,
+          tmdbId: normalized.tmdbId,
+        }).catch(() => null));
+    }
+    await upsert(normalized);
   }
 }
 

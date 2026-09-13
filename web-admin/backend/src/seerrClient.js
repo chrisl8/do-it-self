@@ -38,3 +38,12 @@ export async function listRequests(server, { filter, take = 50 } = {}) {
   const data = await seerrFetch(server, `/api/v1/request?${params}`);
   return Array.isArray(data?.results) ? data.results : [];
 }
+
+// The /api/v1/request list doesn't carry a title (verified live 2026-09-13) —
+// only the webhook payload's `subject` does. Movies use `title`, TV shows use
+// `name` (standard TMDB convention).
+export async function getMediaTitle(server, { mediaType, tmdbId }) {
+  if (!tmdbId || (mediaType !== "movie" && mediaType !== "tv")) return null;
+  const data = await seerrFetch(server, `/api/v1/${mediaType}/${tmdbId}`);
+  return (mediaType === "movie" ? data?.title : data?.name) || null;
+}
