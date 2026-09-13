@@ -24,3 +24,18 @@ KOPIA_WEB_ADMIN_URL=""
 # Hosts to ignore when checking for stale backups
 # These hosts still appear in output but stale snapshots won't trigger alerts
 KOPIA_IGNORE_HOSTS=()
+
+# ── Restore-test (kopia-restore-test.sh) settings ─────────────────
+# Weekly content-existence check runs at 0% file-content verify (cheap,
+# still walks every blob in the repo — catches missing/corrupt chunks).
+# On the first Sunday of the month it additionally downloads a sample of
+# actual file content (see KOPIA_VERIFY_FULL_PERCENT) to catch
+# corruption that a blob-existence check alone would miss — mirrors
+# borg-restore-test.sh's fast/full split.
+KOPIA_VERIFY_FULL_PERCENT=2
+
+# Log file
+KOPIA_VERIFY_LOG_FILE="${HOME}/logs/kopia-restore-test.log"
+
+# Lock file to prevent concurrent runs
+KOPIA_VERIFY_LOCK_FILE="/tmp/kopia-restore-test.lock"
