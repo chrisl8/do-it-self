@@ -3,7 +3,10 @@
 // Pure, stateless helpers against a remote Jellyfin server (neuromancer's, in
 // the deepthought use case). Each call takes a `{ baseUrl, apiKey }` server
 // object so the same module can talk to the source Jellyfin (listing) and the
-// local Jellyfin (post-copy refresh). Auth is the `X-Emby-Token` header.
+// local Jellyfin (post-copy refresh). Auth is the `ApiKey` query param —
+// Jellyfin 12.0 dropped the legacy `X-Emby-Token`/`X-Emby-Authorization`
+// headers and the lowercase `api_key` param; only `?ApiKey=` (capital K)
+// authenticates now.
 //
 // The crux is path mapping. Jellyfin returns each item's `Path` /
 // `MediaSources[].Path` as the path *inside the Jellyfin container*
@@ -23,12 +26,13 @@ async function jfFetch(server, urlPath, { raw = false } = {}) {
     throw new Error("jellyfin server baseUrl/apiKey not configured");
   }
   const base = server.baseUrl.replace(/\/+$/, "");
-  const url = `${base}${urlPath}`;
+  const sep = urlPath.includes("?") ? "&" : "?";
+  const url = `${base}${urlPath}${sep}ApiKey=${encodeURIComponent(server.apiKey)}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
-      headers: { "X-Emby-Token": server.apiKey, Accept: "application/json" },
+      headers: { Accept: "application/json" },
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -192,11 +196,13 @@ export async function refreshLibrary(server) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(`${base}/Library/Refresh`, {
-      method: "POST",
-      headers: { "X-Emby-Token": server.apiKey },
-      signal: controller.signal,
-    });
+    const res = await fetch(
+      `${base}/Library/Refresh?ApiKey=${encodeURIComponent(server.apiKey)}`,
+      {
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
     if (!res.ok && res.status !== 204) {
       throw new Error(`Jellyfin refresh ${res.status}`);
     }
