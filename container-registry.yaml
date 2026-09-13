@@ -943,6 +943,13 @@ containers:
         required: true
         description: JWT secret for whiteboard authentication
         auto_generate: true
+  obsolete-aeon:
+    description: Build status/download page for the Obsolete Aeon Unity game (reads DeathStarPlans share)
+    homepage_group: Personal Projects
+    tags: []
+    uses_tailscale: true
+    start_order: "031"
+    default_disabled: true
   obsidian:
     description: Obsidian note-taking app in the browser via KasmVNC
     homepage_group: Desktop Apps
