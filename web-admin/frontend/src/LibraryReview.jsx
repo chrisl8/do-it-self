@@ -247,6 +247,7 @@ const WatchStatsSection = () => {
               <TableRow>
                 <TableCell>Title</TableCell>
                 <TableCell>Library</TableCell>
+                <TableCell>Requested by</TableCell>
                 {users.map((u) => (
                   <TableCell key={u}>{u}</TableCell>
                 ))}
@@ -269,6 +270,9 @@ const WatchStatsSection = () => {
                     )}
                   </TableCell>
                   <TableCell>{it.library}</TableCell>
+                  <TableCell>
+                    {it.requestedBy?.length ? it.requestedBy.join(", ") : "—"}
+                  </TableCell>
                   {users.map((u) => {
                     const stat = it.perUser[u];
                     if (!stat) return <TableCell key={u}>—</TableCell>;

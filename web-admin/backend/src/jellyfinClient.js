@@ -290,7 +290,11 @@ export async function listPlaybackItems(server, { parentId, userId }) {
     ParentId: parentId,
     IncludeItemTypes: "Movie,Episode",
     Recursive: "true",
-    Fields: "SeriesName",
+    // ProviderIds is a movie's own TMDB/TVDB id, but an EPISODE's ProviderIds
+    // is the episode's own (rarely-populated) id, not its series' — SeriesId
+    // is what lets the caller join an episode back to a series-level id via
+    // a separate listSeriesProviderIds() lookup.
+    Fields: "SeriesName,SeriesId,ProviderIds",
     EnableUserData: "true",
   });
   if (userId) params.set("userId", userId);
@@ -300,10 +304,31 @@ export async function listPlaybackItems(server, { parentId, userId }) {
     name: it.Name,
     type: it.Type,
     seriesName: it.SeriesName || null,
+    seriesId: it.SeriesId || null,
+    ...normalizeProviderIds(it),
     played: it.UserData?.Played ?? false,
     playCount: it.UserData?.PlayCount ?? 0,
     lastPlayedDate: it.UserData?.LastPlayedDate || null,
   }));
+}
+
+// Series-level provider ids, independent of user — one call per library,
+// not per user, since these never vary by who's asking. Episodes' own
+// ProviderIds (from listPlaybackItems) are episode-specific, not the
+// series', so this is the only way to get a TV series' TMDB/TVDB id.
+export async function listSeriesProviderIds(server, { parentId }) {
+  const params = new URLSearchParams({
+    ParentId: parentId,
+    IncludeItemTypes: "Series",
+    Recursive: "true",
+    Fields: "ProviderIds",
+  });
+  const data = await jfFetch(server, `/Items?${params}`);
+  const byId = new Map();
+  for (const it of data?.Items || []) {
+    byId.set(it.Id, normalizeProviderIds(it));
+  }
+  return byId;
 }
 
 // Compute the path of an item RELATIVE to its library root — the unit of

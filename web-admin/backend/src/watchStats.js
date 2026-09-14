@@ -13,6 +13,7 @@
 import { getUserConfig } from "./configRegistry.js";
 import { getSecret, setSecret, createFolder } from "./infisicalClient.js";
 import * as jf from "./jellyfinClient.js";
+import { listLedgerRequests } from "./seerrLedger.js";
 
 const SECRET_CACHE_TTL_MS = 5 * 60 * 1000;
 const STATS_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -84,10 +85,52 @@ export async function getWatchStats({ forceRefresh = false } = {}) {
     return statsCache.data;
   }
   const srv = await server(cfg);
-  const [users, folders] = await Promise.all([
+  const [users, folders, seerrRequests] = await Promise.all([
     jf.listUsers(srv),
     jf.getVirtualFolders(srv),
+    listLedgerRequests({}).catch(() => []), // works even if seerrNotify isn't configured
   ]);
+
+  // Series-level provider ids, independent of user — fetched once per
+  // library rather than once per (user, library), since they never vary by
+  // who's asking (see jf.listSeriesProviderIds for why this can't just come
+  // from the per-episode query below).
+  const seriesProviderIdsById = new Map();
+  await Promise.all(
+    folders
+      .filter((f) => f.itemId)
+      .map(async (f) => {
+        const ids = await jf.listSeriesProviderIds(srv, { parentId: f.itemId });
+        for (const [id, providerIds] of ids) {
+          seriesProviderIdsById.set(id, providerIds);
+        }
+      }),
+  );
+
+  // Requester lookup: a title can have been requested by more than one
+  // person (or multiple times), so collect a set of usernames per id rather
+  // than assuming one.
+  const requestersByTmdb = new Map();
+  const requestersByTvdb = new Map();
+  for (const r of seerrRequests) {
+    if (!r.requestedByUsername) continue;
+    if (r.tmdbId) {
+      if (!requestersByTmdb.has(r.tmdbId))
+        requestersByTmdb.set(r.tmdbId, new Set());
+      requestersByTmdb.get(r.tmdbId).add(r.requestedByUsername);
+    }
+    if (r.tvdbId) {
+      if (!requestersByTvdb.has(r.tvdbId))
+        requestersByTvdb.set(r.tvdbId, new Set());
+      requestersByTvdb.get(r.tvdbId).add(r.requestedByUsername);
+    }
+  }
+  const requestersFor = (tmdbId, tvdbId) => {
+    const set =
+      (tmdbId && requestersByTmdb.get(tmdbId)) ||
+      (tvdbId && requestersByTvdb.get(tvdbId));
+    return set ? Array.from(set) : [];
+  };
 
   // Movies stay one row each; episodes roll up to their series — a
   // thousand-episode library otherwise means a thousand near-identical
@@ -127,11 +170,13 @@ export async function getWatchStats({ forceRefresh = false } = {}) {
             name: seriesName,
             library: folder.name,
             kind: "series",
+            seriesId: it.seriesId || null,
             episodeIds: new Set(),
             perUser: {},
           });
         }
         const s = series.get(key);
+        if (!s.seriesId) s.seriesId = it.seriesId || null;
         s.episodeIds.add(it.id);
         if (!s.perUser[user.name]) {
           s.perUser[user.name] = {
@@ -151,6 +196,8 @@ export async function getWatchStats({ forceRefresh = false } = {}) {
             name: it.name,
             library: folder.name,
             kind: "movie",
+            tmdbId: it.tmdbId,
+            tvdbId: it.tvdbId,
             perUser: {},
           });
         }
@@ -163,29 +210,41 @@ export async function getWatchStats({ forceRefresh = false } = {}) {
     }
   }
 
-  const seriesItems = Array.from(series.entries()).map(([key, s]) => ({
-    id: key,
-    name: s.name,
-    library: s.library,
-    kind: "series",
-    episodeCount: s.episodeIds.size,
-    perUser: Object.fromEntries(
-      Object.entries(s.perUser).map(([user, su]) => [
-        user,
-        {
-          watchedCount: su.watchedIds.size,
-          episodeCount: s.episodeIds.size,
-          playCount: su.playCount,
-          lastPlayedDate: su.lastPlayedDate,
-        },
-      ]),
-    ),
+  const seriesItems = Array.from(series.entries()).map(([key, s]) => {
+    const providerIds = seriesProviderIdsById.get(s.seriesId) || {
+      tmdbId: null,
+      tvdbId: null,
+    };
+    return {
+      id: key,
+      name: s.name,
+      library: s.library,
+      kind: "series",
+      episodeCount: s.episodeIds.size,
+      requestedBy: requestersFor(providerIds.tmdbId, providerIds.tvdbId),
+      perUser: Object.fromEntries(
+        Object.entries(s.perUser).map(([user, su]) => [
+          user,
+          {
+            watchedCount: su.watchedIds.size,
+            episodeCount: s.episodeIds.size,
+            playCount: su.playCount,
+            lastPlayedDate: su.lastPlayedDate,
+          },
+        ]),
+      ),
+    };
+  });
+
+  const movieItems = Array.from(movies.values()).map((m) => ({
+    ...m,
+    requestedBy: requestersFor(m.tmdbId, m.tvdbId),
   }));
 
   const data = {
     enabled: true,
     users: users.map((u) => u.name),
-    items: [...Array.from(movies.values()), ...seriesItems],
+    items: [...movieItems, ...seriesItems],
   };
   statsCache = { data, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
   return data;
