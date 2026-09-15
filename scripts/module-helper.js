@@ -5,9 +5,15 @@
 //
 // Usage: node module-helper.js <subcommand> [args...]
 // Subcommands: add-source, remove-source, install, uninstall, update, list, regenerate-registry, dev-sync
-//   update [<module>] [--no-restart]   update modules; by default recreates
-//     re-rendered running containers so their bind mounts pick up the new
-//     directory inode. --no-restart skips that (you restart them yourself).
+//   update [<module>] [--no-restart] [--container <name>[,<name>...]]
+//     update modules; by default recreates re-rendered running containers so
+//     their bind mounts pick up the new directory inode. --no-restart skips
+//     that (you restart them yourself). A module update only re-renders the
+//     containers whose files actually changed between the old and new commit
+//     (see the diff logic in updateModules) -- NOT every container the
+//     module ships, so a one-line fix to one container's compose.yaml no
+//     longer restarts the whole platform. --container overrides that and
+//     forces just the named container(s), regardless of what changed.
 //
 // See docs/MODULES.md for the full design.
 
@@ -537,7 +543,20 @@ async function updateModules(args) {
   // --no-restart leaves re-rendered running containers alone (they keep
   // stale bind mounts until manually restarted); default is to recreate them.
   const noRestart = args.includes("--no-restart");
-  const positional = args.filter((a) => !a.startsWith("--"));
+  // --container <name>[,<name>...] forces the update to touch only the named
+  // container(s) regardless of what the module diff says. Useful for a
+  // deliberate one-off bump when you don't want to wait on the diff logic
+  // (e.g. the module hasn't been pushed to yet) or want to be extra sure.
+  const containerFlagIndex = args.indexOf("--container");
+  const containerOverride =
+    containerFlagIndex !== -1 && args[containerFlagIndex + 1]
+      ? args[containerFlagIndex + 1].split(",").map((s) => s.trim())
+      : null;
+  const positional = args.filter(
+    (a, i) =>
+      !a.startsWith("--") &&
+      (containerFlagIndex === -1 || i !== containerFlagIndex + 1),
+  );
   const specificModule = positional[0] || null;
   const installed = await readInstalledModules();
   const moduleNames = specificModule
@@ -609,7 +628,84 @@ async function updateModules(args) {
 
     anyUpdated = true;
 
+    // Determine which of this module's installed containers actually need to
+    // be touched. Every installed container used to be re-rendered (and
+    // restarted, if running) just because the module's commit moved at all
+    // -- e.g. bumping infisical's image tag by one line restarted all ~120
+    // containers sourced from this module. Diff the old and new commit and
+    // only touch containers whose own directory actually changed.
+    let containersToProcess;
+    if (containerOverride) {
+      containersToProcess = containerList.filter((c) =>
+        containerOverride.includes(c),
+      );
+      const unknown = containerOverride.filter(
+        (c) => !containerList.includes(c),
+      );
+      if (unknown.length) {
+        console.warn(
+          `  Warning: --container named "${unknown.join(", ")}", not installed from module "${name}" -- ignoring.`,
+        );
+      }
+    } else if (!moduleEntry.commit) {
+      // No prior commit recorded to diff against (first update since
+      // install) -- nothing to compare, so process everything once.
+      containersToProcess = containerList;
+    } else {
+      let changedPaths = null;
+      try {
+        changedPaths = exec(
+          `git -C "${modulePath}" diff --name-only ${moduleEntry.commit} ${newCommit}`,
+        )
+          .split("\n")
+          .filter(Boolean);
+      } catch (e) {
+        console.warn(
+          `  ${name}: could not diff ${moduleEntry.commit}..${newCommit} (${e.message}) -- falling back to full update.`,
+        );
+      }
+
+      if (changedPaths === null) {
+        containersToProcess = containerList;
+      } else {
+        // module.yaml is shared metadata (start_order, generation gates,
+        // registry fields) that can affect any container, so a change there
+        // falls back to processing everything rather than reasoning about
+        // which ones it touches.
+        const moduleWideChange = changedPaths.includes("module.yaml");
+        const changedDirs = new Set(changedPaths.map((p) => p.split("/")[0]));
+        containersToProcess = moduleWideChange
+          ? containerList
+          : containerList.filter((c) => changedDirs.has(c));
+      }
+    }
+
+    // Generation-pin catch-up (see pendingGenerationRetry above) must still
+    // happen even when a container's files didn't change in this diff -- the
+    // module content is identical; only the consumer's pin in
+    // user-config.yaml changed.
     for (const containerName of containerList) {
+      const gen = moduleYaml.containers?.[containerName]?.generation;
+      if (!gen || containersToProcess.includes(containerName)) continue;
+      const pinned = userConfig?.containers?.[containerName]?.pinned_generation;
+      const applied =
+        moduleEntry.container_state?.[containerName]?.applied_generation;
+      if (pinned === gen && applied !== gen) {
+        containersToProcess.push(containerName);
+      }
+    }
+
+    if (containersToProcess.length === 0) {
+      console.log(
+        `  ${name}: commit moved but no installed container's files changed -- nothing to do.`,
+      );
+    } else if (containersToProcess.length < containerList.length) {
+      console.log(
+        `  ${name}: only ${containersToProcess.join(", ")} changed -- leaving the other ${containerList.length - containersToProcess.length} installed container(s) alone.`,
+      );
+    }
+
+    for (const containerName of containersToProcess) {
       const sourceDir = join(modulePath, containerName);
       const targetDir = join(CONTAINERS_DIR, containerName);
       const stagingDir = `${targetDir}.new`;
