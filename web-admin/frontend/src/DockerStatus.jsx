@@ -409,15 +409,18 @@ const DockerStatus = ({
       </Box>
 
       {dockerStatus.invalidPendingUpdates?.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          <AlertTitle>Invalid Stack Names in Updates File</AlertTitle>
-          The following stack names in the updates file no longer exist:{" "}
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <AlertTitle>
+            Stale Stack Names Auto-Removed from Updates File
+          </AlertTitle>
+          The following stack names in the updates file no longer exist and have
+          been pruned automatically:{" "}
           <strong>{dockerStatus.invalidPendingUpdates.join(", ")}</strong>
           <br />
           <Typography variant="caption">
-            These are usually leftover entries from an uninstalled container.
-            Uninstalling now prunes them automatically; to clear an old one,
-            remove the matching line from pendingContainerUpdates.txt.
+            These are usually leftover entries from an uninstalled or renamed
+            container, or a DIUN image name that never mapped to a real stack.
+            No action needed -- this notice clears on the next refresh.
           </Typography>
         </Alert>
       )}

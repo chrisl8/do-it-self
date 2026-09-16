@@ -112,4 +112,70 @@ function getPendingUpdateDetails() {
   return details;
 }
 
-export { getPendingUpdates, getPendingUpdateDetails };
+// Self-healing counterpart to the invalidPendingUpdates check in
+// dockerStatus.js: rewrites pendingContainerUpdates.txt (and the details
+// jsonl) to drop any stack name that isn't in the current set of container
+// folders. Covers every flavor of stale entry -- an uninstalled container
+// (module-helper.js's prunePendingUpdates only catches this going forward,
+// on uninstall), a stack rename, or diunUpdate.sh falling back to a raw
+// image name that was never a real stack (e.g. "nginx-unprivileged" instead
+// of the folder that used it) -- without requiring anyone to hand-edit the
+// file. Best-effort: errors are logged, never thrown.
+function pruneInvalidPendingUpdates(validStackNames) {
+  const filePath = getPendingUpdatesFilePath();
+  if (!filePath || !fs.existsSync(filePath)) return [];
+
+  try {
+    const lines = fs.readFileSync(filePath, "utf8").split("\n");
+    const trimmedLines = lines.map((line) => line.trim());
+    const removed = [
+      ...new Set(
+        trimmedLines.filter(
+          (line) => line.length > 0 && !validStackNames.has(line),
+        ),
+      ),
+    ];
+    if (removed.length === 0) return [];
+
+    const kept = trimmedLines.filter(
+      (line) => line.length === 0 || validStackNames.has(line),
+    );
+    fs.writeFileSync(filePath, kept.join("\n"));
+    console.log(
+      "[pendingUpdates] Pruned invalid stack names from updates file:",
+      removed,
+    );
+
+    const detailsFilePath = getPendingUpdateDetailsFilePath();
+    if (detailsFilePath && fs.existsSync(detailsFilePath)) {
+      const detailLines = fs.readFileSync(detailsFilePath, "utf8").split("\n");
+      const keptDetails = detailLines.filter((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return true;
+        try {
+          const { stack } = JSON.parse(trimmed);
+          return !stack || validStackNames.has(stack);
+        } catch {
+          return true;
+        }
+      });
+      if (keptDetails.length !== detailLines.length) {
+        fs.writeFileSync(detailsFilePath, keptDetails.join("\n"));
+      }
+    }
+
+    return removed;
+  } catch (error) {
+    console.error(
+      "[pendingUpdates] Error pruning invalid pending updates:",
+      error,
+    );
+    return [];
+  }
+}
+
+export {
+  getPendingUpdates,
+  getPendingUpdateDetails,
+  pruneInvalidPendingUpdates,
+};

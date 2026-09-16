@@ -8,6 +8,7 @@ import {
 import {
   getPendingUpdates,
   getPendingUpdateDetails,
+  pruneInvalidPendingUpdates,
 } from "./pendingUpdates.js";
 import { getDriftedContainers } from "./moduleDrift.js";
 import { getVersionDrift } from "./versionDrift.js";
@@ -101,9 +102,10 @@ async function getFormattedDockerContainers() {
     );
     if (invalidPendingUpdates.length > 0) {
       console.warn(
-        "[dockerStatus] Invalid stack names in pending updates file:",
+        "[dockerStatus] Invalid stack names in pending updates file, pruning:",
         invalidPendingUpdates,
       );
+      pruneInvalidPendingUpdates(new Set(Object.keys(stacks)));
     }
 
     return { running, stacks: stacksWithIcons, invalidPendingUpdates };
