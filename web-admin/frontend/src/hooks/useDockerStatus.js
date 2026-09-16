@@ -13,6 +13,7 @@ function useDockerStatus() {
   const [startAllStatus, setStartAllStatus] = useState(null);
   const [tailscalePreflightStatus, setTailscalePreflightStatus] =
     useState(null);
+  const [versionDriftCheckStatus, setVersionDriftCheckStatus] = useState(null);
   const [releaseNotes, setReleaseNotes] = useState(null);
   const [releaseNotesLoading, setReleaseNotesLoading] = useState(false);
   const socketRef = useRef(null);
@@ -77,6 +78,9 @@ function useDockerStatus() {
           }
           if (data.tailscalePreflightStatus !== undefined) {
             setTailscalePreflightStatus(data.tailscalePreflightStatus);
+          }
+          if (data.versionDriftCheckStatus !== undefined) {
+            setVersionDriftCheckStatus(data.versionDriftCheckStatus);
           }
           if (data.docker.running || data.docker.stacks) {
             setIsLoading(false);
@@ -232,6 +236,13 @@ function useDockerStatus() {
     }
   }, []);
 
+  const runVersionDriftCheck = useCallback(() => {
+    setVersionDriftCheckStatus({ status: "running" });
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "runVersionDriftCheck" }));
+    }
+  }, []);
+
   const fetchReleaseNotes = useCallback((stackName) => {
     setReleaseNotesLoading(true);
     setReleaseNotes(null);
@@ -278,6 +289,8 @@ function useDockerStatus() {
     dismissStartAll,
     tailscalePreflightStatus,
     runTailscalePreflight,
+    versionDriftCheckStatus,
+    runVersionDriftCheck,
     connectionState,
     isLoading,
     releaseNotes,

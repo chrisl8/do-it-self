@@ -2387,10 +2387,26 @@ async function webserver() {
   // release-notes GitHub/Gitea calls, so this runs on a much slower cadence.
   // dockerWatcher.init() (called after webserver() in main.js) hasn't
   // populated docker.running yet at this point, so delay the first run.
-  const runVersionDriftCheck = () =>
-    Promise.resolve(getStatus()?.docker?.running || {})
+  // versionDriftCheckStatus lets the frontend show a spinner/"last checked"
+  // for the manual recheck button, mirroring tailscalePreflightStatus above.
+  const runVersionDriftCheck = () => {
+    updateStatus("versionDriftCheckStatus", { status: "running" });
+    return Promise.resolve(getStatus()?.docker?.running || {})
       .then(refreshVersionDrift)
-      .catch((e) => console.error("[Version Drift] check failed:", e));
+      .then(() => {
+        updateStatus("versionDriftCheckStatus", {
+          status: "done",
+          checkedAt: Date.now(),
+        });
+      })
+      .catch((e) => {
+        console.error("[Version Drift] check failed:", e);
+        updateStatus("versionDriftCheckStatus", {
+          status: "failed",
+          checkedAt: Date.now(),
+        });
+      });
+  };
   const VERSION_DRIFT_STARTUP_DELAY_MS = 30 * 1000;
   const VERSION_DRIFT_INTERVAL_MS = 12 * 60 * 60 * 1000;
   setTimeout(runVersionDriftCheck, VERSION_DRIFT_STARTUP_DELAY_MS).unref();
@@ -2691,9 +2707,27 @@ async function webserver() {
                   });
                 }
                 getFormattedDockerContainers()
-                  .then((containers) => {
+                  .then(async (containers) => {
                     updateStatus("docker.running", containers.running);
                     updateStatus("docker.stacks", containers.stacks);
+                    // A successful upgrade should clear a stale "vX.Y.Z
+                    // available" chip immediately rather than waiting for
+                    // the 12h periodic check to catch up -- recheck just
+                    // this stack (not the whole fleet, to avoid piling on
+                    // registry rate limits) and push the corrected result.
+                    if (code === 0 && containers.running?.[stackName]) {
+                      await refreshVersionDrift({
+                        [stackName]: containers.running[stackName],
+                      }).catch((e) =>
+                        console.error(
+                          `[Version Drift] post-upgrade recheck failed for ${stackName}:`,
+                          e,
+                        ),
+                      );
+                      const refreshed = await getFormattedDockerContainers();
+                      updateStatus("docker.running", refreshed.running);
+                      updateStatus("docker.stacks", refreshed.stacks);
+                    }
                     statusEmitter.emit("update");
                   })
                   .catch((err) => {
@@ -2929,6 +2963,25 @@ async function webserver() {
         // Fire and forget; the result is broadcast via tailscalePreflightStatus
         // to every client, not just this one.
         runTailscalePreflight();
+      } else if (message.type === "runVersionDriftCheck") {
+        // Manual "recalculate" for the "newer tag available" chips -- these
+        // otherwise only refresh on a 12h timer, so a container upgraded by
+        // some path other than the dashboard's Update button (e.g. a module
+        // update run by hand) can show stale drift for hours.
+        console.log("[Version Drift] Manual recheck requested");
+        runVersionDriftCheck()
+          .then(() => getFormattedDockerContainers())
+          .then((containers) => {
+            updateStatus("docker.running", containers.running);
+            updateStatus("docker.stacks", containers.stacks);
+            statusEmitter.emit("update");
+          })
+          .catch((err) =>
+            console.error(
+              "[Version Drift] manual recheck refresh failed:",
+              err,
+            ),
+          );
       } else if (message.type === "getReleaseNotes") {
         const stackName = message.payload?.stackName;
         if (!stackName) {

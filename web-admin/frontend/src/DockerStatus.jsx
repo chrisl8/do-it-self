@@ -201,6 +201,8 @@ const DockerStatus = ({
   dismissStartAll,
   tailscalePreflightStatus,
   runTailscalePreflight,
+  versionDriftCheckStatus,
+  runVersionDriftCheck,
   connectionState,
   isLoading,
   releaseNotes,
@@ -607,6 +609,18 @@ const DockerStatus = ({
               Start All Enabled ({startableCount})
             </Button>
           )}
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={runVersionDriftCheck}
+          disabled={versionDriftCheckStatus?.status === "running"}
+          size="small"
+          title="Recheck every running container's tag against the registry now, instead of waiting up to 12h. Useful after an upgrade done outside the dashboard (e.g. a manual module update)."
+        >
+          {versionDriftCheckStatus?.status === "running"
+            ? "Checking Versions..."
+            : "Recheck Versions"}
+        </Button>
       </Box>
 
       {!hasData && !isLoading && (

@@ -201,6 +201,8 @@ const App = () => {
     dismissStartAll,
     tailscalePreflightStatus,
     runTailscalePreflight,
+    versionDriftCheckStatus,
+    runVersionDriftCheck,
     connectionState,
     isLoading,
     releaseNotes,
@@ -244,6 +246,8 @@ const App = () => {
               dismissStartAll={dismissStartAll}
               tailscalePreflightStatus={tailscalePreflightStatus}
               runTailscalePreflight={runTailscalePreflight}
+              versionDriftCheckStatus={versionDriftCheckStatus}
+              runVersionDriftCheck={runVersionDriftCheck}
               connectionState={connectionState}
               isLoading={isLoading}
               releaseNotes={releaseNotes}
