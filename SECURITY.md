@@ -27,22 +27,28 @@ Implications:
 
 ## Host sudoers rules
 
-`scripts/setup.sh` installs three drop-in files in `/etc/sudoers.d/`
-(`scripts/setup.sh:95-125`):
+`scripts/setup.sh` installs a set of narrowly-scoped drop-in files in
+`/etc/sudoers.d/` (`scripts/setup.sh:93-158`), each idempotent and gated so
+re-running `setup.sh` only adds whatever's missing:
 
 | File | Rule | Why |
 |---|---|---|
 | `containers-chown` | NOPASSWD `/usr/bin/chown` | `all-containers.sh` fixes mount ownership before `docker compose up` (see `mount-permissions.yaml`). |
 | `containers-chmod` | NOPASSWD `/usr/bin/chmod` | Same, for mount mode bits. |
 | `containers-shutdown` | NOPASSWD `/usr/sbin/shutdown` | `system-graceful-shutdown.sh` uses it for ordered cron-driven shutdowns. |
+| `containers-resolved` | NOPASSWD `/usr/bin/systemctl restart systemd-resolved` (exact command only) | `system-dns-watchdog.sh` bounces the resolver to recover a Tailscale/resolved DNS wedge. |
+| `containers-netwatch` | NOPASSWD `/usr/bin/nmcli device disconnect *` / `connect *` | `system-network-watchdog.sh` reconnects the LAN interface after a router reboot/IP conflict. |
+| `containers-infisical-cli` | NOPASSWD `apt-get update`, `apt-get install -y infisical=*`, `apt-mark hold/unhold infisical` (exact commands/package only) | `all-containers.sh`'s CLI sync step keeps the apt-installed Infisical CLI in lock-step with the pinned server version (see `docs/INFISICAL_UPGRADE_RUNBOOK.md`). |
 
-Each rule is scoped to a single binary, not blanket sudo. Remove with
-`sudo rm /etc/sudoers.d/containers-*`.
+Most rules are scoped to a single binary; the DNS/netwatch/Infisical rules are
+scoped further, to an exact command or a narrow wildcard — not blanket sudo.
+Remove with `sudo rm /etc/sudoers.d/containers-*`.
 
 **Trade-off.** Any process running as the host user can chown or chmod any
-file on the system, and can halt the host. This is acceptable on a
-single-admin box where the host user is you; it is **not** acceptable on a
-multi-tenant host, and this platform is not designed for that shape.
+file on the system, halt the host, or install/hold a specific apt package.
+This is acceptable on a single-admin box where the host user is you; it is
+**not** acceptable on a multi-tenant host, and this platform is not designed
+for that shape.
 
 ## Web-admin access control
 

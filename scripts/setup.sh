@@ -100,6 +100,7 @@ SUDOERS_CHMOD="/etc/sudoers.d/containers-chmod"
 SUDOERS_SHUTDOWN="/etc/sudoers.d/containers-shutdown"
 SUDOERS_RESOLVED="/etc/sudoers.d/containers-resolved"
 SUDOERS_NETWATCH="/etc/sudoers.d/containers-netwatch"
+SUDOERS_INFISICAL_CLI="/etc/sudoers.d/containers-infisical-cli"
 CURRENT_USER=$(whoami)
 if [[ ! -f "$SUDOERS_CHOWN" ]]; then
   step "Configuring passwordless sudo for chown"
@@ -154,6 +155,26 @@ if [[ ! -f "$SUDOERS_NETWATCH" ]]; then
   ok "Passwordless sudo for LAN interface reconnect configured"
 else
   ok "Passwordless sudo for LAN interface reconnect already configured"
+fi
+# Narrow rule for keeping the apt-installed Infisical CLI in lock-step with
+# the pinned Infisical server (see docs/INFISICAL_UPGRADE_RUNBOOK.md). ONLY
+# apt-get update/install of the exact `infisical` package and apt-mark
+# hold/unhold of it, not apt-get/apt-mark in general. Lets
+# all-containers.sh's CLI sync step install the server-compatible CLI
+# version on every normal run instead of requiring a manual per-host
+# apt-mark unhold/install/hold dance after each server bump.
+if [[ ! -f "$SUDOERS_INFISICAL_CLI" ]]; then
+  step "Configuring passwordless sudo for Infisical CLI version sync"
+  {
+    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get update"
+    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y infisical=*"
+    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-mark hold infisical"
+    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-mark unhold infisical"
+  } | sudo tee "$SUDOERS_INFISICAL_CLI" > /dev/null
+  sudo chmod 0440 "$SUDOERS_INFISICAL_CLI"
+  ok "Passwordless sudo for Infisical CLI version sync configured"
+else
+  ok "Passwordless sudo for Infisical CLI version sync already configured"
 fi
 
 # ── Step 1c: Memory-pressure hardening ──────────────────────────────────

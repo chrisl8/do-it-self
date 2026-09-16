@@ -329,6 +329,37 @@ resolve_mount_path() {
   echo "$expanded"
 }
 
+sync_infisical_cli() {
+  # Keep the apt-installed Infisical CLI (a host package, not a container) in
+  # lock-step with container-registry.yaml's containers.infisical.cli_version.
+  # A CLI ahead of the pinned server calls an API version the server doesn't
+  # route and silently blanks every secret -- see
+  # docs/INFISICAL_UPGRADE_RUNBOOK.md. This replaces the old per-host manual
+  # `apt-mark unhold/install/hold` dance: bumping cli_version in the registry
+  # (alongside a server image bump) is enough, every host self-heals on its
+  # next --start. No-ops on hosts without the CLI installed.
+  command -v infisical &> /dev/null || return 0
+  command -v yq &> /dev/null || return 0
+
+  local pinned_version installed_version
+  pinned_version=$(yq e '.containers.infisical.cli_version // ""' "${SCRIPT_DIR}/container-registry.yaml" 2>/dev/null)
+  [[ -z "${pinned_version}" ]] && return 0
+
+  installed_version=$(infisical --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+  [[ "${installed_version}" == "${pinned_version}" ]] && return 0
+
+  printf "${YELLOW}Infisical CLI v${installed_version} != pinned v${pinned_version} -- syncing...${NC}\n"
+  sudo -n /usr/bin/apt-mark unhold infisical &> /dev/null || true
+  if sudo -n /usr/bin/apt-get update &> /dev/null && \
+     sudo -n /usr/bin/apt-get install -y "infisical=${pinned_version}" &> /dev/null && \
+     sudo -n /usr/bin/apt-mark hold infisical &> /dev/null; then
+    printf "${YELLOW}Infisical CLI synced to v${pinned_version} and held.${NC}\n"
+  else
+    printf "${RED}Could not sync Infisical CLI to v${pinned_version} automatically.${NC}\n"
+    printf "${RED}Passwordless sudo may not be configured -- re-run scripts/setup.sh, then retry.${NC}\n"
+  fi
+}
+
 apply_mount_permissions() {
   local config_file="$1"
 
@@ -661,6 +692,10 @@ RESTART_LIST_TEXT_UPPER="All containers"
 # Fix any necessary file permissions
 if [[ -e "${HOME}/credentials/infisical.env" ]]; then
   chmod 600 "${HOME}/credentials/infisical.env"
+fi
+
+if [[ ${START_ACTION} = true ]]; then
+  sync_infisical_cli
 fi
 
 # If a container list file is provided, read it and filter the container list

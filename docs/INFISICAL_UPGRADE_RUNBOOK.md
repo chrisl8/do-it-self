@@ -24,6 +24,42 @@ bump). It has been reconciled with what was actually done: minimal-disruption
 and untouched), pg_dump as the primary rollback (the ZFS snapshot reverts the
 whole shared dataset, so it is a last resort only).
 
+## Fast-track: patch-only bump (same minor version)
+
+Since the CLI/server coupling risk is now guarded structurally (see below),
+a same-minor patch bump (e.g. `v0.165.10 -> v0.165.11`) doesn't need the full
+checklist — Infisical patch releases haven't historically shipped breaking
+schema/API changes. Reserve the full "Upgrading the server" procedure below
+for minor/major jumps, where an actual API or DB-migration change is
+plausible.
+
+1. **Snapshot the DB** (steps 1-2 of the full procedure below — ZFS snapshot
+   + `pg_dump`). Migrations are still irreversible even on a patch bump.
+2. Bump the image tag in
+   `.modules/do-it-self-containers/infisical/compose.yaml`, and in the same
+   commit, bump `cli_version` in
+   `.modules/do-it-self-containers/module.yaml`'s `infisical` entry to a CLI
+   version you've **confirmed exports cleanly against the new server**
+   (`infisical export ... --path=/shared` from step 6 below). Commit and push
+   to the module repo, then `module.sh update` + regenerate the root
+   `container-registry.yaml` (`node scripts/module-helper.js
+   regenerate-registry`, maintainer-only) so `all-containers.sh` reads the
+   new pin.
+3. `~/containers/scripts/all-containers.sh --stop --start` (or
+   `--container infisical` first, verify, then a full cycle) on the server
+   host.
+4. Smoke test: step 6's `/shared` export check below. `exit=0` and real key
+   names -> good; `exit=1` -> stop and roll back.
+5. Every **client** host's Infisical CLI is brought in line automatically:
+   `all-containers.sh`'s `sync_infisical_cli` step (near the top of every
+   `--start`) reads the new `cli_version` from `container-registry.yaml` and
+   `apt-get install`s + holds it if it differs from what's installed. No
+   manual `apt-mark unhold/install/hold` needed on those hosts — just run
+   their normal `all-containers.sh --start` (or wait for the next cron
+   startup). Requires the `containers-infisical-cli` sudoers grant from
+   `scripts/setup.sh` — re-run `setup.sh` once on any host provisioned before
+   this mechanism existed.
+
 ## TL;DR
 
 The Infisical **CLI** (apt, auto-updating third-party repo) and the Infisical
@@ -79,7 +115,11 @@ it always exists. Exit code — not emptiness — is the signal:
 `0.43.76` — works, but **not held**. Its `unattended-upgrades` is enabled yet
 `Allowed-Origins` covers only Ubuntu origins, so the third-party Infisical repo
 is *not* auto-upgraded. The risk there is a human running `apt upgrade`
-(candidate `0.43.106` — verified broken). Consider `apt-mark hold infisical`.
+(candidate `0.43.106` — verified broken). Once `setup.sh` has been re-run
+there to pick up the `containers-infisical-cli` sudoers grant,
+`all-containers.sh`'s `sync_infisical_cli` step holds it at the repo-pinned
+version automatically on every `--start`, closing this gap without a manual
+`apt-mark hold`.
 
 ## Upgrading the server (the real fix)
 
@@ -145,11 +185,23 @@ Commit and push to
     # Expect exit=0 and the /shared keys (DOCKER_GID HOST_NAME TS_API_TOKEN
     # TS_AUTHKEY TS_DOMAIN ...). exit=1 -> STOP and roll back.
 
-    # 7. Now unhold and upgrade the CLI to match the new server
+    # 7. Confirm a CLI version against the new server, then commit that pin.
+    #    Try the currently-installed CLI first (`infisical --version`); if
+    #    step 6 already passed above, it's already confirmed and you can
+    #    skip straight to recording it. Otherwise unhold and try current:
     sudo apt-mark unhold infisical
     sudo apt-get update && sudo apt-get install -y infisical
     # Re-run the step 6 verification with the new CLI. If it fails, the CLI has
     # outrun the server again -- re-pin and reassess, do not proceed.
+    #
+    #    Once a working CLI version is confirmed, record it in
+    #    .modules/do-it-self-containers/module.yaml's infisical.cli_version
+    #    (same commit as the server tag bump), regenerate
+    #    container-registry.yaml, and re-hold this host at that version:
+    sudo apt-mark hold infisical
+    #    Every OTHER host then self-heals via all-containers.sh's
+    #    sync_infisical_cli step on its next --start -- no manual per-host
+    #    apt-mark dance needed there. See the Fast-track section above.
 
     # 8. Full cycle so every container gets real secrets
     #    (--start alone SKIPS already-healthy containers)
@@ -191,6 +243,13 @@ Once verified and soaked, drop the snapshot:
   runtime. Test against the live server instead.
 - After a downgrade the CLI nags on stderr about a newer release. Harmless
   (call sites discard stderr); `INFISICAL_DISABLE_UPDATE_CHECK` silences it.
-- `apt-mark hold` is **host-local state**, not in the repo. A fresh `setup.sh`
-  installs the current CLI and would hit this wall — the in-loop guard is what
-  protects that case, by failing loudly instead of silently.
+- `apt-mark hold` itself is still **host-local state**, not in the repo — but
+  *which version* to hold at no longer is: `container-registry.yaml`'s
+  `containers.infisical.cli_version` (sourced from
+  `.modules/do-it-self-containers/module.yaml`) is the repo-tracked pin, and
+  `all-containers.sh`'s `sync_infisical_cli` step applies + holds it on every
+  `--start`. A fresh `setup.sh` + `all-containers.sh --start` now lands on the
+  correct CLI version automatically instead of whatever apt's candidate is.
+  The in-loop export guard (`INFISICAL_AVAILABLE` block) remains the backstop
+  for any host that hasn't run the updated `setup.sh`/`all-containers.sh` yet,
+  failing loudly instead of silently.

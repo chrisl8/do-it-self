@@ -590,6 +590,7 @@ containers:
     uses_tailscale: false
     start_order: "000"
     protected: true
+    cli_version: 0.43.116
     generation: 2026-08-postgres18-valkey
     volumes:
       db:
