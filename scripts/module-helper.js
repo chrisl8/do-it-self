@@ -543,6 +543,9 @@ async function updateModules(args) {
   // --no-restart leaves re-rendered running containers alone (they keep
   // stale bind mounts until manually restarted); default is to recreate them.
   const noRestart = args.includes("--no-restart");
+  // --yes/-y confirms a module-wide full sweep (see moduleWideChange below)
+  // instead of aborting it.
+  const yesFlag = args.includes("--yes") || args.includes("-y");
   // --container <name>[,<name>...] forces the update to touch only the named
   // container(s) regardless of what the module diff says. Useful for a
   // deliberate one-off bump when you don't want to wait on the diff logic
@@ -555,6 +558,7 @@ async function updateModules(args) {
   const positional = args.filter(
     (a, i) =>
       !a.startsWith("--") &&
+      a !== "-y" &&
       (containerFlagIndex === -1 || i !== containerFlagIndex + 1),
   );
   const specificModule = positional[0] || null;
@@ -674,6 +678,31 @@ async function updateModules(args) {
         // which ones it touches.
         const moduleWideChange = changedPaths.includes("module.yaml");
         const changedDirs = new Set(changedPaths.map((p) => p.split("/")[0]));
+
+        // A module.yaml-only edit (e.g. adding one field to one container's
+        // entry) reads identically to a real breaking change once it's
+        // bundled with an unrelated commit and the diff spans both -- this
+        // is the trap that silently escalated a one-line infisical tag bump
+        // into a 120-container restart sweep before. Make the escalation
+        // loud and require it to be explicit rather than letting it happen
+        // as a side effect of an ordinary `module.sh update`.
+        if (moduleWideChange && containerList.length > 1 && !yesFlag) {
+          console.warn(
+            `\n  ${"!".repeat(70)}\n` +
+              `  ${name}: module.yaml changed between ${moduleEntry.commit.slice(0, 7)} and ${newCommit.slice(0, 7)}.\n` +
+              `  That's shared metadata, so ALL ${containerList.length} installed container(s)\n` +
+              `  from this module would be re-rendered and restarted, not just the\n` +
+              `  one(s) you meant to touch. This can take 30+ minutes.\n` +
+              `  Changed files: ${changedPaths.join(", ")}\n\n` +
+              `  Re-run with --yes to proceed with the full sweep, or --container\n` +
+              `  <name> to force just the container(s) you actually meant to bump\n` +
+              `  (module.yaml's other changes get picked up on the next full run).\n` +
+              `  ${"!".repeat(70)}\n`,
+          );
+          console.log(`  ${name}: skipped -- see warning above.`);
+          continue;
+        }
+
         containersToProcess = moduleWideChange
           ? containerList
           : containerList.filter((c) => changedDirs.has(c));
