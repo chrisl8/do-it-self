@@ -69,6 +69,36 @@ load_env() {
     fi
 }
 
+# `pm2 restart --update-env` freezes whatever env the CALLING shell has at
+# that moment into PM2's stored env for the app, permanently -- not just what
+# load_env exported from $ENV_FILE. If this runs from a shell that has
+# sourced credential-loading scripts (setup-infisical.sh, all-containers.sh,
+# borg-backup.sh), those secrets get baked into the web-admin's PM2 env for
+# good. Run it through `env -i` with an explicit allowlist instead, so only
+# what the app actually needs rides along. Mirrors CHILD_ENV_ALLOWLIST in
+# web-admin/backend/src/childEnv.js. See docs/PM2_ENV_POLLUTION_FINDINGS_2026-09-15.md.
+CHILD_ENV_ALLOWLIST=(PATH HOME PM2_HOME USER LOGNAME SHELL LANG LC_ALL TERM TZ XDG_RUNTIME_DIR NODE_ENV)
+
+restart_with_clean_env() {
+    local env_args=()
+    local key value
+    for key in "${CHILD_ENV_ALLOWLIST[@]}"; do
+        if [ -n "${!key+x}" ]; then
+            env_args+=("$key=${!key}")
+        fi
+    done
+    if [ -f "$ENV_FILE" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            if [[ "$line" =~ ^[^#].*= ]]; then
+                key="${line%%=*}"
+                value="${line#*=}"
+                env_args+=("$key=$value")
+            fi
+        done < "$ENV_FILE"
+    fi
+    env -i "${env_args[@]}" pm2 restart "$PM2_NAME" --update-env
+}
+
 start() {
     if pm2 list 2>/dev/null | grep -q "$PM2_NAME"; then
         # Look up "Container Web Admin" specifically. The previous version
@@ -153,7 +183,7 @@ rebuild() {
     if pm2 list 2>/dev/null | grep -q "$PM2_NAME"; then
         echo "Restarting existing web-admin process..."
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restarting PM2 process: $PM2_NAME"
-        pm2 restart "$PM2_NAME" --update-env
+        restart_with_clean_env
     else
         echo "Starting web-admin via PM2..."
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting new PM2 process from $ECOSYSTEM_FILE"

@@ -18,6 +18,7 @@
 import { spawn } from "child_process";
 import os from "os";
 import { join } from "path";
+import { childEnv } from "./childEnv.js";
 import { getUserConfig } from "./configRegistry.js";
 import { getSecret, setSecret } from "./infisicalClient.js";
 import { updateStatus, getStatus } from "./statusEmitter.js";
@@ -165,7 +166,7 @@ export async function setClientPassphrase(clientName, passphrase) {
 // Build the env object for `spawn` — combines per-client BORG_PASSPHRASE_<UPPER>
 // vars with the existing process env. Returns { env, sendEnvNames }.
 async function buildPassphraseEnv(cfg) {
-  const env = { ...process.env };
+  const env = { ...childEnv() };
   const sendEnvNames = [];
   for (const client of cfg.clients) {
     if (!client?.name || !client?.infisical_key) continue;
@@ -422,7 +423,7 @@ function runRpcAction(cfg, actionLabel, verb, ws) {
       command: `action ${verb}`,
       controlPrefix: "backuppi-rpc",
     });
-    const child = spawn("ssh", args);
+    const child = spawn("ssh", args, { env: childEnv() });
     const timer = setTimeout(() => child.kill("SIGTERM"), ACTION_TIMEOUT_MS);
     pipeChildToWs(child, actionLabel, ws);
     child.on("error", (err) => {
@@ -466,7 +467,7 @@ async function runMgmtVerb(cfg, actionLabel, verb, clientName, ws) {
     return { ok: false, code: 1 };
   }
 
-  const env = { ...process.env, BORG_PASSPHRASE: passphrase };
+  const env = { ...childEnv(), BORG_PASSPHRASE: passphrase };
   const args = buildSshArgs({
     key: cfg.mgmtKey,
     user: cfg.mgmtUser,

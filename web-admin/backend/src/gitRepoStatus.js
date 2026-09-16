@@ -5,12 +5,13 @@
 
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { childEnv as baseChildEnv } from "./childEnv.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_CHANGES_PER_REPO = 50;
 
 function childEnv() {
-  return { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
+  return { ...baseChildEnv(), GIT_OPTIONAL_LOCKS: "0" };
 }
 
 // Returns { branch, upstream, ahead, behind, canFastForward } for a repo,

@@ -34,6 +34,7 @@ import { getUserConfig } from "./configRegistry.js";
 import { getSecret, setSecret, createFolder } from "./infisicalClient.js";
 import { updateStatus } from "./statusEmitter.js";
 import * as jf from "./jellyfinClient.js";
+import { childEnv } from "./childEnv.js";
 
 const POLL_INTERVAL_MS_DEFAULT = 5 * 1000;
 const SECRET_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -279,7 +280,9 @@ function parseDf(output) {
 
 function readDisk(cfg) {
   return new Promise((resolve) => {
-    const child = spawn("df", ["-PB1", cfg.freeSpacePath]);
+    const child = spawn("df", ["-PB1", cfg.freeSpacePath], {
+      env: childEnv(),
+    });
     let out = "";
     const timer = setTimeout(() => child.kill("SIGTERM"), 10000);
     child.stdout.on("data", (d) => (out += d.toString()));

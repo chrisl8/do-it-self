@@ -18,6 +18,7 @@ import os from "os";
 import { join } from "path";
 import { getUserConfig } from "./configRegistry.js";
 import { recordCopy } from "./copyHistory.js";
+import { childEnv } from "./childEnv.js";
 
 const POLL_INTERVAL_MS_DEFAULT = 10 * 1000;
 const STATUS_THROTTLE_MS = 3 * 1000;
@@ -122,11 +123,11 @@ function remoteExec(
   { input, timeoutMs = SSH_OP_TIMEOUT_MS } = {},
 ) {
   return new Promise((resolve) => {
-    const child = spawn("ssh", [
-      ...sshOpts(client),
-      `${client.sshUser}@${client.host}`,
-      command,
-    ]);
+    const child = spawn(
+      "ssh",
+      [...sshOpts(client), `${client.sshUser}@${client.host}`, command],
+      { env: childEnv() },
+    );
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);
@@ -290,7 +291,7 @@ async function runJob({ client, job, p }) {
   let eta = null;
   let lastWrite = 0;
 
-  const child = spawn("rsync", args);
+  const child = spawn("rsync", args, { env: childEnv() });
   activeJob = { id, client, child };
   const timer = setTimeout(() => child.kill("SIGTERM"), RSYNC_TIMEOUT_MS);
 

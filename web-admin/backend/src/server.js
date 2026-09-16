@@ -12,6 +12,7 @@ import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 import { getReleaseNotesForStack } from "./githubReleases.js";
 import { refreshVersionDrift } from "./versionDrift.js";
 import { bestEffortFetch, getRepoStatus } from "./gitRepoStatus.js";
+import { childEnv } from "./childEnv.js";
 import {
   getRegistry,
   getUserConfig,
@@ -124,34 +125,6 @@ function runStackOpExclusive(task) {
   return result;
 }
 
-// Children spawned from the backend get an explicit, minimal env rather than
-// inheriting process.env. This prevents variables intended for the web-admin's
-// own compose.yaml substitution (e.g. TS_STATE_HOST_DIR, HOMEPAGE_GROUP) from
-// leaking to docker compose invocations in child scripts — shell env wins over
-// project .env files in docker compose, so leaked vars would override each
-// target container's own settings. Allowlist exactly what the shell scripts need.
-const CHILD_ENV_ALLOWLIST = [
-  "PATH",
-  "HOME",
-  "USER",
-  "LOGNAME",
-  "SHELL",
-  "LANG",
-  "LC_ALL",
-  "TERM",
-  "TZ",
-  "XDG_RUNTIME_DIR",
-  "NODE_ENV",
-];
-
-function childEnv() {
-  const out = {};
-  for (const k of CHILD_ENV_ALLOWLIST) {
-    if (process.env[k] !== undefined) out[k] = process.env[k];
-  }
-  return out;
-}
-
 function spawnTracked(command, args, timeoutMs) {
   let output = "";
   const child = spawn(command, args, { env: childEnv() });
@@ -251,17 +224,19 @@ async function runTailscalePreflight() {
       return;
     }
     updateStatus("tailscalePreflightStatus", { status: "running", checks: [] });
-    const childEnv = { ...process.env };
-    childEnv.TS_API_TOKEN = tokenSecret.value;
+    const preflightEnv = { ...childEnv() };
+    preflightEnv.TS_API_TOKEN = tokenSecret.value;
     for (const s of secrets) {
-      if (s.key && s.value) childEnv[s.key] = s.value;
+      if (s.key && s.value) preflightEnv[s.key] = s.value;
     }
     const preflightPath = join(
       os.homedir(),
       "containers/scripts/lib/tailscale-preflight.js",
     );
     await new Promise((resolve) => {
-      const child = spawn("node", [preflightPath, "--json"], { env: childEnv });
+      const child = spawn("node", [preflightPath, "--json"], {
+        env: preflightEnv,
+      });
       let output = "";
       child.stdout.on("data", (d) => (output += d.toString()));
       child.stderr.on("data", (d) => (output += d.toString()));
