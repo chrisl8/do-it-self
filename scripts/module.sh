@@ -39,7 +39,7 @@ SUBCOMMAND="${1:-help}"
 shift || true
 
 case "${SUBCOMMAND}" in
-  add-source|remove-source|install|uninstall|update|list|regenerate-registry|dev-sync|check)
+  add-source|remove-source|install|uninstall|update|list|regenerate-registry|dev-sync|check|drift-status)
     node "${HELPER}" "${SUBCOMMAND}" "$@"
     ;;
   help|--help|-h)
@@ -61,6 +61,9 @@ case "${SUBCOMMAND}" in
     echo "  regenerate-registry               Rebuild container-registry.yaml from modules"
     echo "  dev-sync [<module>] [<container>]  Sync live edits back to module repo"
   echo "  check                              Read-only: report drifted/unpulled modules (no writes)"
+    echo "  drift-status <container>          Read-only, single container, no git fetch: warns on stdout"
+    echo "                                     (exit 1) only for real drift; silent (exit 0) if clean or"
+    echo "                                     pending a generation migration. Used by all-containers.sh."
     echo ""
     echo "See docs/MODULES.md for the full design."
     exit 0

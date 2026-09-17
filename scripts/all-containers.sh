@@ -962,17 +962,16 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
     # lost the recon recyclarr service. Warn loudly on start so a non-durable
     # root edit is caught now rather than vanishing later. Warn-only: never block
     # startup. compose.override.yaml is a separate file and is not compared.
+    # Delegated to `module.sh drift-status` (scripts/lib/module-drift.js)
+    # rather than a bare `diff` here, so a container intentionally held back
+    # by an unmigrated breaking-change generation (see module-helper.js's
+    # `update()`) is recognized the same way here as in the cron check and
+    # the web-admin dashboard, instead of re-deriving that exception a
+    # third time in bash and inevitably missing it again.
     if [[ ${START_ACTION} = true ]]; then
-      MODULE_SRC=""
-      for MOD_DIR in "${SCRIPT_DIR}"/.modules/*/; do
-        if [[ -f "${MOD_DIR}${CONTAINER_DIR}/compose.yaml" ]]; then
-          MODULE_SRC="${MOD_DIR}${CONTAINER_DIR}/compose.yaml"
-          break
-        fi
-      done
-      if [[ -n "${MODULE_SRC}" ]] && ! diff -q "${MODULE_SRC}" "compose.yaml" >/dev/null 2>&1; then
-        printf "${YELLOW}  WARNING: ${CONTAINER_DIR}/compose.yaml differs from its module source -- the root copy is a gitignored render and will be OVERWRITTEN on the next module update.${NC}\n"
-        printf "${YELLOW}  Reconcile: 'scripts/module.sh dev-sync ${CONTAINER_DIR}' to push root edits into the module (or re-render if the module is newer). Source: ${MODULE_SRC#"${SCRIPT_DIR}"/}${NC}\n"
+      DRIFT_MSG="$(node "${SCRIPT_DIR}/scripts/module-helper.js" drift-status "${CONTAINER_DIR}" 2>/dev/null)" || true
+      if [[ -n "${DRIFT_MSG}" ]]; then
+        printf "${YELLOW}%s${NC}\n" "${DRIFT_MSG}"
       fi
     fi
 

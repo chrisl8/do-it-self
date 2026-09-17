@@ -27,7 +27,7 @@ import {
   readdir,
   rename,
 } from "fs/promises";
-import { join, dirname, basename } from "path";
+import { join, dirname, basename, relative } from "path";
 import { fileURLToPath } from "url";
 import { execSync, execFileSync } from "child_process";
 import { createInterface } from "readline";
@@ -36,6 +36,10 @@ import {
   PLATFORM_CONTAINERS,
   getContainerSource,
 } from "./lib/container-source.js";
+import {
+  generationGateLabel,
+  classifyContainerDrift,
+} from "./lib/module-drift.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTAINERS_DIR = join(__dirname, "..");
@@ -791,18 +795,20 @@ async function updateModules(args) {
       // action required from that consumer. A fresh install with no existing
       // targetDir content of its own has nothing to protect and is handled
       // like any other container (this check only ever skips an update to
-      // an already-installed container).
-      const currentGeneration =
-        moduleYaml.containers?.[containerName]?.generation;
+      // an already-installed container). `generationGateLabel` is shared
+      // with the drift-reporting subcommands below (and the web-admin
+      // dashboard) so this exact rule can't drift out of sync with what
+      // they report as "expected, not an alarm".
+      const currentGeneration = generationGateLabel(
+        moduleYaml,
+        userConfig,
+        containerName,
+      );
       if (currentGeneration) {
-        const pinnedGeneration =
-          userConfig?.containers?.[containerName]?.pinned_generation;
-        if (pinnedGeneration !== currentGeneration) {
-          console.log(
-            `  ${containerName}: module has a breaking change pending (generation "${currentGeneration}") -- skipping, not pinned. See docs/MAJOR_VERSION_UPGRADE_GOTCHAS.md, then set user-config.yaml containers.${containerName}.pinned_generation: "${currentGeneration}" once migrated.`,
-          );
-          continue;
-        }
+        console.log(
+          `  ${containerName}: module has a breaking change pending (generation "${currentGeneration}") -- skipping, not pinned. See docs/MAJOR_VERSION_UPGRADE_GOTCHAS.md, then set user-config.yaml containers.${containerName}.pinned_generation: "${currentGeneration}" once migrated.`,
+        );
+        continue;
       }
 
       // Copy module source into a staging dir. targetDir remains intact;
@@ -1284,15 +1290,17 @@ async function checkDrift() {
         readFile(moduleCompose, "utf8"),
         readFile(rootCompose, "utf8"),
       ]);
-      if (moduleText === rootText) continue;
-
-      const currentGeneration =
-        moduleYaml?.containers?.[containerName]?.generation;
-      const pinnedGeneration =
-        userConfig?.containers?.[containerName]?.pinned_generation;
-      if (currentGeneration && pinnedGeneration !== currentGeneration) {
+      const result = classifyContainerDrift({
+        moduleText,
+        rootText,
+        moduleYaml,
+        userConfig,
+        containerName,
+      });
+      if (result.status === "clean") continue;
+      if (result.status === "pending-generation") {
         pendingGeneration.push(
-          `  ${containerName} (module: ${moduleName}): generation "${currentGeneration}" not yet migrated -- module.sh update will keep skipping it. See docs/MAJOR_VERSION_UPGRADE_GOTCHAS.md, then set user-config.yaml containers.${containerName}.pinned_generation: "${currentGeneration}" once migrated.`,
+          `  ${containerName} (module: ${moduleName}): generation "${result.generation}" not yet migrated -- module.sh update will keep skipping it. See docs/MAJOR_VERSION_UPGRADE_GOTCHAS.md, then set user-config.yaml containers.${containerName}.pinned_generation: "${result.generation}" once migrated.`,
         );
         continue;
       }
@@ -1334,6 +1342,56 @@ async function checkDrift() {
   // a pending generation migration is informational and shouldn't fail the
   // cron job / page the owner on its own.
   if (drifted.length > 0) process.exitCode = 1;
+}
+
+// Single-container drift check for `all-containers.sh`'s start-time
+// warning. Deliberately filesystem-only (no `git fetch`, unlike
+// `checkDrift`'s sweep above) -- this runs once per container on every
+// `--start`, so it has to stay cheap. Prints the exact warning text
+// all-containers.sh used to construct itself via a bare `diff`, now backed
+// by the same `classifyContainerDrift` the cron check and the web-admin
+// dashboard use, so a container held back by a generation gate reads the
+// same everywhere instead of only being recognized in some of them.
+// Prints nothing (and exits 0) for "clean" or "pending-generation" --
+// warn-only, never blocks startup, exactly like the code it replaced.
+async function driftStatusOne(args) {
+  const [containerName] = args;
+  if (!containerName) {
+    console.error("Usage: module.sh drift-status <container>");
+    process.exit(1);
+  }
+
+  const installed = await readInstalledModules();
+  const moduleName = getContainerSource(containerName, installed);
+  if (!moduleName || !installed.modules?.[moduleName]) return; // not module-sourced -- nothing to compare
+
+  const modulePath = join(MODULES_DIR, moduleName);
+  const moduleCompose = join(modulePath, containerName, "compose.yaml");
+  const rootCompose = join(CONTAINERS_DIR, containerName, "compose.yaml");
+  if (!(await fileExists(moduleCompose)) || !(await fileExists(rootCompose)))
+    return;
+
+  const [moduleText, rootText, moduleYaml, userConfig] = await Promise.all([
+    readFile(moduleCompose, "utf8"),
+    readFile(rootCompose, "utf8"),
+    readYaml(join(modulePath, "module.yaml")),
+    readYaml(USER_CONFIG_PATH),
+  ]);
+
+  const result = classifyContainerDrift({
+    moduleText,
+    rootText,
+    moduleYaml,
+    userConfig,
+    containerName,
+  });
+  if (result.status !== "drifted") return; // "clean" or "pending-generation"
+
+  console.log(
+    `  WARNING: ${containerName}/compose.yaml differs from its module source -- the root copy is a gitignored render and will be OVERWRITTEN on the next module update.\n` +
+      `  Reconcile: 'scripts/module.sh dev-sync ${containerName}' to push root edits into the module (or re-render if the module is newer). Source: ${relative(CONTAINERS_DIR, moduleCompose)}`,
+  );
+  process.exitCode = 1;
 }
 
 async function devSync(args) {
@@ -1503,6 +1561,7 @@ const subcommands = {
   "regenerate-registry": regenerateRegistry,
   "dev-sync": devSync,
   check: checkDrift,
+  "drift-status": driftStatusOne,
 };
 
 const [subcommand, ...args] = process.argv.slice(2);

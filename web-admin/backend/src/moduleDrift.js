@@ -3,6 +3,9 @@ import { join } from "path";
 import { homedir } from "os";
 import { parse as parseYaml } from "yaml";
 import { getUserConfig } from "./configRegistry.js";
+// Shared with scripts/module-helper.js and all-containers.sh -- see that
+// file's header for why this rule needs to live in exactly one place.
+import { classifyContainerDrift } from "../../../scripts/lib/module-drift.js";
 
 const CONTAINERS_DIR = join(homedir(), "containers");
 const INSTALLED_MODULES_PATH = join(CONTAINERS_DIR, "installed-modules.yaml");
@@ -85,15 +88,14 @@ async function getDriftedContainers() {
           readFile(moduleCompose, "utf8"),
           readFile(rootCompose, "utf8"),
         ]);
-        if (moduleText === rootText) continue;
-
-        const currentGeneration =
-          moduleYaml?.containers?.[containerName]?.generation;
-        const pinnedGeneration =
-          userConfig?.containers?.[containerName]?.pinned_generation;
-        if (currentGeneration && pinnedGeneration !== currentGeneration) {
-          continue; // expected divergence, not drift
-        }
+        const result = classifyContainerDrift({
+          moduleText,
+          rootText,
+          moduleYaml,
+          userConfig,
+          containerName,
+        });
+        if (result.status !== "drifted") continue; // "clean" or "pending-generation"
 
         drifted.add(containerName);
       } catch (error) {
