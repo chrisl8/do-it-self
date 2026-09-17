@@ -517,6 +517,46 @@ These files are platform-specific and never synced back to the module repo:
 
 If you changed volumes, variables, or other metadata in `compose.yaml`, remember to update the container's definition in `module.yaml` manually — dev-sync only handles file sync, not metadata.
 
+## Sharing logic between scripts/, web-admin, and bash
+
+Three independent consumers need to answer the same questions about module
+state (which module owns a container, whether a container's rendered
+`compose.yaml` matches its module source, whether a breaking-change
+`generation` gate is still unmigrated, ...): `scripts/module-helper.js` (the
+CLI), `web-admin/backend` (the dashboard), and `scripts/all-containers.sh`
+(bash, on the per-container start hot path). `scripts/` and
+`web-admin/backend` are separate Node projects with separate
+`package.json`/`node_modules`, and bash can't `import` a JS module at all,
+so it's tempting to just hand-port a rule into each consumer as it comes up.
+
+Don't. That's exactly how the generation-gate exception ended up
+re-implemented three times and wrong in two of them (see git history around
+`scripts/lib/module-drift.js` and the 2026-09-17 incident) — and it's not
+the only instance; `web-admin/backend/src/moduleRegistry.js` independently
+re-derived the same "which module owns this container" logic that
+`scripts/lib/container-source.js` already provided.
+
+Instead:
+
+- Put cross-cutting business logic in a **pure, dependency-free** file
+  under `scripts/lib/*.js` (no imports beyond Node built-ins). Being
+  dependency-free is what makes it safe to import from *either* Node
+  project without pulling one project's `node_modules` into the other.
+- Import it directly (relative path, e.g.
+  `../../../scripts/lib/whatever.js`) from `web-admin/backend/src/*.js`.
+  This already works today (`container-source.js`, `module-drift.js`) —
+  it's not a hypothetical option.
+- For bash consumers, add a thin subcommand to `module-helper.js` (wired
+  through `module.sh`) that calls the shared function and prints a
+  bash-consumable result, then have the shell script call that instead of
+  re-deriving the rule with `diff`/`grep`/etc. Filesystem-only logic (no
+  `git fetch`) if it's going to run on a per-container hot path like
+  `all-containers.sh --start`.
+
+If you're fixing a bug in one of these three consumers and the fix is "this
+rule needs an exception," check whether the same rule is duplicated in the
+other two before you're done — it usually is.
+
 ## Implementation phases
 
 ### Phase 1: Module infrastructure — DONE

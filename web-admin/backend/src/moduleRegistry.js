@@ -2,6 +2,10 @@ import { readFile, access, stat } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 import { parse as parseYaml } from "yaml";
+import {
+  getContainerSource,
+  installedContainerSet,
+} from "../../../scripts/lib/container-source.js";
 
 const CONTAINERS_DIR = join(homedir(), "containers");
 const CATALOG_PATH = join(CONTAINERS_DIR, "module-catalog.yaml");
@@ -50,20 +54,19 @@ export async function getModuleYaml(moduleName) {
   return await readYaml(path, null);
 }
 
-const PLATFORM_CONTAINERS = new Set(["web-admin"]);
-
 // Build a map of { containerName: source } for every installed container.
-// source is the module name, "personal", or "platform". Mirrors the logic in
-// scripts/lib/container-source.js — the registry itself no longer carries
-// the source field, so this is computed at request time from installed-modules.yaml.
+// source is the module name, "personal", or "platform". The registry itself
+// no longer carries the source field, so this is computed at request time
+// from installed-modules.yaml, via the same shared lookup scripts/ uses
+// (scripts/lib/container-source.js) rather than a second copy of the rule —
+// see docs/MODULES.md's "Sharing logic between scripts/, web-admin, and
+// bash" for why that matters.
 export async function getContainerSources() {
   const installed = await readYaml(INSTALLED_MODULES_PATH, { modules: {} });
   const sources = {};
-  for (const name of PLATFORM_CONTAINERS) sources[name] = "platform";
-  for (const [moduleName, entry] of Object.entries(installed.modules || {})) {
-    for (const c of entry?.installed_containers || []) sources[c] = moduleName;
+  for (const name of installedContainerSet(installed)) {
+    sources[name] = getContainerSource(name, installed);
   }
-  for (const c of installed.personal_containers || []) sources[c] = "personal";
   return sources;
 }
 
