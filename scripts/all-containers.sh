@@ -207,6 +207,29 @@ if [ -f "$DIUN_ENV_FILE" ]; then
   VOL_DIUN_SCRIPT=$(grep '^VOL_DIUN_SCRIPT=' "$DIUN_ENV_FILE" | cut -d= -f2-)
   SCRIPT_VOLUME_PATH="${VOL_DIUN_SCRIPT:-$HOME/container-data}/container-mounts/diun/script"
   DIUN_UPDATE_FILE="$SCRIPT_VOLUME_PATH/pendingContainerUpdates.txt"
+
+  # Regenerate the list of container folders actually installed on this host,
+  # written into diun's already-mounted /script volume. diunUpdate.sh has no
+  # visibility into ~/containers (and deliberately isn't given one -- several
+  # container folders hold real secrets files), so it checks this manifest
+  # instead to skip fleet-wide shared-image mappings (e.g. valkey_9-alpine ->
+  # "infisical paperless dawarich searxng") that name stacks not installed
+  # here. Mirrors containerFolderScanner.js's definition of "valid stack name"
+  # exactly: a non-hidden ~/containers subdirectory containing compose.yaml,
+  # regardless of enabled/disabled state. Regenerated on every run of this
+  # script (boot, health-check restarts, manual/module runs), so it stays
+  # fresh without a dedicated cron entry.
+  if [ -n "$SCRIPT_VOLUME_PATH" ]; then
+    mkdir -p "$SCRIPT_VOLUME_PATH" 2>/dev/null || true
+    INSTALLED_CONTAINERS_FILE="$SCRIPT_VOLUME_PATH/installed-containers.txt"
+    {
+      for d in "$SCRIPT_DIR"/*/; do
+        name="$(basename "$d")"
+        [[ "$name" == .* ]] && continue
+        [[ -f "$d/compose.yaml" ]] && echo "$name"
+      done
+    } >"${INSTALLED_CONTAINERS_FILE}.tmp" && mv "${INSTALLED_CONTAINERS_FILE}.tmp" "$INSTALLED_CONTAINERS_FILE"
+  fi
 fi
 
 # Block until no container is still in the "(health: starting)" phase, i.e. the
@@ -708,12 +731,17 @@ if [[ -n "${CONTAINER_LIST_FILE}" ]]; then
   # Read the container list file into an array
   mapfile -t ALLOWED_DIRS < "${CONTAINER_LIST_FILE}"
   
-  # Ensure that each entry in the CONTAINER_LIST exists as a folder in the containers directory
+  # Warn about (but don't abort on) any entry that doesn't exist as a folder in
+  # the containers directory. A single bad line (a stale/hand-edited pending-
+  # updates file, a container removed after being queued, a notifier bug) must
+  # not stall every OTHER real update in this run -- the caller only deletes
+  # the pending-updates file on a successful (exit 0) run, so aborting here
+  # previously meant no updates applied at all, retried indefinitely.
   for ENTRY in "${ALLOWED_DIRS[@]}"; do
     CONTAINER_DIR="$(echo "$ENTRY" | cut -d "/" -f 2)"
     if [[ ! -d "${SCRIPT_DIR}/${CONTAINER_DIR}" ]] || [[ ! -e "${SCRIPT_DIR}/${CONTAINER_DIR}/compose.yaml" ]]; then
-      printf "${RED}Error: Container directory ${CONTAINER_DIR} does not exist or does not contain a compose.yaml file${NC}\n"
-      exit 1
+      printf "${YELLOW}Warning: Container directory ${CONTAINER_DIR} does not exist or does not contain a compose.yaml file -- skipping this entry${NC}\n"
+      continue
     fi
   done
 
