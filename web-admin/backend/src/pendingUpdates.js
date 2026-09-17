@@ -174,55 +174,8 @@ function pruneInvalidPendingUpdates(validStackNames) {
   }
 }
 
-// Clears one stack's entry from pendingContainerUpdates.txt (and its
-// pendingUpdateDetails.jsonl lines) after a web-admin-triggered upgrade
-// succeeds. Without this, the DIUN-sourced "Update" badge stays stuck
-// forever on any host where scripts/update-containers-from-diun-list.sh
-// (the only other code path that clears these files) isn't in the
-// crontab -- diunUpdate.sh only ever appends, and the versionDrift "Recheck
-// versions" button is a completely separate signal (registry tag lookups),
-// so it can never clear a stale DIUN flag either. Best-effort: errors are
-// logged, never thrown.
-function clearPendingUpdate(stackName) {
-  const filePath = getPendingUpdatesFilePath();
-  if (!filePath || !fs.existsSync(filePath)) return;
-
-  try {
-    const lines = fs.readFileSync(filePath, "utf8").split("\n");
-    const kept = lines.filter((line) => line.trim() !== stackName);
-    if (kept.length !== lines.length) {
-      fs.writeFileSync(filePath, kept.join("\n"));
-      console.log(`[pendingUpdates] Cleared ${stackName} from updates file`);
-    }
-
-    const detailsFilePath = getPendingUpdateDetailsFilePath();
-    if (detailsFilePath && fs.existsSync(detailsFilePath)) {
-      const detailLines = fs.readFileSync(detailsFilePath, "utf8").split("\n");
-      const keptDetails = detailLines.filter((line) => {
-        const trimmed = line.trim();
-        if (!trimmed) return true;
-        try {
-          const { stack } = JSON.parse(trimmed);
-          return stack !== stackName;
-        } catch {
-          return true;
-        }
-      });
-      if (keptDetails.length !== detailLines.length) {
-        fs.writeFileSync(detailsFilePath, keptDetails.join("\n"));
-      }
-    }
-  } catch (error) {
-    console.error(
-      `[pendingUpdates] Error clearing pending update for ${stackName}:`,
-      error,
-    );
-  }
-}
-
 export {
   getPendingUpdates,
   getPendingUpdateDetails,
   pruneInvalidPendingUpdates,
-  clearPendingUpdate,
 };
