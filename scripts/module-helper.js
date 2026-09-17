@@ -1223,9 +1223,21 @@ async function syncOneContainer(containerName, moduleName, registry, yesFlag) {
 //      would silently clobber later (the recon/recyclarr incident).
 //   2. Unpulled commits: the local module clone is behind its remote, so
 //      even a same-day `module.sh update` wouldn't pick up the latest fix.
+//
+// A container gated by an unpinned `generation` (see the gate in
+// `update()` above) is EXPECTED to differ from its module source -- that's
+// the whole point of the gate, and `update()` deliberately skips
+// re-rendering it. Reported here as ordinary content drift, it produced a
+// false "will be overwritten on next `module.sh update`" alarm (wrong: the
+// update explicitly skips it) that fired every day via the cron email and
+// the web-admin "Module Drift" chip for a container that needed no action
+// beyond the migration itself. Split into its own non-alarming bucket
+// instead.
 async function checkDrift() {
   const installed = await readInstalledModules();
+  const userConfig = await readYaml(USER_CONFIG_PATH);
   const drifted = [];
+  const pendingGeneration = [];
   const behind = [];
 
   for (const [moduleName, moduleEntry] of Object.entries(
@@ -1258,6 +1270,8 @@ async function checkDrift() {
       behind.push(`  ${moduleName}: could not check remote (${e.message})`);
     }
 
+    const moduleYaml = await readYaml(join(modulePath, "module.yaml"));
+
     for (const containerName of moduleEntry.installed_containers || []) {
       const moduleCompose = join(modulePath, containerName, "compose.yaml");
       const rootCompose = join(CONTAINERS_DIR, containerName, "compose.yaml");
@@ -1270,13 +1284,28 @@ async function checkDrift() {
         readFile(moduleCompose, "utf8"),
         readFile(rootCompose, "utf8"),
       ]);
-      if (moduleText !== rootText) {
-        drifted.push(`  ${containerName} (module: ${moduleName})`);
+      if (moduleText === rootText) continue;
+
+      const currentGeneration =
+        moduleYaml?.containers?.[containerName]?.generation;
+      const pinnedGeneration =
+        userConfig?.containers?.[containerName]?.pinned_generation;
+      if (currentGeneration && pinnedGeneration !== currentGeneration) {
+        pendingGeneration.push(
+          `  ${containerName} (module: ${moduleName}): generation "${currentGeneration}" not yet migrated -- module.sh update will keep skipping it. See docs/MAJOR_VERSION_UPGRADE_GOTCHAS.md, then set user-config.yaml containers.${containerName}.pinned_generation: "${currentGeneration}" once migrated.`,
+        );
+        continue;
       }
+
+      drifted.push(`  ${containerName} (module: ${moduleName})`);
     }
   }
 
-  if (drifted.length === 0 && behind.length === 0) {
+  if (
+    drifted.length === 0 &&
+    pendingGeneration.length === 0 &&
+    behind.length === 0
+  ) {
     console.log("No module drift detected.");
     return;
   }
@@ -1287,14 +1316,24 @@ async function checkDrift() {
     );
     console.log(drifted.join("\n"));
   }
-  if (behind.length > 0) {
+  if (pendingGeneration.length > 0) {
     console.log(
       (drifted.length > 0 ? "\n" : "") +
+        "Breaking-change generation(s) pending migration (expected divergence, not an alarm):",
+    );
+    console.log(pendingGeneration.join("\n"));
+  }
+  if (behind.length > 0) {
+    console.log(
+      (drifted.length > 0 || pendingGeneration.length > 0 ? "\n" : "") +
         "Module clone(s) behind their remote (run `module.sh update` to pull):",
     );
     console.log(behind.join("\n"));
   }
-  process.exitCode = 1;
+  // Only unreconciled content drift is treated as an actionable failure --
+  // a pending generation migration is informational and shouldn't fail the
+  // cron job / page the owner on its own.
+  if (drifted.length > 0) process.exitCode = 1;
 }
 
 async function devSync(args) {
