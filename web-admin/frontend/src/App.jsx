@@ -183,6 +183,19 @@ const Navigation = () => {
 };
 
 const App = () => {
+  // Tells apart the maintaining admin from a regular household viewer (e.g.
+  // the daughter this box belongs to), sourced from the Tailscale-User-Login
+  // header via /api/viewer. Used to hide dashboard signals that admin-only
+  // person can act on but a regular viewer never would (see DockerStatus's
+  // "manual upgrade" chip).
+  const [isAdminViewer, setIsAdminViewer] = useState(false);
+  useEffect(() => {
+    fetch("/api/viewer")
+      .then((r) => r.json())
+      .then((d) => setIsAdminViewer(!!d.isAdmin))
+      .catch(() => setIsAdminViewer(false));
+  }, []);
+
   const {
     dockerStatus,
     getDockerStatus,
@@ -256,6 +269,7 @@ const App = () => {
               clearReleaseNotes={clearReleaseNotes}
               postUpdateFindings={postUpdateFindings}
               acknowledgePostUpdateFinding={acknowledgePostUpdateFinding}
+              isAdminViewer={isAdminViewer}
             />
           }
         />

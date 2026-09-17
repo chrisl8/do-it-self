@@ -211,6 +211,7 @@ const DockerStatus = ({
   clearReleaseNotes,
   postUpdateFindings,
   acknowledgePostUpdateFinding,
+  isAdminViewer,
 }) => {
   const [expandedStacks, setExpandedStacks] = useState({});
   const [expandedContainers, setExpandedContainers] = useState({});
@@ -1040,27 +1041,28 @@ const DockerStatus = ({
                       />
                     </Tooltip>
                   )}
-                  {stack.versionDrift?.map((drift) => (
-                    <Tooltip
-                      key={drift.container}
-                      title={`${drift.container}: pinned to ${drift.currentTag}, ${drift.newerTag} is available on ${drift.registry} -- this is a manual upgrade, not a one-click restart. Click to view available tags.`}
-                    >
-                      <Chip
-                        icon={<TrendingUpIcon />}
-                        label={`${drift.newerTag} available`}
-                        size="small"
-                        color="secondary"
-                        variant="outlined"
-                        component="a"
-                        href={drift.tagsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        clickable
-                        onClick={(e) => e.stopPropagation()}
-                        sx={{ cursor: "pointer" }}
-                      />
-                    </Tooltip>
-                  ))}
+                  {isAdminViewer &&
+                    stack.versionDrift?.map((drift) => (
+                      <Tooltip
+                        key={drift.container}
+                        title={`${drift.container}: pinned to ${drift.currentTag}, ${drift.newerTag} is available on ${drift.registry} -- this is a manual upgrade, not a one-click restart. Click to view available tags.`}
+                      >
+                        <Chip
+                          icon={<TrendingUpIcon />}
+                          label={`Manual upgrade: ${drift.currentTag} → ${drift.newerTag}`}
+                          size="small"
+                          color="secondary"
+                          variant="outlined"
+                          component="a"
+                          href={drift.tagsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          clickable
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{ cursor: "pointer" }}
+                        />
+                      </Tooltip>
+                    ))}
                   {postUpdateFindings?.[stack.name]?.needsAttention && (
                     <Tooltip
                       title={`${postUpdateFindings[stack.name].note || "Post-update check found something to review."} Click to dismiss.`}

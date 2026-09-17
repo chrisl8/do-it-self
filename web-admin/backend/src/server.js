@@ -13,6 +13,7 @@ import { getReleaseNotesForStack } from "./githubReleases.js";
 import { refreshVersionDrift } from "./versionDrift.js";
 import { bestEffortFetch, getRepoStatus } from "./gitRepoStatus.js";
 import { childEnv } from "./childEnv.js";
+import { getViewerLogin, isAdminLogin } from "./identity.js";
 import {
   getRegistry,
   getUserConfig,
@@ -560,6 +561,14 @@ app.get("/dashboard-icons/svg/web-admin.svg", (req, res) => {
 // neuromancer and deepthought admin tabs are distinguishable.
 app.get("/api/hostname", (req, res) => {
   res.json({ hostname: os.hostname() });
+});
+
+// Viewer identity — lets the frontend hide admin-only signals (e.g. by-hand
+// upgrade chips) from a non-admin viewer, sourced from the Tailscale-User-Login
+// header that `tailscale serve` already attaches to every proxied request.
+app.get("/api/viewer", async (req, res) => {
+  const login = getViewerLogin(req.headers);
+  res.json({ login, isAdmin: await isAdminLogin(login) });
 });
 
 app.use("/dashboard-icons/svg", express.static(join(ICONS_BASE_DIR, "svg")));
@@ -2313,6 +2322,9 @@ async function webserver() {
   function wireUpgrade(server) {
     server.on("upgrade", (request, socket, head) => {
       wss.handleUpgrade(request, socket, head, (ws) => {
+        // Stashed for any future action that needs to gate on identity, not
+        // used yet -- see identity.js.
+        ws.userLogin = getViewerLogin(request.headers);
         wss.emit("connection", ws, request);
       });
     });
