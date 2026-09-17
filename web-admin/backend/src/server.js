@@ -11,6 +11,7 @@ import getFormattedDockerContainers from "./dockerStatus.js";
 import { statusEmitter, getStatus, updateStatus } from "./statusEmitter.js";
 import { getReleaseNotesForStack } from "./githubReleases.js";
 import { refreshVersionDrift } from "./versionDrift.js";
+import { clearPendingUpdate } from "./pendingUpdates.js";
 import { bestEffortFetch, getRepoStatus } from "./gitRepoStatus.js";
 import { childEnv } from "./childEnv.js";
 import {
@@ -347,6 +348,7 @@ async function processUpdateQueue() {
 
     if (exitCode === 0) {
       console.log(`[Update All] ${stackName} upgraded successfully`);
+      clearPendingUpdate(stackName);
       status.completed.push(stackName);
       status.current = null;
       updateStatus(`restartStatus.${stackName}`, undefined);
@@ -2696,6 +2698,7 @@ async function webserver() {
                   `Upgrade completed for ${stackName}: ${code === 0 ? "SUCCESS" : "FAILED"} (exit code: ${code})`,
                 );
                 if (code === 0) {
+                  clearPendingUpdate(stackName);
                   updateStatus(`restartStatus.${stackName}`, undefined);
                 } else {
                   updateStatus(`restartStatus.${stackName}`, {
