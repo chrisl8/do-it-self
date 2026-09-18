@@ -1,4 +1,8 @@
-// Sends the "your show/movie is ready to watch on deepthought" email.
+// Sends the "your show/movie has been downloaded and is ready to copy to
+// deepthought" email -- fires as soon as neuromancer's Radarr/Sonarr imports
+// it and Seerr marks it available. deepthought is a pure receiver with no
+// visibility into neuromancer, so this is the cue for the person to go
+// trigger the copy themselves from deepthought's Media Staging panel.
 //
 // This host already runs a local Postfix relaying outbound mail through
 // Fastmail (/etc/postfix/main.cf: relayhost = [smtp.fastmail.com]:587, SASL
@@ -27,13 +31,13 @@ export async function sendReadyEmail({ toEmail, title, season }) {
   });
   const subject =
     season != null
-      ? `${title} — Season ${season} is ready`
-      : `${title} is ready`;
+      ? `${title} — Season ${season} is downloaded`
+      : `${title} is downloaded`;
   await transport.sendMail({
     from: await fromAddress(),
     to: toEmail,
-    subject: `${subject} to watch`,
-    text: `${subject} to watch on deepthought.`,
+    subject: `${subject} and ready to copy`,
+    text: `${subject} and ready to copy to deepthought via the Media Staging panel.`,
   });
   return { ok: true };
 }

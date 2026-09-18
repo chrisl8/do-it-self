@@ -164,6 +164,33 @@ async function upsert(partial) {
           ...partial,
         }
       : { ...requests[idx], ...partial };
+
+  // Notify as soon as the file lands on neuromancer (Seerr's "available"),
+  // not when the manual deepthought copy finishes -- deepthought is a
+  // pure receiver with no view into neuromancer, so the person has to be
+  // told to go trigger that copy themselves via deepthought's panel; a
+  // "ready" email that fires only after they've already done that manually
+  // tells them nothing they don't know.
+  if (merged.availableEpoch && !merged.notifiedEpoch) {
+    const toEmail = await getRecipientEmail(merged.requestedByUsername);
+    if (toEmail) {
+      const result = await sendReadyEmail({
+        toEmail,
+        title: merged.title,
+        season: merged.season,
+      }).catch((err) => ({ ok: false, error: err?.message }));
+      if (result.ok) {
+        merged.notifiedEpoch = nowEpoch();
+      } else {
+        console.error("[seerrLedger] sendReadyEmail failed:", result.error);
+      }
+    } else {
+      console.warn(
+        `[seerrLedger] no mapped email for Seerr user "${merged.requestedByUsername}" -- skipping notification for request ${merged.seerrRequestId}`,
+      );
+    }
+  }
+
   if (idx === -1) requests.push(merged);
   else requests[idx] = merged;
   await writeLedger(requests);
@@ -344,13 +371,15 @@ export function stop() {
   tickTimer = null;
 }
 
-// ── matching + notification ─────────────────────────────────────
+// ── matching ────────────────────────────────────────────────────
 // Called by copyHistory.recordCopy() right after a copy lands. Matches
 // primarily on tmdbId/tvdbId (falling back through whichever id the copy
 // actually resolved), plus season number when both sides have one, against
 // any ledger request not yet marked copied. On a match: marks the request
-// copied, looks up the requester's mapped email, sends the "ready" email,
-// and links the copy-history row back to the request.
+// copied and links the copy-history row back to the request. The "ready"
+// email already went out when the item became available on neuromancer
+// (see upsert()) -- by the time a copy lands, the person who ran it already
+// knows, since they're the one who triggered it from deepthought's panel.
 export async function matchAndNotify(copyHistoryEntry) {
   const mediaId = copyHistoryEntry?.seerrMediaId;
   if (!mediaId || (!mediaId.tmdbId && !mediaId.tvdbId)) return; // nothing to match on
@@ -375,26 +404,6 @@ export async function matchAndNotify(copyHistoryEntry) {
   candidate.status = "copied";
   candidate.copiedEpoch = nowEpoch();
 
-  let notifiedEpoch = null;
-  const toEmail = await getRecipientEmail(candidate.requestedByUsername);
-  if (toEmail) {
-    const result = await sendReadyEmail({
-      toEmail,
-      title: candidate.title || copyHistoryEntry.label,
-      season: candidate.season,
-    }).catch((err) => ({ ok: false, error: err?.message }));
-    if (result.ok) {
-      notifiedEpoch = nowEpoch();
-      candidate.notifiedEpoch = notifiedEpoch;
-    } else {
-      console.error("[seerrLedger] sendReadyEmail failed:", result.error);
-    }
-  } else {
-    console.warn(
-      `[seerrLedger] no mapped email for Seerr user "${candidate.requestedByUsername}" — skipping notification for request ${candidate.seerrRequestId}`,
-    );
-  }
-
   const idx = requests.findIndex(
     (r) => r.seerrRequestId === candidate.seerrRequestId,
   );
@@ -403,7 +412,7 @@ export async function matchAndNotify(copyHistoryEntry) {
 
   await linkSeerrRequest(copyHistoryEntry.id, {
     seerrRequestId: candidate.seerrRequestId,
-    notifiedEpoch,
+    notifiedEpoch: candidate.notifiedEpoch,
   });
 }
 
