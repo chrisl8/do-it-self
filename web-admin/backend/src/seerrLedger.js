@@ -321,7 +321,7 @@ async function pollOnce() {
   const cfg = await readConfig();
   if (!cfg) return;
   const server = await seerrServer(cfg);
-  const apiRequests = await listSeerrApiRequests(server, { take: 50 });
+  const apiRequests = await listSeerrApiRequests(server);
   const existing = await readLedger();
   for (const raw of apiRequests) {
     const normalized = normalizeApiRequest(raw);

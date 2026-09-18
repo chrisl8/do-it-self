@@ -31,12 +31,28 @@ async function seerrFetch(server, urlPath) {
 }
 
 // filter: "pending" | "approved" | "available" | "declined" | ... (see Seerr's
-// /api/v1/request docs) — omit for all.
-export async function listRequests(server, { filter, take = 50 } = {}) {
-  const params = new URLSearchParams({ take: String(take), skip: "0" });
-  if (filter) params.set("filter", filter);
-  const data = await seerrFetch(server, `/api/v1/request?${params}`);
-  return Array.isArray(data?.results) ? data.results : [];
+// /api/v1/request docs) — omit for all. Pages through the full result set:
+// a single take:50 page used to silently skip anything older than the 50
+// most recent requests, so an item that became available and then sat
+// un-copied while newer requests piled up in front of it would never be
+// seen again by the reconciliation poll -- it fell off the page forever.
+export async function listRequests(server, { filter, pageSize = 50 } = {}) {
+  const results = [];
+  let skip = 0;
+  for (;;) {
+    const params = new URLSearchParams({
+      take: String(pageSize),
+      skip: String(skip),
+    });
+    if (filter) params.set("filter", filter);
+    const data = await seerrFetch(server, `/api/v1/request?${params}`);
+    const page = Array.isArray(data?.results) ? data.results : [];
+    results.push(...page);
+    const total = data?.pageInfo?.results ?? results.length;
+    skip += pageSize;
+    if (page.length === 0 || skip >= total) break;
+  }
+  return results;
 }
 
 // The /api/v1/request list doesn't carry a title (verified live 2026-09-13) —
