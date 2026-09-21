@@ -60,6 +60,11 @@
 */the-lounge/config/logs/
 
 # Regenerated caches
+# Valheim's own rolling world backups (38G, redundant with the live world),
+# jellyfin trickplay thumbnails (regenerated), recoll search index (rebuilt).
+*/container-mounts/valheim/config/backups/
+*/container-mounts/jellyfin/config/data/trickplay/
+*/container-mounts/recoll/xapiandb/
 */container-mounts/jellyfin/cache/
 
 # Kopia caches (regenerated)
