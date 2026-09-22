@@ -57,6 +57,11 @@ fi
 # Load healthcheck.io ping key from config file
 HEALTHCHECK_CONFIG_FILE="$(dirname "$0")/healthcheck.conf"
 HEALTHCHECK_PING_KEY=""
+# Optional second check. When set, HEALTHCHECK_PING_KEY becomes a pure ALIVE heartbeat (success
+# ping every completed run, never /fail) and THIS check carries the service-level pass/fail.
+# That lets "box/internet is down" (silence) page somewhere different from "a service is
+# unhealthy". Unset = original single-check behavior.
+HEALTHCHECK_SERVICES_PING_KEY=""
 
 if [ -f "$HEALTHCHECK_CONFIG_FILE" ]; then
     # Source the config file to get the ping key
@@ -67,6 +72,9 @@ fi
 # Only send healthcheck ping if we have a valid key
 if [ -n "$HEALTHCHECK_PING_KEY" ]; then
     curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_PING_KEY/start" > /dev/null
+fi
+if [ -n "$HEALTHCHECK_SERVICES_PING_KEY" ]; then
+    curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_SERVICES_PING_KEY/start" > /dev/null
 fi
 
 ERROR_COUNT=0
@@ -429,7 +437,15 @@ if [ $ERROR_COUNT -gt 0 ]; then
   if [ "$(wc -l < "$ALERT_LOG" 2>/dev/null || echo 0)" -gt 5000 ]; then
     tail -n 2000 "$ALERT_LOG" > "${ALERT_LOG}.tmp" && mv "${ALERT_LOG}.tmp" "$ALERT_LOG"
   fi
-  if [ -n "$HEALTHCHECK_PING_KEY" ]; then
+  if [ -n "$HEALTHCHECK_SERVICES_PING_KEY" ]; then
+    # Split mode: the service problem goes to the SERVICES check (cause as the body)...
+    curl -m 10 --retry 5 -s --data-raw "$ALERT_BUFFER" "https://hc-ping.com/$HEALTHCHECK_SERVICES_PING_KEY/fail" > /dev/null
+    # ...while the ALIVE check still gets its success ping: the script ran to completion,
+    # so the box is up and can reach the internet. Only silence should page there.
+    if [ -n "$HEALTHCHECK_PING_KEY" ]; then
+      curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_PING_KEY" > /dev/null
+    fi
+  elif [ -n "$HEALTHCHECK_PING_KEY" ]; then
     # Send the cause as the ping body so the healthchecks.io dashboard/API records
     # WHY we failed, not just that we did (fail pings were previously bodyless).
     curl -m 10 --retry 5 -s --data-raw "$ALERT_BUFFER" "https://hc-ping.com/$HEALTHCHECK_PING_KEY/fail" > /dev/null
@@ -439,4 +455,7 @@ fi
 
 if [ -n "$HEALTHCHECK_PING_KEY" ]; then
   curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_PING_KEY" > /dev/null
+fi
+if [ -n "$HEALTHCHECK_SERVICES_PING_KEY" ]; then
+  curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_SERVICES_PING_KEY" > /dev/null
 fi

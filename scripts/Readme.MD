@@ -35,6 +35,10 @@ I use Healthcheck.io with this. In order for that to work you must get a key fro
 with contents that look like this:  
 `HEALTHCHECK_PING_KEY=YOUR_HEALTHCHECK_PING_KEY`
 
+Optional: to route "the box is silent/unreachable" and "a service is unhealthy" to different places, create a second check and add its key too:  
+`HEALTHCHECK_SERVICES_PING_KEY=YOUR_SECOND_CHECK_KEY`  
+When set, `HEALTHCHECK_PING_KEY` becomes a pure alive heartbeat (success ping every completed run, never a failure), and the second check receives the `/fail` pings with the cause as the body. Leave it unset for the original single-check behavior.
+
 This script also checks for down Tailscale devices and notifies about them. However you likely have many that you don't care about, so you can create a file called:  
 `excluded_devices.conf`  
 and add the following lines:
