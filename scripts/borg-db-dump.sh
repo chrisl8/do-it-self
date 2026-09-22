@@ -108,14 +108,10 @@ dump_postgres "dawarich_db" "postgres" "dawarich_production" &
 PG_PIDS[1]=$!
 dump_postgres "paperless-db" "paperless" "paperless" &
 PG_PIDS[2]=$!
-dump_postgres "formbricks_postgres" "postgres" "formbricks" &
-PG_PIDS[3]=$!
-dump_postgres "onlyoffice-postgresql" "onlyoffice" "onlyoffice" &
-PG_PIDS[4]=$!
 dump_postgres "infisical-db" "infisical" "infisical" &
-PG_PIDS[5]=$!
+PG_PIDS[3]=$!
 dump_postgres "zipline-db" "zipline" "zipline" &
-PG_PIDS[6]=$!
+PG_PIDS[4]=$!
 
 for pid in "${PG_PIDS[@]}"; do
     if ! wait "${pid}"; then

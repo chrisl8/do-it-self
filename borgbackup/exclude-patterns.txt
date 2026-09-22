@@ -38,8 +38,6 @@
 */container-mounts/immich/db/
 */container-mounts/dawarich/db_data/
 */container-mounts/paperless-ngx/database/
-*/container-mounts/formbricks/data/
-*/container-mounts/onlyoffice/db_data/
 */container-mounts/infisical/db/
 */container-mounts/zipline/db/
 # MariaDB
