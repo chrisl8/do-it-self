@@ -334,7 +334,11 @@ if [ -x "$MODULE_CHECK_SCRIPT" ]; then
   [[ "$LAST_WARNED" =~ ^[0-9]+$ ]] || LAST_WARNED=0
   if (( NOW_EPOCH - LAST_WARNED >= 86400 )); then
     MODULE_DRIFT_OUT=$("$MODULE_CHECK_SCRIPT" check 2>&1) || true
-    if [ "$MODULE_DRIFT_OUT" != "No module drift detected." ]; then
+    # "Breaking-change generation(s) pending migration" is reported by
+    # `module.sh check` as expected divergence (exit 0, "not an alarm"), so
+    # drop that paragraph before deciding whether anything is left to email.
+    MODULE_DRIFT_OUT=$(printf '%s\n' "$MODULE_DRIFT_OUT" | awk -v RS= -v ORS='\n\n' '!/^Breaking-change generation/')
+    if [ -n "${MODULE_DRIFT_OUT//[$' \t\n']/}" ] && [ "$MODULE_DRIFT_OUT" != "No module drift detected." ]; then
       echo ""
       note "Module drift detected (scripts/module.sh check):"
       note "$MODULE_DRIFT_OUT"
