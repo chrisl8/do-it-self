@@ -789,26 +789,6 @@ containers:
         host_subpath: container-mounts/mariadb/db
         container_path: /var/lib/mysql
     default_disabled: true
-  meshtastic:
-    description: Meshtastic mesh networking web client
-    homepage_group: Communication
-    tags: []
-    start_order: "031"
-    default_disabled: true
-    variables:
-      MESHTASTIC_DB_USER:
-        type: string
-        required: true
-        description: Database username
-      MESHTASTIC_DB_PASSWORD:
-        type: secret
-        required: true
-        description: Database password
-        auto_generate: true
-      ADMIN_PASSWORD:
-        type: secret
-        required: true
-        description: Admin panel password
   minecraft:
     description: Minecraft Bedrock Edition dedicated server
     homepage_group: Gaming
