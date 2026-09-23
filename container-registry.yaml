@@ -789,6 +789,23 @@ containers:
         host_subpath: container-mounts/mariadb/db
         container_path: /var/lib/mysql
     default_disabled: true
+  meshmonitor:
+    description: MeshCore/Meshtastic mesh radio dashboard (USB serial radio)
+    homepage_group: Tools
+    tags: []
+    uses_tailscale: true
+    variables:
+      SESSION_SECRET:
+        type: secret
+        required: true
+        description: MeshMonitor session encryption secret (required for HTTPS)
+        auto_generate: true
+    volumes:
+      data:
+        var: VOL_MESHMONITOR_DATA
+        host_subpath: container-mounts/meshmonitor/data
+        container_path: /data
+    default_disabled: true
   minecraft:
     description: Minecraft Bedrock Edition dedicated server
     homepage_group: Gaming
