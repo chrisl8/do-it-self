@@ -1580,6 +1580,10 @@ containers:
         required: true
         description: Key the MeshMapper app sends as X-API-Key (also needed to read runs)
         auto_generate: true
+      MESHMONITOR_TOKEN:
+        type: secret
+        required: false
+        description: MeshMonitor API token for the backhaul monitor (empty = monitor off)
     volumes:
       data:
         var: VOL_WARDRIVE_DATA
