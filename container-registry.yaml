@@ -1569,6 +1569,23 @@ containers:
     tags: []
     uses_tailscale: true
     protected: true
+  wardrive:
+    description: Receiver for MeshMapper wardrive pings (Custom API forward), tailnet-only
+    homepage_group: Tools
+    tags: []
+    uses_tailscale: true
+    variables:
+      WARDRIVE_API_KEY:
+        type: secret
+        required: true
+        description: Key the MeshMapper app sends as X-API-Key (also needed to read runs)
+        auto_generate: true
+    volumes:
+      data:
+        var: VOL_WARDRIVE_DATA
+        host_subpath: container-mounts/wardrive/data
+        container_path: /data
+    default_disabled: true
   witchazzan:
     description: Witchazzan multiplayer web game
     homepage_group: Personal Projects
