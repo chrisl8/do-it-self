@@ -26,6 +26,11 @@
 //   ./media-stall-check.js --all        # ignore the throttle, show everything
 //   ./media-stall-check.js --no-confirm # skip indexer confirmation entirely
 //   ./media-stall-check.js --quiet      # exit code only, for scripting
+//   ./media-stall-check.js --no-purge   # skip the deleted-title cleanup
+//   ./media-stall-check.js --purge-dry-run  # show what cleanup would remove
+//
+// It also cleans up after titles deliberately deleted in Jellyfin -- see
+// purgeDeleted() below.
 //
 // Run from cron every few hours. It is silent (exit 0, no output) when nothing
 // is stalled, so cron only mails you when there is something to do -- the same
@@ -90,6 +95,15 @@ const args = process.argv.slice(2);
 const showAll = args.includes("--all");
 const confirmEnabled = !args.includes("--no-confirm");
 const quiet = args.includes("--quiet");
+const purgeEnabled = !args.includes("--no-purge");
+const purgeDryRun = args.includes("--purge-dry-run");
+
+// Deleted-title cleanup. A delete must be this old before we act on it, so an
+// accidental delete can still be undone by re-monitoring and re-searching.
+const PURGE_GRACE_HOURS = Number(process.env.PURGE_GRACE_HOURS ?? 24);
+// More candidates than this in one run looks like a mount outage or a mass
+// accident, not a person tidying up -- refuse and shout instead.
+const PURGE_MAX = Number(process.env.PURGE_MAX ?? 5);
 
 // ---------------------------------------------------------------- primitives
 
@@ -109,7 +123,9 @@ function makeClient(base, key) {
       ...options,
     });
     if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
-    return res.json();
+    // DELETE answers 200 with an empty body, which res.json() chokes on.
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
   };
 }
 
@@ -476,6 +492,200 @@ async function confirm(stall, sonarr, radarr) {
   }
 }
 
+// --------------------------------------------------------------------- purge
+
+// Deleting a title in Jellyfin only removes the file. Radarr/Sonarr keep the
+// entry and Seerr keeps the request marked Available, and anything left
+// monitored gets re-grabbed within minutes by decluttarr's SEARCH_MISSING --
+// Clue and Europa Report came back that way on 2026-09-24.
+//
+// Both *arrs have "Unmonitor Deleted Movies/Episodes" on, so a file that goes
+// missing from disk gets unmonitored. That is the signal used here: a title
+// whose files were REMOVED (history reason MissingFromDisk or Manual, never
+// Upgrade) and which the *arr then unmonitored. Requiring the unmonitor keeps
+// out "deleted a bad file in Radarr to force a re-grab", which stays
+// monitored. Things that never had a file (the Quatermass serials) have no
+// delete events at all, so they can never match.
+//
+// TV is purged only when EVERY regular-season file is gone. Deleting a few
+// episodes is normal for a permanent library and leaves the series alone.
+const REAL_REMOVAL = new Set(["MissingFromDisk", "Manual"]);
+
+async function purgeCandidates(sonarr, radarr) {
+  const out = [];
+  if (radarr) {
+    const [roots, movies, queue] = await Promise.all([
+      radarr("rootfolder"),
+      radarr("movie"),
+      radarr("queue?pageSize=500"),
+    ]);
+    // A dropped mount makes every file "missing". Never act on that.
+    if (!roots.length || roots.some((r) => !r.accessible)) {
+      throw new Error("a Radarr root folder is not accessible");
+    }
+    const downloading = queueIds(queue, "movieId");
+    for (const m of movies) {
+      if (m.monitored || m.hasFile || downloading.has(m.id)) continue;
+      const hist = await radarr(`history/movie?movieId=${m.id}`);
+      const del = hist.find(
+        (h) =>
+          h.eventType === "movieFileDeleted" &&
+          REAL_REMOVAL.has(h.data?.reason),
+      );
+      if (!del || ageHours(del.date) < PURGE_GRACE_HOURS) continue;
+      // History is newest-first: an import after the delete means it came back
+      // on purpose, not a leftover.
+      if (
+        hist.some(
+          (h) => h.eventType === "downloadFolderImported" && h.date > del.date,
+        )
+      )
+        continue;
+      out.push({
+        kind: "movie",
+        id: m.id,
+        title: `${m.title} (${m.year})`,
+        deleted: del.date,
+        seerrMatch: { mediaType: "movie", tmdbId: m.tmdbId },
+      });
+    }
+  }
+  if (sonarr) {
+    const [roots, series, queue] = await Promise.all([
+      sonarr("rootfolder"),
+      sonarr("series"),
+      sonarr("queue?pageSize=500"),
+    ]);
+    if (!roots.length || roots.some((r) => !r.accessible)) {
+      throw new Error("a Sonarr root folder is not accessible");
+    }
+    const downloading = queueIds(queue, "seriesId");
+    for (const s of series) {
+      if (downloading.has(s.id)) continue;
+      const files = (s.seasons ?? [])
+        .filter((x) => x.seasonNumber > 0)
+        .reduce((n, x) => n + (x.statistics?.episodeFileCount ?? 0), 0);
+      if (files > 0) continue;
+      const hist = await sonarr(`history/series?seriesId=${s.id}`);
+      const dels = hist.filter(
+        (h) =>
+          h.eventType === "episodeFileDeleted" &&
+          REAL_REMOVAL.has(h.data?.reason),
+      );
+      if (!dels.length) continue;
+      const last = dels[0];
+      if (ageHours(last.date) < PURGE_GRACE_HOURS) continue;
+      if (
+        hist.some(
+          (h) => h.eventType === "downloadFolderImported" && h.date > last.date,
+        )
+      )
+        continue;
+      // Every episode that lost a file must have been unmonitored by it.
+      const eps = await sonarr(`episode?seriesId=${s.id}`);
+      const deletedIds = new Set(dels.map((h) => h.episodeId));
+      if (eps.some((e) => deletedIds.has(e.id) && e.monitored)) continue;
+      out.push({
+        kind: "tv",
+        id: s.id,
+        title: `${s.title} (${s.year})`,
+        deleted: last.date,
+        seerrMatch: { mediaType: "tv", tvdbId: s.tvdbId },
+      });
+    }
+  }
+  return out;
+}
+
+function seerrClient() {
+  let key;
+  try {
+    key = JSON.parse(readFileSync(SEERR_SETTINGS, "utf8")).main.apiKey;
+  } catch {
+    return null;
+  }
+  return async (path, options) => {
+    const res = await fetch(`${SEERR}${path}`, {
+      headers: { "X-Api-Key": key },
+      signal: AbortSignal.timeout(30000),
+      ...options,
+    });
+    if (!res.ok) throw new Error(`seerr ${path} -> HTTP ${res.status}`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  };
+}
+
+// Returns the lines to print. Seerr goes first: if the *arr removal then
+// fails, the next run still sees the *arr entry and retries. The other order
+// would strand a stale Seerr record with nothing left to match it against.
+async function purgeDeleted(sonarr, radarr) {
+  const candidates = await purgeCandidates(sonarr, radarr);
+  if (!candidates.length) return [];
+  if (candidates.length > PURGE_MAX) {
+    return [
+      `Deleted-title cleanup REFUSED: ${candidates.length} candidates is over the limit of ${PURGE_MAX}.`,
+      `That looks like a mount problem or a mass delete, not tidying up. Nothing was removed.`,
+      ...candidates.map(
+        (c) =>
+          `    ${c.kind}:${c.id}  ${c.title}  (deleted ${days(ageDays(c.deleted))} ago)`,
+      ),
+      `If it is real: PURGE_MAX=${candidates.length} ./scripts/media-stall-check.js`,
+      "",
+    ];
+  }
+
+  const seerr = seerrClient();
+  let seerrMedia = null;
+  if (seerr) {
+    try {
+      seerrMedia = (await seerr("/media?take=5000&filter=all")).results ?? [];
+    } catch {
+      /* reported per item below */
+    }
+  }
+
+  const lines = [
+    purgeDryRun
+      ? "Deleted-title cleanup (dry run, nothing removed):"
+      : "Cleaned up titles deleted in Jellyfin:",
+  ];
+  for (const c of candidates) {
+    const m = seerrMedia?.find((x) =>
+      Object.entries(c.seerrMatch).every(([k, v]) => x[k] === v),
+    );
+    if (seerrMedia === null) {
+      lines.push(
+        `    ${c.title} -- skipped, Seerr unreachable (retries next run)`,
+      );
+      continue;
+    }
+    const parts = [];
+    try {
+      if (m) {
+        if (!purgeDryRun) await seerr(`/media/${m.id}`, { method: "DELETE" });
+        parts.push("Seerr");
+      }
+      const api = c.kind === "movie" ? radarr : sonarr;
+      const path =
+        c.kind === "movie"
+          ? `movie/${c.id}?deleteFiles=false&addImportExclusion=false`
+          : `series/${c.id}?deleteFiles=false`;
+      if (!purgeDryRun) await api(path, { method: "DELETE" });
+      parts.push(c.kind === "movie" ? "Radarr" : "Sonarr");
+      lines.push(
+        `    ${c.title} -- ${purgeDryRun ? "would remove" : "removed"} from ${parts.join(" + ")}`,
+      );
+    } catch (err) {
+      lines.push(
+        `    ${c.title} -- FAILED after [${parts.join(", ")}]: ${err.message}`,
+      );
+    }
+  }
+  lines.push("");
+  return lines;
+}
+
 // ----------------------------------------------------------------------- main
 
 const sonarrKey = apiKeyFrom(SONARR_CONFIG);
@@ -488,6 +698,19 @@ if (!sonarrKey && !radarrKey) {
 }
 const sonarr = makeClient(SONARR, sonarrKey);
 const radarr = makeClient(RADARR, radarrKey);
+
+// Cleanup runs before stall detection so a title removed here is not also
+// reported below. Its output prints even on an otherwise clean run, which is
+// what makes cron mail a note whenever something was removed.
+if (purgeEnabled || purgeDryRun) {
+  let lines;
+  try {
+    lines = await purgeDeleted(sonarr, radarr);
+  } catch (err) {
+    lines = [`Deleted-title cleanup skipped: ${err.message}`, ""];
+  }
+  if (!quiet) for (const l of lines) console.log(l);
+}
 
 const state = loadState();
 const stalls = [];
