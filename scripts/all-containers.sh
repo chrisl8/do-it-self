@@ -1005,7 +1005,15 @@ for ENTRY in "${SORTED_CONTAINER_LIST[@]}";do
 
     if [[ ${RESTART_UNHEALTHY} = true ]];then
       # Check if any containers are unhealthy
-      UNHEALTHY_COUNT=$(docker --log-level ERROR compose ps -a --format '{{.Status}}' | grep -c -v "(healthy)" || true)
+      # stderr goes to a temp file so a compose parse error (e.g. "invalid spec"
+      # from an empty .env var) is reported WITH the container dir, instead of
+      # as an anonymous line in the cron mail.
+      PS_ERR_FILE=$(mktemp)
+      UNHEALTHY_COUNT=$(docker --log-level ERROR compose ps -a --format '{{.Status}}' 2>"${PS_ERR_FILE}" | grep -c -v "(healthy)" || true)
+      if [[ -s "${PS_ERR_FILE}" ]];then
+        printf "compose ps failed in %s (.env: %s): %s\n" "${CONTAINER_DIR}" "$(stat -c '%y %s bytes' .env 2>&1)" "$(head -c 300 "${PS_ERR_FILE}")"
+      fi
+      rm -f "${PS_ERR_FILE}"
       if [[ ${UNHEALTHY_COUNT} -eq 0 ]];then
         # No unhealthy containers, skip to next
         continue
