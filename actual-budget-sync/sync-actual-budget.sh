@@ -58,6 +58,17 @@ if [[ -z "${TS_DOMAIN}" || -z "${ACTUAL_SERVER_PASSWORD}" || -z "${SYNC_ID}" ]];
 fi
 export TS_DOMAIN ACTUAL_SERVER_PASSWORD SYNC_ID
 
+# Keep @actual-app/api in lockstep with the actual-server container. The server
+# auto-updates, and a newer budget DB makes an older API fail with
+# "out-of-sync-migrations". Best-effort: if this fails, the sync just runs as-is.
+cd "${SCRIPT_DIR}"
+SERVER_VERSION=$(/usr/bin/docker exec actual-server node -e "console.log(require('/app/package.json').version)" 2>/dev/null || true)
+API_VERSION=$(node -p "require('./node_modules/@actual-app/api/package.json').version" 2>/dev/null || true)
+if [[ "${SERVER_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "${SERVER_VERSION}" != "${API_VERSION}" ]]; then
+    echo "$(date -Iseconds) @actual-app/api ${API_VERSION:-none} -> ${SERVER_VERSION}" >> "${HOME}/logs/actual-budget-api-upgrades.log"
+    npm install "@actual-app/api@${SERVER_VERSION}" --save-exact >> "${HOME}/logs/actual-budget-api-upgrades.log" 2>&1 || true
+fi
+
 # Attempt the sync, capturing output and exit code
 cd "${SCRIPT_DIR}"
 set +e

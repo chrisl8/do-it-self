@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@actual-app/api": "^26.1.0"
+    "@actual-app/api": "26.10.0"
   }
 }
