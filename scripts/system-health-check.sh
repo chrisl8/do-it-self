@@ -14,9 +14,19 @@ fi
 # unless this script was called BY all-containers.sh itself using the --run-health-check option
 # In that case we want to do the health check as normal
 if [[ ${ALL_CONTAINERS_IS_RUNNING} = true ]];then
-  # This way we don't spam healthcheck.io with pings when the system is doing container updates,
-  # meanwhile if the updates take too long healthcheck.io will still alert us after it fails to get a ping
+  # Skip the checks/restarts while updates run, but STILL send the ALIVE heartbeat: this
+  # script running at all proves the box and its internet are up. Exiting silently here made
+  # the alive check go DOWN (and page Pushover) whenever an update outlasted its 120s grace.
+  # Only the alive key is pinged -- never the services key, so no service pass/fail is implied.
   if [ "$1" != "--run-health-check" ]; then
+    ALIVE_CONFIG_FILE="$(dirname "$0")/healthcheck.conf"
+    if [ -f "$ALIVE_CONFIG_FILE" ]; then
+      # shellcheck source=healthcheck.conf
+      . "$ALIVE_CONFIG_FILE"
+    fi
+    if [ -n "${HEALTHCHECK_PING_KEY:-}" ]; then
+      curl -m 10 --retry 5 -s "https://hc-ping.com/$HEALTHCHECK_PING_KEY" > /dev/null
+    fi
     exit 0
   fi
 fi
