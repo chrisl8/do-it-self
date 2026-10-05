@@ -291,13 +291,15 @@ rather than reverting, so if a release ever does appear they will grab it.
 
 ## The alert: `scripts/media-stall-check.js`
 
-Runs from cron every 4 hours. **Silent (exit 0, no output) unless something
-needs a decision** — cron mails any output, so silence when clean is what keeps
-it from becoming noise.
+Runs from cron every hour (every 4 hours until 2026-10-05). **Silent (exit 0,
+no output) unless something needs a decision or was just fixed automatically** —
+cron mails any output, so silence when clean is what keeps it from becoming noise.
+Hourly costs nothing: detection is API reads only, and the one expensive step
+(the confirming search) is capped per run and cached 7 days.
 
 ```
-0 */4 * * * /home/chrisl8/.local/share/fnm/aliases/default/bin/node \
-              /home/chrisl8/containers/scripts/media-stall-check.js
+0 * * * * /home/chrisl8/.local/share/fnm/aliases/default/bin/node \
+            /home/chrisl8/containers/scripts/media-stall-check.js
 ```
 
 node is called by absolute path on purpose: fnm's PATH entry is a per-shell
@@ -308,12 +310,15 @@ directory under `/run` that does not exist for cron. The
 
 | Tier | Condition | Meaning |
 | --- | --- | --- |
-| NEVER | 0 files, added > 12h ago | never grabbed anything — the profile-trap signature |
+| NEVER | 0 files, added > 2h ago, nothing in the queue | never grabbed anything — the profile-trap signature |
 | STALLED | has files, wanted episodes, no grab in 14 days | back catalog nobody kicked, or retention failures |
 
-Twelve hours is the grace period for the automatic on-add search to run. Past
-that, zero files means zero excuses — which is how The Good Place would have
-been caught the same day instead of whenever someone complained.
+Two hours is the grace period for the automatic on-add search to run (it was
+12h; shortened 2026-10-05 after The Great North and Detectorists sat on the
+4K-only profile for ~5 hours unnoticed). The on-add search fires within minutes,
+and anything actually downloading is skipped via the queue check, so past 2h zero
+files means zero excuses — which is how The Good Place would have been caught the
+same day instead of whenever someone complained.
 
 **Requester attribution.** It joins against Seerr so the report leads with who
 is waiting and for how long. Seerr is not host-reachable on `:5055` (internal
@@ -337,13 +342,35 @@ the 1953 Quatermass was a profile trap and to set it to the profile **it was
 already on** — its 2 releases are rejected as `Unable to parse release`, which no
 profile change can fix.
 
+**Auto-switch (2026-10-05).** Seerr gives every TV request the 4K-only
+`WEB-2160p` profile, so a show with no 4K release is the commonest stall, and its
+fix is always the same: repoint to `Best Available (SD-1080p)` and search. On a
+confirmed `PROFILE_TRAP` the script now does that itself — but only when 4K is
+not plausibly coming. It does **not** switch if any of these hold, and just
+alerts as before:
+
+| Gate | Default | Why |
+| --- | --- | --- |
+| a 2160p release exists in the confirming search | — | `WEB-2160p` accepts only `WEB 2160p`, so a 4K **Blu-ray** of an older show is rejected as "not wanted in profile" and looks identical to a trap. `Best Available` is capped at 1080p and would lock that 4K release out for good. A human decides. |
+| show is on air | status `continuing`, or an episode aired < 365 days ago | a current show arrives in 4K; wait for it |
+| show is new | premiered < 3 years ago | same reasoning |
+| premiere date unknown | — | hold; one more alert costs less than a show permanently capped at 1080p |
+
+A switch searches only the missing aired episodes (explicit ids, never upgrades —
+the same as `sonarr-kick-missing.js`) and appears in the report as `AUTO-FIXED`.
+Undo is just setting the profile back. `--no-auto-switch` (or `STALL_AUTO_SWITCH=0`)
+disables it; `--auto-switch-dry-run` reports what it would do without changing
+anything. Confirmations cached before the 2160p check existed are treated as stale
+and re-confirmed, because "unknown" must never read as "no 4K exists".
+
 **Silencing things.** Some decisions are "nothing can be done". Park those in
 `scripts/media-stall-check.conf` (gitignored) by key (`tv:31`, `movie:22`) or
 title substring. Prefer keys — "Quatermass" matches five separate items. Excluded
 titles still show as a count in the report footer, so the list stays visible.
 
 Tunable via env: `STALL_GRACE_HOURS`, `STALL_STALE_DAYS`, `STALL_RENAG_DAYS`,
-`STALL_MAX_CONFIRM`, `STALL_MOUNT`.
+`STALL_MAX_CONFIRM`, `STALL_MOUNT`, `STALL_AUTO_SWITCH`, `STALL_ONAIR_DAYS`,
+`STALL_NEW_SHOW_YEARS`.
 
 ## Division of labour between the three scripts
 

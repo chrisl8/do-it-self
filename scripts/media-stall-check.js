@@ -28,6 +28,11 @@
 //   ./media-stall-check.js --quiet      # exit code only, for scripting
 //   ./media-stall-check.js --no-purge   # skip the deleted-title cleanup
 //   ./media-stall-check.js --purge-dry-run  # show what cleanup would remove
+//   ./media-stall-check.js --no-auto-switch # alert only, never repoint a profile
+//   ./media-stall-check.js --auto-switch-dry-run  # say what auto-switch would do
+//
+// It also repoints a show stuck on the 4K-only profile to the 1080p-capped
+// fallback when 4K is not coming (see the auto-switch block below for the gate).
 //
 // It also cleans up after titles deliberately deleted in Jellyfin -- see
 // purgeDeleted() below.
@@ -42,8 +47,12 @@ import { dirname } from "node:path";
 // ---------------------------------------------------------------- thresholds
 
 // A brand-new request needs time for its automatic on-add search to run. Below
-// this age we say nothing -- above it, zero files means zero excuses.
-const GRACE_HOURS = Number(process.env.STALL_GRACE_HOURS ?? 12);
+// this age we say nothing -- above it, zero files means zero excuses. That
+// search fires within minutes of the request, and anything actually downloading
+// is skipped via the queue check, so 2h is plenty (it was 12h; The Great North
+// and Detectorists sat unusable on the 4K-only profile for ~5h before anyone
+// looked, and would have waited 7 more for the email).
+const GRACE_HOURS = Number(process.env.STALL_GRACE_HOURS ?? 2);
 
 // Something that HAS files but is still missing aired episodes is a slower,
 // murkier problem (usenet retention, missing articles, back catalog nobody has
@@ -97,6 +106,30 @@ const confirmEnabled = !args.includes("--no-confirm");
 const quiet = args.includes("--quiet");
 const purgeEnabled = !args.includes("--no-purge");
 const purgeDryRun = args.includes("--purge-dry-run");
+
+// Automatic profile switch for the commonest stall: a show requested on the
+// 4K-only WEB-2160p profile that has no 4K release. Seerr gives every TV request
+// that profile, so this happens constantly, and the fix is always the same two
+// steps (repoint to the 1080p-capped fallback, search). Done automatically ONLY
+// when 4K is not plausibly coming:
+//   - never while the show is on air (status continuing, or an episode aired
+//     within STALL_ONAIR_DAYS) -- a current show arrives in 4K, so wait for it;
+//   - never for a show that premiered within STALL_NEW_SHOW_YEARS -- same logic;
+//   - never if the confirming search saw ANY 2160p release. WEB-2160p accepts
+//     only WEB 2160p, so a 4K Blu-ray of an older show is rejected as "not wanted
+//     in profile" and looks exactly like a trap. Moving that show to a
+//     1080p-capped profile would lock the 4K Blu-ray out for good, so a human
+//     decides.
+// Everything else falls through to the normal alert. Disable with
+// --no-auto-switch (or STALL_AUTO_SWITCH=0); --auto-switch-dry-run reports what
+// it would do without changing anything.
+const autoSwitchDryRun = args.includes("--auto-switch-dry-run");
+const autoSwitchEnabled =
+  !args.includes("--no-auto-switch") && process.env.STALL_AUTO_SWITCH !== "0";
+const ONAIR_DAYS = Number(process.env.STALL_ONAIR_DAYS ?? 365);
+const NEW_SHOW_YEARS = Number(process.env.STALL_NEW_SHOW_YEARS ?? 3);
+const SWITCH_FROM = "WEB-2160p";
+const SWITCH_TO = "Best Available (SD-1080p)";
 
 // Deleted-title cleanup. A delete must be this old before we act on it, so an
 // accidental delete can still be undone by re-monitoring and re-searching.
@@ -480,15 +513,119 @@ async function confirm(stall, sonarr, radarr) {
     else if (accepted.length > 0) verdict = "CAN_GRAB";
     else if (profileBlocked > 0) verdict = "PROFILE_TRAP";
     else verdict = "UNUSABLE";
+    // Any 2160p release at all, accepted or not. Drives the auto-switch gate: if
+    // 4K exists in a form the profile rejects (e.g. Bluray-2160p) the show must
+    // not be moved to a profile that can never take it.
+    const has2160 = releases.some(
+      (r) => (r.quality?.quality?.resolution ?? 0) >= 2160,
+    );
     return {
       found: releases.length,
       accepted: accepted.length,
       profileBlocked,
+      has2160,
       verdict,
       top: [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 4),
     };
   } catch (err) {
     return { error: err.message };
+  }
+}
+
+// ---------------------------------------------------------------- auto-switch
+
+// Why this show should be left on the 4K profile, or null if 4K is not coming.
+// Unknown dates count as "hold": the cost of waiting is one more alert, the cost
+// of guessing wrong is a show permanently capped at 1080p.
+function holdReason(series) {
+  if (series.status === "continuing") return "still airing (continuing)";
+  const lastAired = series.lastAired ?? series.previousAiring;
+  if (lastAired && ageDays(lastAired) < ONAIR_DAYS) {
+    return `an episode aired ${days(ageDays(lastAired))} ago`;
+  }
+  const premiered =
+    series.firstAired ?? (series.year ? `${series.year}-01-01` : null);
+  if (!premiered) return "premiere date unknown";
+  if (ageDays(premiered) < NEW_SHOW_YEARS * 365) {
+    return `premiered ${days(ageDays(premiered))} ago`;
+  }
+  return null;
+}
+
+// Sets s.auto = { done, why, searched? } when the show is a candidate; leaves it
+// unset when auto-switch simply does not apply (movies, other profiles, ...).
+async function maybeAutoSwitch(s, sonarr, state) {
+  const c = s.confirm;
+  if (
+    !autoSwitchEnabled ||
+    s.kind !== "tv" ||
+    s.tier !== "NEVER" ||
+    s.profile !== SWITCH_FROM ||
+    c?.verdict !== "PROFILE_TRAP"
+  ) {
+    return;
+  }
+  // `=== false`, not falsy: a confirmation cached before this field existed has
+  // no has2160, and "unknown" must not be read as "no 4K exists".
+  if (c.has2160 !== false) {
+    s.auto = {
+      done: false,
+      why: c.has2160
+        ? "2160p releases exist in the search (a 4K Blu-ray or WEB the profile rejects) -- your call"
+        : "confirmation predates the 4K check -- will re-check on the next confirmation",
+    };
+    return;
+  }
+  try {
+    const series = await sonarr(`series/${s.id}`);
+    const hold = holdReason(series);
+    if (hold) {
+      s.auto = { done: false, why: `${hold} -- leaving it to wait for 4K` };
+      return;
+    }
+    const target = (await sonarr("qualityprofile")).find(
+      (p) => p.name === SWITCH_TO,
+    );
+    if (!target) {
+      s.auto = { done: false, why: `profile "${SWITCH_TO}" does not exist` };
+      return;
+    }
+    if (autoSwitchDryRun) {
+      s.auto = { done: false, why: `dry run -- would move to "${SWITCH_TO}"` };
+      return;
+    }
+    const json = { "Content-Type": "application/json" };
+    await sonarr(`series/${s.id}`, {
+      method: "PUT",
+      headers: json,
+      body: JSON.stringify({ ...series, qualityProfileId: target.id }),
+    });
+    // Explicit episode ids rather than SeriesSearch, the same way
+    // sonarr-kick-missing.js does it: search what is missing, never upgrades.
+    const episodes = await sonarr(`episode?seriesId=${s.id}`);
+    const ids = episodes
+      .filter(
+        (e) =>
+          e.monitored &&
+          !e.hasFile &&
+          e.seasonNumber > 0 &&
+          e.airDateUtc &&
+          new Date(e.airDateUtc) <= now,
+      )
+      .map((e) => e.id);
+    if (ids.length) {
+      await sonarr("command", {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ name: "EpisodeSearch", episodeIds: ids }),
+      });
+    }
+    // The cached verdict described the OLD profile. Drop it so the next run, if
+    // this still has no files, confirms against the new one.
+    delete state.confirmed[s.key];
+    s.auto = { done: true, searched: ids.length };
+  } catch (err) {
+    s.auto = { done: false, why: `auto-switch failed: ${err.message}` };
   }
 }
 
@@ -799,14 +936,25 @@ const reportable = live.filter((s) => {
 let budget = confirmEnabled ? MAX_CONFIRM : 0;
 for (const s of reportable) {
   const cached = state.confirmed[s.key];
-  if (cached && (now - cached.at) / DAY < CONFIRM_CACHE_DAYS) {
+  // A trap verdict cached before has2160 existed cannot drive the auto-switch
+  // gate, so treat it as stale and re-confirm rather than wait out the cache.
+  const missing4kCheck =
+    cached?.result?.verdict === "PROFILE_TRAP" &&
+    cached.result.has2160 === undefined;
+  if (
+    cached &&
+    !missing4kCheck &&
+    (now - cached.at) / DAY < CONFIRM_CACHE_DAYS
+  ) {
     s.confirm = cached.result;
+    await maybeAutoSwitch(s, sonarr, state);
     continue;
   }
   if (budget <= 0 || s.tier !== "NEVER") continue;
   s.confirm = await confirm(s, sonarr, radarr);
   state.confirmed[s.key] = { at: now, result: s.confirm };
   budget -= 1;
+  await maybeAutoSwitch(s, sonarr, state);
 }
 
 // Silence on a clean run is load-bearing: cron mails ANY output, so printing
@@ -863,7 +1011,15 @@ for (const s of reportable) {
     for (const [reason, n] of c.top) {
       console.log(`        ${String(n).padStart(4)} | ${reason}`);
     }
-    if (s.kind === "tv" && s.profile !== TV_FALLBACK) {
+    if (s.auto?.done) {
+      console.log(
+        `    AUTO-FIXED: moved to "${SWITCH_TO}" and searched ${s.auto.searched} missing episode(s).`,
+      );
+      console.log(
+        `    Nothing to do unless this shows up again. Undo: set the profile back to "${SWITCH_FROM}".`,
+      );
+    } else if (s.kind === "tv" && s.profile !== TV_FALLBACK) {
+      if (s.auto) console.log(`    Not auto-switched: ${s.auto.why}`);
       console.log(`    FIX: set profile to "${TV_FALLBACK}", then`);
       console.log(`         ./scripts/sonarr-kick-missing.js ${s.id} --go`);
     } else if (s.kind === "tv") {
@@ -947,6 +1103,11 @@ if (excluded.length) {
 }
 console.log(
   `Thresholds: 0 files -> ${GRACE_HOURS}h, partial -> ${STALE_DAYS}d, re-nag every ${RENAG_DAYS}d.`,
+);
+console.log(
+  autoSwitchEnabled
+    ? `Auto-switch ${SWITCH_FROM} -> ${SWITCH_TO}: only if no 2160p release exists, off-air ${ONAIR_DAYS}d, premiered over ${NEW_SHOW_YEARS}y ago.`
+    : "Auto-switch: disabled.",
 );
 console.log(`Silence one of these: add its key or title to ${EXCLUDE_FILE}`);
 console.log(`State: ${STATE_FILE}`);
