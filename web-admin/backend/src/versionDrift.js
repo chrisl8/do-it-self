@@ -16,6 +16,43 @@ import {
 } from "./registryTags.js";
 import { classifyTag, bestNewerTag } from "./tagVersion.js";
 
+// MariaDB ships a rolling release every quarter plus one LTS a year, and only
+// the LTS lines are a sane upgrade target for a datastore (rolling majors hit
+// community EOL within months -- e.g. 13.0 and 13.1 vs the 12.3 LTS). The
+// registry tag list can't tell them apart, so without this the badge nags
+// about every rolling major. Maps major -> LTS minors; unknown majors >= 12
+// are assumed to follow the current "x.3 is the LTS" cadence.
+// https://mariadb.org/about/#maintenance-policy
+const MARIADB_LTS_MINORS = { 10: [6, 11], 11: [4, 8], 12: [3], 13: [3] };
+
+function mariadbLtsMinors(major) {
+  return MARIADB_LTS_MINORS[major] ?? (major >= 12 ? [3] : []);
+}
+
+// Drops MariaDB candidate tags that point at a rolling (non-LTS) release. A
+// bare-major tag like "13" only counts once that major has an LTS tag
+// published (e.g. "13.3.x"), since before then it floats over rolling builds.
+export function filterMariadbRolling(tags) {
+  const classified = tags.map((tag) => ({ tag, c: classifyTag(tag) }));
+  const hasLts = (major) =>
+    classified.some(
+      ({ c }) =>
+        c &&
+        c.parts.length >= 2 &&
+        c.parts[0] === major &&
+        mariadbLtsMinors(major).includes(c.parts[1]),
+    );
+  return classified
+    .filter(({ c }) => {
+      if (!c) return true; // unclassifiable tags are ignored downstream anyway
+      const [major, minor] = c.parts;
+      return c.parts.length === 1
+        ? hasLts(major)
+        : mariadbLtsMinors(major).includes(minor);
+    })
+    .map(({ tag }) => tag);
+}
+
 const driftCache = new Map(); // stackName -> null | { container, currentTag, newerTag, registry, repoPath, tagsUrl, checkedAt }
 
 async function computeDriftForContainer(containerName, image) {
@@ -26,7 +63,11 @@ async function computeDriftForContainer(containerName, image) {
   const tags = await fetchTagList(ref);
   if (!tags) return "skip"; // fetch/auth failure -- keep prior cached result
 
-  const newer = bestNewerTag(ref.tag, tags);
+  const isMariadb = /(^|\/)mariadb$/.test(ref.repoPath);
+  const newer = bestNewerTag(
+    ref.tag,
+    isMariadb ? filterMariadbRolling(tags) : tags,
+  );
   if (!newer) return null;
 
   return {
