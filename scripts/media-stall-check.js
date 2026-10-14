@@ -31,8 +31,9 @@
 //   ./media-stall-check.js --no-auto-switch # alert only, never repoint a profile
 //   ./media-stall-check.js --auto-switch-dry-run  # say what auto-switch would do
 //
-// It also repoints a show stuck on the 4K-only profile to the 1080p-capped
-// fallback when 4K is not coming (see the auto-switch block below for the gate).
+// It also repoints a show stuck on the 4K-only profile to the uncapped
+// "Best Available (up to 4K)" profile
+// when 4K is not coming (see the auto-switch block below for the gate).
 //
 // It also cleans up after titles deliberately deleted in Jellyfin -- see
 // purgeDeleted() below.
@@ -110,7 +111,7 @@ const purgeDryRun = args.includes("--purge-dry-run");
 // Automatic profile switch for the commonest stall: a show requested on the
 // 4K-only WEB-2160p profile that has no 4K release. Seerr gives every TV request
 // that profile, so this happens constantly, and the fix is always the same two
-// steps (repoint to the 1080p-capped fallback, search). Done automatically ONLY
+// steps (repoint to the uncapped fallback, search). Done automatically ONLY
 // when 4K is not plausibly coming:
 //   - never while the show is on air (status continuing, or an episode aired
 //     within STALL_ONAIR_DAYS) -- a current show arrives in 4K, so wait for it;
@@ -129,7 +130,11 @@ const autoSwitchEnabled =
 const ONAIR_DAYS = Number(process.env.STALL_ONAIR_DAYS ?? 365);
 const NEW_SHOW_YEARS = Number(process.env.STALL_NEW_SHOW_YEARS ?? 3);
 const SWITCH_FROM = "WEB-2160p";
-const SWITCH_TO = "Best Available (SD-1080p)";
+// Uncapped: takes the best release that exists now, and still upgrades to WEB
+// 2160p if one shows up. (The older 1080p-capped "Best Available (SD-1080p)" is
+// still valid to sit on, but is no longer where we send anything.)
+const SWITCH_TO = "Best Available (up to 4K)";
+const SD_CAPPED = "Best Available (SD-1080p)";
 
 // Deleted-title cleanup. A delete must be this old before we act on it, so an
 // accidental delete can still be undone by re-monitoring and re-searching.
@@ -1018,13 +1023,17 @@ for (const s of reportable) {
       console.log(
         `    Nothing to do unless this shows up again. Undo: set the profile back to "${SWITCH_FROM}".`,
       );
-    } else if (s.kind === "tv" && s.profile !== TV_FALLBACK) {
+    } else if (
+      s.kind === "tv" &&
+      s.profile !== SWITCH_TO &&
+      s.profile !== SD_CAPPED
+    ) {
       if (s.auto) console.log(`    Not auto-switched: ${s.auto.why}`);
-      console.log(`    FIX: set profile to "${TV_FALLBACK}", then`);
+      console.log(`    FIX: set profile to "${SWITCH_TO}", then`);
       console.log(`         ./scripts/sonarr-kick-missing.js ${s.id} --go`);
     } else if (s.kind === "tv") {
       console.log(
-        `    Already on "${TV_FALLBACK}" -- the floor cannot go lower, so the`,
+        `    Already on "${s.profile}" -- the floor cannot go lower, so the`,
       );
       console.log(
         `    blocking format is a custom-format score, not the quality range.`,
