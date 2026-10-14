@@ -1007,7 +1007,6 @@ for (const s of reportable) {
   const c = s.confirm;
   // Sonarr and Radarr each have a local profile of this name that reaches down
   // to SD, so the remedy reads identically on both sides.
-  const TV_FALLBACK = "Best Available (SD-1080p)";
   if (c?.verdict === "PROFILE_TRAP") {
     console.log(
       `    CONFIRMED PROFILE TRAP -- ${c.found} releases exist, ${c.profileBlocked} blocked`,
@@ -1038,11 +1037,11 @@ for (const s of reportable) {
       console.log(
         `    blocking format is a custom-format score, not the quality range.`,
       );
-    } else if (s.profile !== TV_FALLBACK) {
-      console.log(`    FIX: set profile to "${TV_FALLBACK}" and re-search.`);
+    } else if (s.profile !== SWITCH_TO && s.profile !== SD_CAPPED) {
+      console.log(`    FIX: set profile to "${SWITCH_TO}" and re-search.`);
     } else {
       console.log(
-        `    Already on "${TV_FALLBACK}" -- the floor cannot go lower, so the`,
+        `    Already on "${s.profile}" -- the floor cannot go lower, so the`,
       );
       console.log(
         `    blocking format is a custom-format score, not the quality range.`,
