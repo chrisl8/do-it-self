@@ -30,7 +30,10 @@ mkdir -p "$(dirname "${LOG_FILE}")"
 if [ -f "${LOG_FILE}" ]; then
     mv "${LOG_FILE}" "${LOG_FILE}.1"
 fi
-exec > >(tee -a "${LOG_FILE}") 2>&1
+# Quiet on success: output goes only to the log. On failure, on_exit dumps the
+# whole log to the original stdout (fd 3) so cron emails only when something broke.
+exec 3>&1
+exec >> "${LOG_FILE}" 2>&1
 
 echo "=========================================="
 echo "Borg restore test starting at $(date)"
@@ -67,6 +70,7 @@ on_exit() {
     if [ "${rc}" -ne 0 ]; then
         echo "ERROR: script exiting with rc=${rc} — pinging healthchecks /fail"
         ping_fail
+        cat "${LOG_FILE}" >&3
     fi
     cleanup
 }
