@@ -590,7 +590,7 @@ containers:
     uses_tailscale: false
     start_order: "000"
     protected: true
-    cli_version: 0.43.116
+    cli_version: 0.43.139
     generation: 2026-08-postgres18-valkey
     volumes:
       db:
@@ -806,6 +806,26 @@ containers:
         host_subpath: container-mounts/meshmonitor/data
         container_path: /data
     default_disabled: true
+  meshtastic:
+    description: Meshtastic mesh networking web client
+    homepage_group: Communication
+    tags: []
+    start_order: "031"
+    default_disabled: true
+    variables:
+      MESHTASTIC_DB_USER:
+        type: string
+        required: true
+        description: Database username
+      MESHTASTIC_DB_PASSWORD:
+        type: secret
+        required: true
+        description: Database password
+        auto_generate: true
+      ADMIN_PASSWORD:
+        type: secret
+        required: true
+        description: Admin panel password
   minecraft:
     description: Minecraft Bedrock Edition dedicated server
     homepage_group: Gaming
@@ -1563,12 +1583,6 @@ containers:
         host_subpath: container-mounts/wallabag/data
         container_path: /var/www/wallabag/data
     default_disabled: true
-  web-admin:
-    description: Self-hosted container management dashboard (Tailscale sidecar; the backend is a PM2 process on the host bound to 127.0.0.1)
-    homepage_group: System Monitoring
-    tags: []
-    uses_tailscale: true
-    protected: true
   wardrive:
     description: Receiver for MeshMapper wardrive pings (Custom API forward), tailnet-only
     homepage_group: Tools
@@ -1590,6 +1604,12 @@ containers:
         host_subpath: container-mounts/wardrive/data
         container_path: /data
     default_disabled: true
+  web-admin:
+    description: Self-hosted container management dashboard (Tailscale sidecar; the backend is a PM2 process on the host bound to 127.0.0.1)
+    homepage_group: System Monitoring
+    tags: []
+    uses_tailscale: true
+    protected: true
   witchazzan:
     description: Witchazzan multiplayer web game
     homepage_group: Personal Projects
