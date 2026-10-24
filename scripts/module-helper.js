@@ -1279,7 +1279,10 @@ async function checkDrift() {
           ["-C", modulePath, "rev-list", "--count", `HEAD..@{u}`],
           { encoding: "utf8" },
         ).trim();
-        behind.push(`  ${moduleName}: ${count} commit(s) not yet pulled`);
+        // Local-only commits (ahead of the remote) make HEAD differ from
+        // @{u} too, but nothing is unpulled -- don't report that as drift.
+        if (Number(count) > 0)
+          behind.push(`  ${moduleName}: ${count} commit(s) not yet pulled`);
       }
     } catch (e) {
       behind.push(`  ${moduleName}: could not check remote (${e.message})`);
