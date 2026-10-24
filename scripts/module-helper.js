@@ -899,17 +899,26 @@ async function updateModules(args) {
       reRendered.push(containerName);
       console.log(`  ${containerName}: updated.`);
 
-      if (currentGeneration) {
+      // The gate above passed, so a declared generation is now the one
+      // rendered. (`currentGeneration` is null once pinned, so it can't be
+      // the source here -- using it meant this never recorded, and
+      // pendingGenerationRetry re-rendered the container on every update.)
+      const renderedGeneration =
+        moduleYaml.containers?.[containerName]?.generation;
+      if (renderedGeneration) {
         moduleEntry.container_state = moduleEntry.container_state || {};
         moduleEntry.container_state[containerName] = {
           ...moduleEntry.container_state[containerName],
-          applied_generation: currentGeneration,
+          applied_generation: renderedGeneration,
         };
       }
     }
 
-    // Update tracking
-    moduleEntry.commit = newCommit;
+    // Update tracking. A --container run only rendered the named container(s),
+    // so it must NOT advance the recorded commit: the next plain update diffs
+    // from it, and advancing here made every other container's changes in the
+    // range invisible forever (infisical drifted on deepthought this way).
+    if (!containerOverride) moduleEntry.commit = newCommit;
     moduleEntry.updated = new Date().toISOString();
   }
 
