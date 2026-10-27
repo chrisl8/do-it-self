@@ -800,6 +800,10 @@ containers:
         required: true
         description: MeshMonitor session encryption secret (required for HTTPS)
         auto_generate: true
+      POTATOMESH_API_TOKEN:
+        type: secret
+        required: true
+        description: Shared API token for the MSP Mesh PotatoMesh dashboard (monitor.mspmesh.org); ingestor feed
     volumes:
       data:
         var: VOL_MESHMONITOR_DATA
