@@ -5,9 +5,14 @@ export PATH="${HOME}/.local/share/fnm/aliases/default/bin:${PATH}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FAILURE_THRESHOLD=6
+# Exit code from the node script meaning "synced, but an account needs attention"
+EXIT_WARNING=2
+# Hours a warning may persist before it is emailed (one-off bank-side upgrades clear on their own)
+WARNING_THRESHOLD_HOURS=72
 STATE_DIR="${HOME}/.local/state/actual-budget-sync"
 FAILURE_COUNT_FILE="${STATE_DIR}/failure_count"
 FIRST_FAILURE_FILE="${STATE_DIR}/first_failure"
+FIRST_WARNING_FILE="${STATE_DIR}/first_warning"
 LOG_FILE="${HOME}/logs/actual-budget-bank-sync.log"
 
 # Exit early if the actual docker container is not running
@@ -81,7 +86,22 @@ echo "${OUTPUT}" > "${LOG_FILE}"
 
 if [[ ${EXIT_CODE} -eq 0 ]]; then
     # Success: reset counter, produce no output (no cron email)
+    rm -f "${FAILURE_COUNT_FILE}" "${FIRST_FAILURE_FILE}" "${FIRST_WARNING_FILE}"
+    exit 0
+fi
+
+if [[ ${EXIT_CODE} -eq ${EXIT_WARNING} ]]; then
+    # The sync itself worked, so reset the failure streak. Stay quiet unless the
+    # warning has persisted past the threshold.
     rm -f "${FAILURE_COUNT_FILE}" "${FIRST_FAILURE_FILE}"
+    [[ -f "${FIRST_WARNING_FILE}" ]] || date -Iseconds > "${FIRST_WARNING_FILE}"
+    FIRST_WARNING=$(cat "${FIRST_WARNING_FILE}")
+    AGE_HOURS=$(( ($(date +%s) - $(date -d "${FIRST_WARNING}" +%s)) / 3600 ))
+    if [[ ${AGE_HOURS} -ge ${WARNING_THRESHOLD_HOURS} ]]; then
+        echo "Actual Budget bank sync: an account has needed attention for ${AGE_HOURS}h (since ${FIRST_WARNING})"
+        echo ""
+        echo "$(echo "${OUTPUT}" | grep '^WARNING:')"
+    fi
     exit 0
 fi
 
