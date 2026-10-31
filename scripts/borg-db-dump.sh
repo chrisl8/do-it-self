@@ -57,7 +57,9 @@ if docker ps --filter "name=dawarich_db" --filter "status=running" -q | grep -q 
       "UPDATE points SET raw_data = NULL, raw_data_archived = true
        WHERE raw_data IS NOT NULL AND raw_data != '{}' AND raw_data_archived = false
        AND timestamp < EXTRACT(epoch FROM now() - interval '2 months');"
-    docker exec dawarich_db psql -U postgres -d dawarich_production -c 'VACUUM;'
+    # No VACUUM here: it stalled for 5.5h+ and blocked the whole backup
+    # (2026-10-31). Dumps don't need it; scripts/dawarich-vacuum.sh runs it
+    # separately from cron, outside the backup window, with logging.
 else
     echo "  Skipping Dawarich cleanup (dawarich_db not running)"
 fi
