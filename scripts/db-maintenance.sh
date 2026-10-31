@@ -80,6 +80,15 @@ pg_maintain() {
 }
 for t in "${PG_TARGETS[@]}"; do IFS=: read -r c u d <<< "${t}"; pg_maintain "${c}" "${u}" "${d}"; done
 
+# ── Dawarich track-generation churn trend (watching for a never-ending rebuild) ──
+# Added 2026-10-31: 1.19 track generation was rewriting points.track_id at
+# ~100 updates/s. Healthy = untracked shrinks and upd_total growth flattens to
+# roughly new-points-per-day; stuck = untracked flat/growing while upd_total
+# keeps climbing millions per day.
+if running dawarich_db; then
+    log "[dawarich_db] TRACKCHURN $(docker exec dawarich_db psql -U postgres -d dawarich_production -X -At -F' ' -c "select 'upd_total='||n_tup_upd, 'dead='||n_dead_tup, 'tracks='||(select count(*) from tracks), 'tracks_created_24h='||(select count(*) from tracks where created_at > now()-interval '24 hours'), 'untracked='||(select count(*) from points where track_id is null) from pg_stat_user_tables where relname='points'" 2>&1)"
+fi
+
 # ── MariaDB ─────────────────────────────────────────────────────────
 SECRETS_AVAILABLE=false
 if command -v infisical &>/dev/null && [ -f "${HOME}/credentials/infisical.env" ] && running infisical; then
