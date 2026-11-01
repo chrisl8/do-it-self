@@ -359,6 +359,62 @@ if [ -x "$MODULE_CHECK_SCRIPT" ]; then
   fi
 fi
 
+# Check the Infisical machine-identity token (~/credentials/infisical.env). It
+# expired silently on 2026-10-31 (a 90-day token minted before the 10yr-TTL fix
+# in setup-infisical.sh): every secret read came back empty, borg could not run,
+# and the Tailscale check below skipped itself because TS_API_TOKEN was empty.
+# Two signals: (1) the JWT's own exp claim -- warn INFISICAL_TOKEN_ALARM_DAYS
+# (default 30) ahead, no network needed; (2) a live test fetch -- the server
+# rejecting the token (401/403) means it is dead NOW whatever the exp says.
+# Throttled to once per 24h like the Tailscale check. Fix: scripts/infisical-reissue-token.sh
+if [ -f "${HOME}/credentials/infisical.env" ] && command -v node &>/dev/null; then
+  INF_TOKEN=$(grep -E '^INFISICAL_TOKEN=' "${HOME}/credentials/infisical.env" | head -1 | cut -d= -f2-)
+  INF_URL=$(grep -E '^INFISICAL_API_URL=' "${HOME}/credentials/infisical.env" | head -1 | cut -d= -f2-)
+  INF_PROJECT=$(grep -E '^INFISICAL_PROJECT_ID=' "${HOME}/credentials/infisical.env" | head -1 | cut -d= -f2-)
+  INF_PROBLEM=""
+  if [ -n "$INF_TOKEN" ]; then
+    INF_DAYS=$(INF_TOKEN="$INF_TOKEN" node -e '
+      try {
+        const c = JSON.parse(Buffer.from(process.env.INF_TOKEN.split(".")[1], "base64url").toString());
+        console.log(c.exp ? Math.floor((c.exp * 1000 - Date.now()) / 86400000) : "none");
+      } catch (e) { console.log("unreadable"); }' 2>/dev/null)
+    if [[ "$INF_DAYS" =~ ^-?[0-9]+$ ]]; then
+      if (( INF_DAYS < 0 )); then
+        INF_PROBLEM="token EXPIRED ${INF_DAYS#-} day(s) ago"
+      elif (( INF_DAYS <= ${INFISICAL_TOKEN_ALARM_DAYS:-30} )); then
+        INF_PROBLEM="token expires in ${INF_DAYS} day(s)"
+      fi
+    fi
+    # Live test (only if the Infisical server is up): 401/403 = dead token.
+    if [ -z "$INF_PROBLEM" ] && [ -n "$INF_URL" ] && docker ps --filter "name=^infisical$" --filter "status=running" -q 2>/dev/null | grep -q .; then
+      INF_CODE=$(curl -s -m 10 -o /dev/null -w '%{http_code}' \
+        "${INF_URL}/api/v3/secrets/raw/BORG_PASSPHRASE?workspaceId=${INF_PROJECT}&environment=prod&secretPath=/borgbackup" \
+        -H "Authorization: Bearer ${INF_TOKEN}" 2>/dev/null)
+      if [ "$INF_CODE" = "401" ] || [ "$INF_CODE" = "403" ]; then
+        INF_PROBLEM="server REJECTS the token (HTTP ${INF_CODE})"
+      fi
+    fi
+  else
+    INF_PROBLEM="INFISICAL_TOKEN is missing from infisical.env"
+  fi
+  if [ -n "$INF_PROBLEM" ]; then
+    INF_STAMP="${HEALTH_STATE_DIR}/infisical-token-last-warned"
+    INF_NOW=$(date +%s)
+    INF_LAST=0
+    [[ -f "$INF_STAMP" ]] && INF_LAST=$(cat "$INF_STAMP" 2>/dev/null || echo 0)
+    [[ "$INF_LAST" =~ ^[0-9]+$ ]] || INF_LAST=0
+    if (( INF_NOW - INF_LAST >= 86400 )); then
+      echo ""
+      note "Infisical machine-identity token problem: ${INF_PROBLEM}"
+      note "  Secret reads (borg backup, generate-env, container starts) fail or return empty when it is dead."
+      note "  Fix: run scripts/infisical-reissue-token.sh (re-issues a long-lived token)."
+      echo ""
+      echo "$INF_NOW" > "$INF_STAMP"
+      ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+  fi
+fi
+
 # Check Tailscale credential expiry. Uses the preflight helper to query the
 # Tailscale API for each credential's expiration. The preflight surfaces an
 # advisory once a credential -- the auth key (TS_AUTHKEY) OR the API access

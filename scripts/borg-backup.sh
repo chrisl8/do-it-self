@@ -103,6 +103,20 @@ if [ "${SECRETS_AVAILABLE}" = "true" ]; then
     TS_DOMAIN=$(load_secret "shared" "TS_DOMAIN") || true
 fi
 
+# Cache the healthcheck ping URLs locally (ping URLs can only ping, not read
+# anything) so a dead Infisical token can still produce an explicit /fail ping.
+# Without this the 2026-10-31 token expiry made BORG_HEALTHCHECK_URL empty, the
+# script died with `> /dev/null` from cron, and only the deadman timeout noticed.
+HC_CACHE="${HOME}/credentials/borg-healthcheck-urls.cache"
+if [ -n "${BORG_HEALTHCHECK_URL}" ] || [ -n "${BORG_REMOTE_HEALTHCHECK_URL}" ]; then
+    ( umask 077; printf 'BORG_HEALTHCHECK_URL=%q\nBORG_REMOTE_HEALTHCHECK_URL=%q\n' \
+        "${BORG_HEALTHCHECK_URL}" "${BORG_REMOTE_HEALTHCHECK_URL}" > "${HC_CACHE}" ) 2>/dev/null || true
+elif [ -f "${HC_CACHE}" ]; then
+    # shellcheck disable=SC1090
+    . "${HC_CACHE}"
+    echo "WARNING: could not read secrets from Infisical — using cached healthcheck URLs"
+fi
+
 # Build web admin URL from hostname and TS_DOMAIN if available
 if [ -n "${TS_DOMAIN}" ]; then
     BORG_WEB_ADMIN_URL="http://$(hostname).${TS_DOMAIN}:3333/backup-status"
@@ -118,6 +132,11 @@ fi
 if [ -z "${BORG_PASSPHRASE}" ] && [ "${REMOTE_ONLY}" != "true" ]; then
     echo "ERROR: BORG_PASSPHRASE is empty — cannot proceed without borg passphrase"
     echo "       Ensure Infisical is running and borgbackup secrets are configured"
+    echo "       (an expired Infisical token also causes this: scripts/infisical-reissue-token.sh)"
+    if [ -n "${BORG_HEALTHCHECK_URL}" ]; then
+        curl -m 10 --retry 5 -s "${BORG_HEALTHCHECK_URL}/fail" \
+            --data-raw "BORG_PASSPHRASE empty — Infisical unavailable or token expired (scripts/infisical-reissue-token.sh)" > /dev/null || true
+    fi
     exit 1
 fi
 
