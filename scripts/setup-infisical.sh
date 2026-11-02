@@ -204,6 +204,10 @@ EOF
   # a large non-zero TTL/maxTTL sidesteps the bug. Do this BEFORE anything else
   # touches the identity, using the still-fresh bootstrap token as the bearer —
   # the identity has org-admin rights over itself.
+  # NOTE: the identity TTL alone is NOT enough. The server's
+  # MAX_MACHINE_IDENTITY_TOKEN_AGE (default 90d) caps every issued token, so the
+  # infisical compose.yaml must set MAX_MACHINE_IDENTITY_TOKEN_AGE=3650d or the
+  # token still expires after 90 days (bit neuromancer 2026-10-31).
   printf "${YELLOW}Setting a long-lived (10yr) token TTL/maxTTL for the machine identity...${NC}\n"
   curl -sf -X PATCH "http://localhost:8085/api/v1/auth/token-auth/identities/${IDENTITY_ID}" \
     -H "Authorization: Bearer ${IDENTITY_TOKEN}" \
