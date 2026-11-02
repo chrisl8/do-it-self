@@ -48,6 +48,40 @@ try: print(json.load(sys.stdin)["accessToken"])
 except Exception: pass')
 [ -n "${NEW}" ] || { echo "FAIL: no accessToken in response"; exit 1; }
 
+token_days() {
+python3 - "$1" <<'PY'
+import sys, json, base64, time, datetime
+t = sys.argv[1]
+p = t.split('.')[1]
+p += '=' * (-len(p) % 4)
+c = json.loads(base64.urlsafe_b64decode(p))
+exp = c.get('exp')
+if exp:
+    print(int((exp - time.time()) / 86400))
+    sys.stderr.write("token expires %s\n" % datetime.datetime.fromtimestamp(exp))
+else:
+    print(-1)
+    sys.stderr.write("token has NO exp claim\n")
+PY
+}
+
+# A token minted with the admin USER's JWT as bearer gets Infisical's 90-day
+# default lifetime regardless of the identity's accessTokenTTL setting (seen on
+# deepthought 2026-11-01: identity TTL = 10yr, every user-JWT-minted token = 89d).
+# A token minted with an existing valid IDENTITY token as bearer honours the
+# identity's TTL (what setup-infisical.sh does). So if the first token is short,
+# use it as the bearer to mint the long-lived one.
+if [ "$(token_days "${NEW}" 2>/dev/null)" -ne -1 ] && [ "$(token_days "${NEW}" 2>/dev/null)" -lt 1825 ]; then
+    echo "first token is short-lived; re-minting with it as bearer to get the identity's full TTL"
+    RESP2=$(curl -s -X POST "${INFISICAL_API_URL}/api/v1/auth/token-auth/identities/${IDENTITY_ID}/tokens" \
+        -H "Authorization: Bearer ${NEW}" -H "Content-Type: application/json" \
+        -d '{"name":"cron-scripts-token"}')
+    NEW2=$(printf '%s' "${RESP2}" | python3 -c 'import sys,json
+try: print(json.load(sys.stdin)["accessToken"])
+except Exception: pass')
+    [ -n "${NEW2}" ] && NEW="${NEW2}"
+fi
+
 DAYS=$(python3 - "${NEW}" <<'PY'
 import sys, json, base64, time, datetime
 t = sys.argv[1]
