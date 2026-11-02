@@ -399,6 +399,10 @@ elif [ -n "${BORG_REMOTE_REPO}" ]; then
     echo ""
     echo "── Remote (offsite) backup ──"
     echo "Skipped — BORG_REMOTE_PASSPHRASE not available"
+    # A configured offsite repo that could not be pushed to is a FAILURE, not a
+    # quiet skip (a skipped push once reported "success" for a day).
+    REMOTE_STATUS="failed"
+    REMOTE_ERROR="offsite push skipped: BORG_REMOTE_PASSPHRASE unavailable (Infisical token expired? scripts/infisical-reissue-token.sh)"
 fi
 
 # Promote remote failure to overall partial status
